@@ -26,7 +26,7 @@ export const useTheme = () => useContext(ThemeContext);
 export { API, BACKEND_URL };
 
 function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() => localStorage.getItem("faculty_theme") || "dark");
+  const [theme, setTheme] = useState(() => localStorage.getItem("faculty_theme") || "light");
 
   useEffect(() => {
     const root = document.documentElement;
