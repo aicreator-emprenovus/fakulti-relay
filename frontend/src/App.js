@@ -19,9 +19,35 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const AuthContext = createContext(null);
+const ThemeContext = createContext(null);
 
 export const useAuth = () => useContext(AuthContext);
+export const useTheme = () => useContext(ThemeContext);
 export { API, BACKEND_URL };
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState(() => localStorage.getItem("faculty_theme") || "dark");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem("faculty_theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  }, []);
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
 
 function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -71,7 +97,7 @@ function AuthProvider({ children }) {
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><div className="text-lime-400 text-lg">Cargando...</div></div>;
+  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="text-primary text-lg">Cargando...</div></div>;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
@@ -79,7 +105,7 @@ function ProtectedRoute({ children }) {
 function AdminLayout({ children }) {
   const location = useLocation();
   return (
-    <div className="flex min-h-screen bg-[#050505]">
+    <div className="flex min-h-screen bg-background">
       <Sidebar currentPath={location.pathname} />
       <main className="flex-1 ml-0 md:ml-64 min-h-screen">
         <div className="p-4 md:p-8">
@@ -90,25 +116,36 @@ function AdminLayout({ children }) {
   );
 }
 
+function AppContent() {
+  const { theme } = useTheme();
+  return (
+    <>
+      <Toaster position="top-right" richColors theme={theme} />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/game/:gameType" element={<GamePublicPage />} />
+        <Route path="/" element={<ProtectedRoute><AdminLayout><DashboardPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/leads" element={<ProtectedRoute><AdminLayout><LeadsPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/games" element={<ProtectedRoute><AdminLayout><GamesConfigPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/loyalty" element={<ProtectedRoute><AdminLayout><LoyaltyPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute><AdminLayout><ChatPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/quotations" element={<ProtectedRoute><AdminLayout><QuotationsPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/bulk" element={<ProtectedRoute><AdminLayout><BulkPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><AdminLayout><SettingsPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Toaster position="top-right" richColors theme="dark" />
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/game/:gameType" element={<GamePublicPage />} />
-          <Route path="/" element={<ProtectedRoute><AdminLayout><DashboardPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/leads" element={<ProtectedRoute><AdminLayout><LeadsPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/games" element={<ProtectedRoute><AdminLayout><GamesConfigPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/loyalty" element={<ProtectedRoute><AdminLayout><LoyaltyPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/chat" element={<ProtectedRoute><AdminLayout><ChatPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/quotations" element={<ProtectedRoute><AdminLayout><QuotationsPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/bulk" element={<ProtectedRoute><AdminLayout><BulkPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><AdminLayout><SettingsPage /></AdminLayout></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

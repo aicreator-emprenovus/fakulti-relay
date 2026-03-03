@@ -134,14 +134,14 @@ function RouletteGame({ config, onPlay }) {
       {result && <Confetti />}
       <canvas ref={canvasRef} width={340} height={340} className="max-w-full" data-testid="roulette-canvas" />
       {!result ? (
-        <Button data-testid="spin-btn" onClick={spin} disabled={spinning} className="bg-lime-400 text-black font-bold rounded-full px-10 py-3 text-lg hover:bg-lime-300 shadow-[0_0_30px_rgba(163,230,53,0.4)] disabled:opacity-50">
+        <Button data-testid="spin-btn" onClick={spin} disabled={spinning} className="bg-primary text-primary-foreground font-bold rounded-full px-10 py-3 text-lg hover:bg-primary/90 shadow-sm disabled:opacity-50">
           {spinning ? "Girando..." : "GIRAR LA RULETA"}
         </Button>
       ) : (
         <div className="text-center animate-fade-in-up" data-testid="prize-result">
-          <p className="text-2xl font-bold text-lime-400 mb-2">{result.prize}</p>
-          <p className="text-zinc-400">{result.message}</p>
-          {result.coupon && <p className="mt-2 text-lg font-bold text-white bg-zinc-800 px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
+          <p className="text-2xl font-bold text-primary mb-2">{result.prize}</p>
+          <p className="text-muted-foreground">{result.message}</p>
+          {result.coupon && <p className="mt-2 text-lg font-bold text-foreground bg-muted px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
         </div>
       )}
     </div>
@@ -174,19 +174,19 @@ function MysteryBoxGame({ config, onPlay }) {
             🎁
           </div>
         ) : (
-          <div className="prize-reveal w-full h-full rounded-2xl flex items-center justify-center bg-zinc-900 border-2 border-lime-400" data-testid="prize-result">
+          <div className="prize-reveal w-full h-full rounded-2xl flex items-center justify-center bg-muted border-2 border-primary" data-testid="prize-result">
             <div className="text-center p-4">
               <p className="text-4xl mb-2">🎉</p>
-              <p className="text-xl font-bold text-lime-400">{result?.prize}</p>
+              <p className="text-xl font-bold text-primary">{result?.prize}</p>
             </div>
           </div>
         )}
       </div>
-      {phase === "idle" && <p className="text-zinc-400 text-sm">Toca la caja para abrirla</p>}
+      {phase === "idle" && <p className="text-muted-foreground text-sm">Toca la caja para abrirla</p>}
       {result && (
         <div className="text-center animate-fade-in-up">
-          <p className="text-zinc-400">{result.message}</p>
-          {result.coupon && <p className="mt-2 text-lg font-bold text-white bg-zinc-800 px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
+          <p className="text-muted-foreground">{result.message}</p>
+          {result.coupon && <p className="mt-2 text-lg font-bold text-foreground bg-muted px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
         </div>
       )}
     </div>
@@ -213,25 +213,25 @@ function LuckyButtonGame({ config, onPlay }) {
       {result && <Confetti />}
       {!result ? (
         <button data-testid="lucky-btn" onClick={play} disabled={pressing}
-          className={`w-40 h-40 rounded-full flex items-center justify-center text-5xl font-bold transition-all ${pressing ? "scale-90 bg-lime-500" : "bg-lime-400 hover:scale-110 lucky-pulse"}`}
+          className={`w-40 h-40 rounded-full flex items-center justify-center text-5xl font-bold transition-all ${pressing ? "scale-90 bg-primary/80" : "bg-primary hover:scale-110 lucky-pulse"}`}
           style={{ color: "#000" }}>
           {pressing ? (
             <div className="animate-spin text-3xl">⚡</div>
           ) : "⚡"}
         </button>
       ) : (
-        <div className="w-40 h-40 rounded-full flex items-center justify-center bg-zinc-900 border-2 border-lime-400 animate-fade-in-up" data-testid="prize-result">
+        <div className="w-40 h-40 rounded-full flex items-center justify-center bg-muted border-2 border-primary animate-fade-in-up" data-testid="prize-result">
           <div className="text-center">
             <p className="text-3xl mb-1">🎉</p>
-            <p className="text-sm font-bold text-lime-400">{result.prize}</p>
+            <p className="text-sm font-bold text-primary">{result.prize}</p>
           </div>
         </div>
       )}
-      {!result && <p className="text-zinc-400 text-sm">{pressing ? "Buscando tu premio..." : "Presiona el boton de la suerte"}</p>}
+      {!result && <p className="text-muted-foreground text-sm">{pressing ? "Buscando tu premio..." : "Presiona el boton de la suerte"}</p>}
       {result && (
         <div className="text-center animate-fade-in-up">
-          <p className="text-zinc-400">{result.message}</p>
-          {result.coupon && <p className="mt-2 text-lg font-bold text-white bg-zinc-800 px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
+          <p className="text-muted-foreground">{result.message}</p>
+          {result.coupon && <p className="mt-2 text-lg font-bold text-foreground bg-muted px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
         </div>
       )}
     </div>
@@ -264,31 +264,31 @@ export default function GamePublicPage() {
     return res.data;
   };
 
-  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500">Cargando juego...</div>;
-  if (error) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-red-400">{error}</div>;
+  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Cargando juego...</div>;
+  if (error) return <div className="min-h-screen bg-background flex items-center justify-center text-red-400">{error}</div>;
 
   const GameComponent = { roulette: RouletteGame, mystery_box: MysteryBoxGame, lucky_button: LuckyButtonGame }[gameType];
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4" data-testid="game-public-page">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4" data-testid="game-public-page">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-lime-400/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
       </div>
       <div className="relative z-10 w-full max-w-md mx-auto">
         <div className="text-center mb-6">
           <img src={LOGO_URL} alt="Faculty" className="h-12 mx-auto mb-3" />
-          <h1 className="text-2xl font-bold text-white font-heading">{config?.name}</h1>
-          <p className="text-sm text-zinc-500">Juega y gana premios exclusivos</p>
+          <h1 className="text-2xl font-bold text-foreground font-heading">{config?.name}</h1>
+          <p className="text-sm text-muted-foreground">Juega y gana premios exclusivos</p>
         </div>
 
         {!registered ? (
-          <Card className="bg-[#0A0A0A] border-white/10 rounded-2xl" data-testid="game-register-form">
+          <Card className="bg-card border-border rounded-2xl" data-testid="game-register-form">
             <CardContent className="p-6">
               <form onSubmit={handleRegister} className="space-y-4">
-                <div><Label className="text-zinc-400 text-sm">Tu Nombre *</Label><Input data-testid="game-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bg-zinc-900 border-zinc-800 text-white h-12" placeholder="Ingresa tu nombre" required /></div>
-                <div><Label className="text-zinc-400 text-sm">WhatsApp *</Label><Input data-testid="game-whatsapp" value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} className="bg-zinc-900 border-zinc-800 text-white h-12" placeholder="+593..." required /></div>
-                <div><Label className="text-zinc-400 text-sm">Ciudad</Label><Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className="bg-zinc-900 border-zinc-800 text-white h-12" placeholder="Tu ciudad" /></div>
-                <Button data-testid="game-register-btn" type="submit" className="w-full bg-lime-400 text-black font-bold rounded-full h-12 hover:bg-lime-300 shadow-[0_0_20px_rgba(163,230,53,0.3)]">
+                <div><Label className="text-muted-foreground text-sm">Tu Nombre *</Label><Input data-testid="game-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bg-muted border-input text-foreground h-12" placeholder="Ingresa tu nombre" required /></div>
+                <div><Label className="text-muted-foreground text-sm">WhatsApp *</Label><Input data-testid="game-whatsapp" value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} className="bg-muted border-input text-foreground h-12" placeholder="+593..." required /></div>
+                <div><Label className="text-muted-foreground text-sm">Ciudad</Label><Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className="bg-muted border-input text-foreground h-12" placeholder="Tu ciudad" /></div>
+                <Button data-testid="game-register-btn" type="submit" className="w-full bg-primary text-primary-foreground font-bold rounded-full h-12 hover:bg-primary/90 shadow-sm">
                   JUGAR AHORA
                 </Button>
               </form>

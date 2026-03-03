@@ -49,8 +49,8 @@ export default function DashboardPage() {
     <div data-testid="dashboard-page" className="space-y-6 animate-fade-in-up">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white font-heading">Dashboard</h1>
-          <p className="text-sm text-zinc-500 mt-1">Resumen general del CRM Faculty</p>
+          <h1 className="text-3xl font-bold text-foreground font-heading">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Resumen general del CRM Faculty</p>
         </div>
       </div>
 
@@ -59,17 +59,17 @@ export default function DashboardPage() {
           <div key={i} className="stat-card p-4" data-testid={`stat-${card.label.toLowerCase().replace(/ /g, "-")}`}>
             <div className="flex items-center gap-2 mb-2">
               <card.icon size={16} className={card.color} />
-              <span className="text-xs text-zinc-500 uppercase tracking-wider">{card.label}</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">{card.label}</span>
             </div>
-            <p className="text-2xl font-bold text-white font-accent">{card.value}</p>
+            <p className="text-2xl font-bold text-foreground font-accent">{card.value}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-[#0A0A0A] border-white/6 rounded-2xl">
+        <Card className="bg-card border-border rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-white">Embudo de Ventas</CardTitle>
+            <CardTitle className="text-lg text-foreground">Embudo de Ventas</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -78,13 +78,13 @@ export default function DashboardPage() {
                 const pct = (stage.value / maxVal) * 100;
                 return (
                   <div key={stage.key} className="flex items-center gap-3" data-testid={`funnel-stage-${stage.key}`}>
-                    <span className="text-xs text-zinc-400 w-28 truncate">{stage.name}</span>
-                    <div className="flex-1 h-8 bg-zinc-900 rounded-lg overflow-hidden relative">
+                    <span className="text-xs text-muted-foreground w-28 truncate">{stage.name}</span>
+                    <div className="flex-1 h-8 bg-muted rounded-lg overflow-hidden relative">
                       <div
                         className="h-full rounded-lg transition-all duration-700"
                         style={{ width: `${pct}%`, backgroundColor: stage.color, animationDelay: `${i * 100}ms` }}
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-white">
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-foreground">
                         {stage.value}
                       </span>
                     </div>
@@ -95,31 +95,31 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0A0A0A] border-white/6 rounded-2xl">
+        <Card className="bg-card border-border rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-white">Ventas por Producto</CardTitle>
+            <CardTitle className="text-lg text-foreground">Ventas por Producto</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.product_stats.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={stats.product_stats}>
-                  <XAxis dataKey="name" tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: "8px", color: "#fff" }} />
-                  <Bar dataKey="revenue" fill="#A3E635" radius={[4, 4, 0, 0]} />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-48 flex items-center justify-center text-zinc-600">Sin datos de ventas aun</div>
+              <div className="h-48 flex items-center justify-center text-muted-foreground">Sin datos de ventas aun</div>
             )}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-[#0A0A0A] border-white/6 rounded-2xl">
+        <Card className="bg-card border-border rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-white">Fuentes de Trafico</CardTitle>
+            <CardTitle className="text-lg text-foreground">Fuentes de Trafico</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.source_stats.length > 0 ? (
@@ -130,30 +130,30 @@ export default function DashboardPage() {
                       <Cell key={i} fill={["#A3E635", "#3B82F6", "#F59E0B", "#8B5CF6", "#10B981", "#64748B"][i % 6]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: "8px", color: "#fff" }} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-48 flex items-center justify-center text-zinc-600">Sin datos de fuentes</div>
+              <div className="h-48 flex items-center justify-center text-muted-foreground">Sin datos de fuentes</div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0A0A0A] border-white/6 rounded-2xl">
+        <Card className="bg-card border-border rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-white">Leads Recientes</CardTitle>
+            <CardTitle className="text-lg text-foreground">Leads Recientes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {stats.recent_leads.map(lead => (
-                <div key={lead.id} className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/50 hover:bg-zinc-900">
+                <div key={lead.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: STAGE_CONFIG[lead.funnel_stage]?.color + "20", color: STAGE_CONFIG[lead.funnel_stage]?.color }}>
                       {lead.name?.[0]}
                     </div>
                     <div>
-                      <p className="text-sm text-white font-medium">{lead.name}</p>
-                      <p className="text-xs text-zinc-500">{lead.whatsapp}</p>
+                      <p className="text-sm text-foreground font-medium">{lead.name}</p>
+                      <p className="text-xs text-muted-foreground">{lead.whatsapp}</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="text-xs" style={{ borderColor: STAGE_CONFIG[lead.funnel_stage]?.color, color: STAGE_CONFIG[lead.funnel_stage]?.color }}>

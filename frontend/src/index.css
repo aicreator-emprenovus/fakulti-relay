@@ -6,6 +6,34 @@
 
 @layer base {
   :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6%;
+    --primary: 82 78% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 82 25% 93%;
+    --secondary-foreground: 82 60% 20%;
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 82 25% 93%;
+    --accent-foreground: 0 0% 6%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 87%;
+    --input: 0 0% 87%;
+    --ring: 82 78% 40%;
+    --chart-1: 82 78% 40%;
+    --chart-2: 217 71% 53%;
+    --chart-3: 263 70% 50%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 160 60% 45%;
+    --radius: 0.75rem;
+    --sidebar-bg: 0 0% 98%;
+  }
+  .dark {
     --background: 0 0% 2%;
     --foreground: 0 0% 98%;
     --card: 0 0% 4%;
@@ -40,19 +68,17 @@ body {
   font-family: 'Manrope', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #050505;
-  color: #fafafa;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #27272a #0a0a0a;
+  scrollbar-color: hsl(var(--muted)) hsl(var(--background));
 }
 
 *::-webkit-scrollbar { width: 6px; }
-*::-webkit-scrollbar-track { background: #0a0a0a; }
-*::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
-*::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+*::-webkit-scrollbar-track { background: hsl(var(--background)); }
+*::-webkit-scrollbar-thumb { background: hsl(var(--muted)); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;

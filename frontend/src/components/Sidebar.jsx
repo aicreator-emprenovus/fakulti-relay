@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, MessageSquare, FileText, Upload, Settings, LogOut, Menu, X } from "lucide-react";
+import { useAuth, useTheme } from "@/App";
+import { LayoutDashboard, Users, Gamepad2, Heart, MessageSquare, FileText, Upload, Settings, LogOut, Menu, X, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png";
@@ -19,6 +19,7 @@ const navItems = [
 
 export default function Sidebar({ currentPath }) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -28,11 +29,11 @@ export default function Sidebar({ currentPath }) {
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-[#080808] border-r border-white/5">
-      <div className="p-4 flex items-center gap-3 border-b border-white/5">
+    <div className="flex flex-col h-full bg-card border-r border-border">
+      <div className="p-4 flex items-center gap-3 border-b border-border">
         <img src={LOGO_URL} alt="Faculty" className="h-10 w-auto" />
         <div className="hidden md:block">
-          <p className="text-xs text-zinc-500 tracking-wider uppercase">CRM Panel</p>
+          <p className="text-xs text-muted-foreground tracking-wider uppercase">CRM Panel</p>
         </div>
       </div>
 
@@ -46,8 +47,8 @@ export default function Sidebar({ currentPath }) {
               onClick={() => handleNav(item.path)}
               className={`sidebar-item w-full flex items-center gap-3 text-sm font-medium transition-all ${
                 isActive
-                  ? "active text-lime-400"
-                  : "text-zinc-400 hover:text-white"
+                  ? "active text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <item.icon size={18} />
@@ -57,21 +58,29 @@ export default function Sidebar({ currentPath }) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-white/5">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-lime-400/10 flex items-center justify-center text-lime-400 text-sm font-bold">
+      <div className="p-4 border-t border-border space-y-3">
+        <button
+          data-testid="theme-toggle-btn"
+          onClick={toggleTheme}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          <span>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</span>
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
             {user?.name?.[0] || "A"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.name || "Admin"}</p>
-            <p className="text-xs text-zinc-500 truncate">{user?.email || ""}</p>
+            <p className="text-sm font-medium text-foreground truncate">{user?.name || "Admin"}</p>
+            <p className="text-xs text-muted-foreground truncate">{user?.email || ""}</p>
           </div>
         </div>
         <Button
           data-testid="logout-btn"
           variant="ghost"
           size="sm"
-          className="w-full text-zinc-400 hover:text-red-400 hover:bg-red-400/5 justify-start gap-2"
+          className="w-full text-muted-foreground hover:text-red-400 hover:bg-red-400/5 justify-start gap-2"
           onClick={logout}
         >
           <LogOut size={16} />
@@ -85,7 +94,7 @@ export default function Sidebar({ currentPath }) {
     <>
       <button
         data-testid="mobile-menu-btn"
-        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white"
+        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border text-foreground"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X size={20} /> : <Menu size={20} />}
