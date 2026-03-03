@@ -1,0 +1,181 @@
+{
+  "identity": {
+    "persona": "E1: The Anti-AI Designer",
+    "mission": "Create a premium, dark-mode, high-performance CRM and Gamification system for Faculty/Fakulti Laboratorios.",
+    "principles": [
+      "Fusion over Imitation: Mix 'Scientific Precision' with 'Organic Wellness'.",
+      "Emotion First: Every interaction must feel 'Premium' and 'Trusted'.",
+      "Content is King: Data is the hero. Funnels are the story.",
+      "Negative Space: Use deep blacks to let the neon green data pop.",
+      "Contrast: High contrast text for readability in dark mode."
+    ]
+  },
+  "brand_core": {
+    "name": "Faculty / Fakulti Laboratorios",
+    "tagline": "La Ciencia de lo Natural",
+    "logo_url": "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png",
+    "theme": "dark",
+    "emotional_archetype": "The Performance Pro + Organic Earthy",
+    "keywords": ["Premium", "Scientific", "Natural", "High-Performance", "Neon-Nature"]
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "default": "#050505",
+        "card": "#0A0A0A",
+        "overlay": "rgba(10, 10, 10, 0.8)",
+        "sidebar": "#080808"
+      },
+      "primary": {
+        "main": "#A3E635",
+        "hover": "#BEF264",
+        "text": "#000000",
+        "description": "Tailwind Lime-400/300. Used for CTAs, Active States, and Key Metrics."
+      },
+      "secondary": {
+        "main": "#3F6212",
+        "surface": "#1A2E05",
+        "description": "Deep Organic Green. Used for backgrounds of active items or subtle borders."
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A1A1AA",
+        "muted": "#52525B",
+        "inverse": "#000000"
+      },
+      "status": {
+        "success": "#22C55E",
+        "warning": "#EAB308",
+        "error": "#EF4444",
+        "info": "#3B82F6"
+      },
+      "funnel_stages": {
+        "nuevo": "#3B82F6",
+        "interesado": "#8B5CF6",
+        "caliente": "#F59E0B",
+        "cliente_nuevo": "#10B981",
+        "cliente_activo": "#A3E635",
+        "lead_frio": "#64748B"
+      }
+    },
+    "gradients": {
+      "brand_glow": "linear-gradient(135deg, #A3E635 0%, #3F6212 100%)",
+      "dark_surface": "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%)",
+      "glass": "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": {
+        "family": "Manrope, sans-serif",
+        "weights": ["600", "700", "800"],
+        "usage": "Headings, KPIs, Funnel Stage Names"
+      },
+      "body": {
+        "family": "Inter, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "Paragraphs, Table Data, Labels"
+      },
+      "accent": {
+        "family": "Barlow Condensed, sans-serif",
+        "weights": ["700"],
+        "usage": "Game Numbers, Big Metrics"
+      }
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight",
+      "h2": "text-3xl font-bold tracking-tight",
+      "h3": "text-2xl font-semibold",
+      "h4": "text-xl font-semibold",
+      "body_lg": "text-lg leading-relaxed",
+      "body": "text-base leading-relaxed text-zinc-400",
+      "small": "text-sm text-zinc-500",
+      "tiny": "text-xs uppercase tracking-wider font-semibold text-zinc-600"
+    }
+  },
+  "layout": {
+    "dashboard": {
+      "type": "Bento Grid (Mode B)",
+      "grid_cols": "grid-cols-1 md:grid-cols-4 lg:grid-cols-12",
+      "gap": "gap-4 md:gap-6",
+      "padding": "p-6 md:p-8"
+    },
+    "spacing_scale": {
+      "container_padding": "p-4 md:p-8",
+      "section_gap": "gap-8 md:gap-12",
+      "internal_card_padding": "p-6"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-black hover:bg-primary/90 font-bold rounded-full px-8 py-3 transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(163,230,53,0.3)]",
+      "secondary": "bg-zinc-800 text-white hover:bg-zinc-700 font-medium rounded-full px-6 py-2 border border-zinc-700",
+      "ghost": "text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg px-4 py-2"
+    },
+    "cards": {
+      "default": "bg-card border border-white/10 rounded-2xl shadow-sm hover:border-primary/30 transition-colors duration-300",
+      "glass": "backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl",
+      "highlight": "bg-gradient-to-br from-zinc-900 to-black border border-primary/20 rounded-2xl relative overflow-hidden"
+    },
+    "inputs": {
+      "default": "bg-zinc-900/50 border-zinc-800 focus:border-primary/50 text-white placeholder:text-zinc-600 rounded-lg h-12"
+    }
+  },
+  "feature_specific_guidelines": {
+    "funnel_visualization": {
+      "style": "Sankey-inspired Steps",
+      "rules": [
+        "Use distinct colors for each stage (defined in colors.status.funnel_stages).",
+        "Connect stages with smooth curves or chevron arrows.",
+        "Show conversion % clearly between steps.",
+        "Highlight drop-offs in red/muted colors."
+      ]
+    },
+    "games": {
+      "general": "Mobile-first, immersive, full-screen overlays on mobile.",
+      "roulette": {
+        "style": "Cyberpunk Casino",
+        "colors": ["#A3E635", "#000000", "#FFFFFF"],
+        "animation": "Smooth easing with confetti explosion on win."
+      },
+      "mystery_box": {
+        "style": "3D Floating Cube",
+        "animation": "Hover float, shake on click, open with light ray emission."
+      }
+    },
+    "chatbot": {
+      "avatar": "Minimalist geometric robot face or just the brand 'F' logo glowing.",
+      "bubble_user": "bg-primary text-black rounded-tr-none",
+      "bubble_bot": "bg-zinc-800 text-white rounded-tl-none border border-zinc-700"
+    }
+  },
+  "assets": {
+    "images": {
+      "supplements_hero": "https://images.unsplash.com/photo-1700225195141-30a6a826cef8",
+      "fitness_lifestyle": "https://images.unsplash.com/photo-1740895307943-7878df384db1",
+      "nature_bg": "https://images.unsplash.com/photo-1758274535230-3641d0632878",
+      "abstract_texture": "https://images.unsplash.com/photo-1762278805066-f62f7e0f5b7d"
+    },
+    "icons_library": "Lucide React (Default) + Phosphor Icons (for Games/Premium feel)",
+    "logo_placeholder": "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png"
+  },
+  "accessibility": {
+    "rules": [
+      "Ensure text on primary color is Black (for contrast).",
+      "Do not use color alone to convey funnel stage status (use icons/labels).",
+      "Focus states must have a high-contrast ring (white or primary)."
+    ]
+  },
+  "universal_guidelines": {
+    "do_not_use": [
+      "Gradients for text (readability issues)",
+      "Generic 'Blue' for primary actions (Use Lime)",
+      "Rounded-xl for everything (Use full rounded for buttons, rounded-2xl for cards)"
+    ],
+    "must_do": [
+      "Use data-testid on all interactive elements.",
+      "Implement error boundaries for Games components.",
+      "Use 'sonner' for all toast notifications."
+    ]
+  }
+}
