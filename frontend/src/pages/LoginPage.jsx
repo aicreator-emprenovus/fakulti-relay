@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/App";
+import { useAuth, Footer } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,6 +90,9 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      <div className="absolute bottom-0 left-0 right-0 z-10">
+        <Footer />
+      </div>
     </div>
   );
 }

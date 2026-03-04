@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Footer } from "@/App";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -463,6 +464,9 @@ export default function GamePublicPage() {
         ) : (
           GameComponent && <GameComponent config={config} onPlay={handlePlay} />
         )}
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 z-10">
+        <Footer />
       </div>
     </div>
   );

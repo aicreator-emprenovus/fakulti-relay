@@ -23,7 +23,7 @@ const ThemeContext = createContext(null);
 
 export const useAuth = () => useContext(AuthContext);
 export const useTheme = () => useContext(ThemeContext);
-export { API, BACKEND_URL };
+export { API, BACKEND_URL, Footer };
 
 function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => localStorage.getItem("faculty_theme") || "light");
@@ -95,6 +95,21 @@ function AuthProvider({ children }) {
   );
 }
 
+const EMPRENOVUS_LOGO = "https://customer-assets.emergentagent.com/job_maestro-ventas/artifacts/seoa983y_isotipo.png";
+
+function Footer() {
+  return (
+    <footer className="w-full py-4 px-6 border-t border-border text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5 flex-wrap" data-testid="app-footer">
+      <span>&copy; 2026 Fakulti. Todos los derechos reservados</span>
+      <span className="hidden sm:inline">|</span>
+      <a href="https://www.emprenovus.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+        <img src={EMPRENOVUS_LOGO} alt="Emprenovus" className="h-4 w-4 inline-block" />
+        <span>AI powered by <span className="font-semibold">Emprenovus</span></span>
+      </a>
+    </footer>
+  );
+}
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="text-primary text-lg">Cargando...</div></div>;
@@ -107,10 +122,11 @@ function AdminLayout({ children }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar currentPath={location.pathname} />
-      <main className="flex-1 ml-0 md:ml-64 min-h-screen">
-        <div className="p-4 md:p-8">
+      <main className="flex-1 ml-0 md:ml-64 min-h-screen flex flex-col">
+        <div className="p-4 md:p-8 flex-1">
           {children}
         </div>
+        <Footer />
       </main>
     </div>
   );
