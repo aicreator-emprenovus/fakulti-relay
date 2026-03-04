@@ -35,7 +35,8 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 9. **Lead Stage Renaming** - "En Negociación" and "Perdido" replacing old names, with DB migration
 10. **Chat Delete Functions** - Delete individual messages and clear entire conversations
 11. **Loyalty System** - Sequence CRUD, lead enrollment, auto-enrollment on purchase, message processing with progress tracking
-12. **Custom Branding** - Fakulti title, Emprenovus footer, hidden Emergent badge
+12. **Loyalty Metrics Dashboard** - Repurchase rates, retention rates, revenue by product, sequence effectiveness, top buyers with charts
+13. **Custom Branding** - Fakulti title, Emprenovus footer, hidden Emergent badge
 
 ### Funnel Stages
 - `nuevo`, `interesado`, `en_negociacion`, `cliente_nuevo`, `cliente_activo`, `perdido`
