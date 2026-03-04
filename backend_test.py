@@ -213,7 +213,7 @@ class FacultyCRMAPITester:
     # ========== GAMES TESTS ==========
     
     def test_get_games_config(self):
-        """Test get games config - should have 3 game configs"""
+        """Test get games config - should have exactly 3 game configs: roulette, slot_machine, scratch_card"""
         success, response = self.run_test(
             "Get games config",
             "GET",
@@ -223,13 +223,88 @@ class FacultyCRMAPITester:
         if success:
             games = response if isinstance(response, list) else []
             print(f"   Found {len(games)} game configs")
-            expected_games = ["roulette", "mystery_box", "lucky_button"]
+            expected_games = ["roulette", "slot_machine", "scratch_card"]
+            found_game_types = []
+            
             for game in games:
                 game_type = game.get('game_type', '')
+                found_game_types.append(game_type)
                 print(f"   - {game.get('name', 'N/A')} ({game_type})")
             
+            # Check exactly 3 games
             if len(games) != 3:
-                self.failed_tests.append(f"Expected 3 game configs, got {len(games)}")
+                self.failed_tests.append(f"Expected exactly 3 game configs, got {len(games)}")
+                return False
+                
+            # Check all expected games are present
+            for expected_game in expected_games:
+                if expected_game not in found_game_types:
+                    self.failed_tests.append(f"Missing expected game: {expected_game}")
+                    return False
+                    
+            # Check no old games are present
+            old_games = ["mystery_box", "lucky_button"]
+            for old_game in old_games:
+                if old_game in found_game_types:
+                    self.failed_tests.append(f"Old game still present (should be removed): {old_game}")
+    def test_game_public_slot_machine(self):
+        """Test public slot machine config endpoint"""
+        success, response = self.run_test(
+            "Get public slot_machine config",
+            "GET",
+            "games/public/slot_machine",
+            200
+        )
+        if success:
+            # Should not have probabilities in public config
+            if 'probabilities' in str(response):
+                self.failed_tests.append("Public game config should not expose probabilities")
+            print(f"   Game: {response.get('name', 'N/A')}")
+            print(f"   Prizes: {len(response.get('prizes', []))}")
+            if response.get('game_type') != 'slot_machine':
+                self.failed_tests.append(f"Expected game_type 'slot_machine', got '{response.get('game_type')}'")
+        return success
+
+    def test_game_public_scratch_card(self):
+        """Test public scratch card config endpoint"""
+        success, response = self.run_test(
+            "Get public scratch_card config",
+            "GET",
+            "games/public/scratch_card",
+            200
+        )
+        if success:
+            # Should not have probabilities in public config
+            if 'probabilities' in str(response):
+                self.failed_tests.append("Public game config should not expose probabilities")
+            print(f"   Game: {response.get('name', 'N/A')}")
+            print(f"   Prizes: {len(response.get('prizes', []))}")
+            if response.get('game_type') != 'scratch_card':
+                self.failed_tests.append(f"Expected game_type 'scratch_card', got '{response.get('game_type')}'")
+        return success
+
+    def test_game_public_mystery_box_404(self):
+        """Test that mystery_box game returns 404 (should be removed)"""
+        success, response = self.run_test(
+            "Get public mystery_box config (should be 404)",
+            "GET",
+            "games/public/mystery_box",
+            404
+        )
+        if success:
+            print("   ✅ mystery_box correctly returns 404 (removed)")
+        return success
+
+    def test_game_public_lucky_button_404(self):
+        """Test that lucky_button game returns 404 (should be removed)"""
+        success, response = self.run_test(
+            "Get public lucky_button config (should be 404)",
+            "GET",
+            "games/public/lucky_button",
+            404
+        )
+        if success:
+            print("   ✅ lucky_button correctly returns 404 (removed)")
         return success
 
     def test_game_public(self):
@@ -258,6 +333,50 @@ class FacultyCRMAPITester:
         }
         success, response = self.run_test(
             "Play roulette game",
+            "POST",
+            "games/play",
+            200,
+            data=game_data
+        )
+        if success:
+            print(f"   Prize won: {response.get('prize', 'N/A')}")
+            print(f"   Message: {response.get('message', 'N/A')}")
+            if response.get('coupon'):
+                print(f"   Coupon: {response.get('coupon')}")
+        return success
+
+    def test_game_play_slot_machine(self):
+        """Test playing slot machine game"""
+        game_data = {
+            "game_type": "slot_machine",
+            "whatsapp": "+593988888888",
+            "name": "Test Slot Player",
+            "city": "Guayaquil"
+        }
+        success, response = self.run_test(
+            "Play slot_machine game",
+            "POST",
+            "games/play",
+            200,
+            data=game_data
+        )
+        if success:
+            print(f"   Prize won: {response.get('prize', 'N/A')}")
+            print(f"   Message: {response.get('message', 'N/A')}")
+            if response.get('coupon'):
+                print(f"   Coupon: {response.get('coupon')}")
+        return success
+
+    def test_game_play_scratch_card(self):
+        """Test playing scratch card game"""
+        game_data = {
+            "game_type": "scratch_card",
+            "whatsapp": "+593977777777",
+            "name": "Test Scratch Player",
+            "city": "Cuenca"
+        }
+        success, response = self.run_test(
+            "Play scratch_card game",
             "POST",
             "games/play",
             200,
@@ -453,7 +572,13 @@ def main():
     print("\n🎮 GAMES TESTS")
     tester.test_get_games_config()
     tester.test_game_public()
+    tester.test_game_public_slot_machine()
+    tester.test_game_public_scratch_card()
+    tester.test_game_public_mystery_box_404()
+    tester.test_game_public_lucky_button_404()
     tester.test_game_play()
+    tester.test_game_play_slot_machine()
+    tester.test_game_play_scratch_card()
     
     # Quotations Tests
     print("\n📄 QUOTATIONS TESTS")

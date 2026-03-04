@@ -876,14 +876,14 @@ async def startup():
             },
             {
                 "id": str(uuid.uuid4()),
-                "game_type": "mystery_box",
-                "name": "Caja Misteriosa Faculty",
+                "game_type": "slot_machine",
+                "name": "Tragamonedas Faculty",
                 "prizes": [
-                    {"name": "Descuento Sorpresa 20%", "probability": 15, "color": "#A3E635", "coupon": "CAJA20", "message": "Abriste la caja y encontraste un 20% de descuento"},
-                    {"name": "Cupon 10%", "probability": 35, "color": "#3B82F6", "coupon": "CAJA10", "message": "Encontraste un cupon del 10%"},
-                    {"name": "Envio Gratis", "probability": 25, "color": "#F59E0B", "coupon": "CAJAENVIO", "message": "Tu caja contiene envio gratis"},
-                    {"name": "Regalo Sorpresa", "probability": 10, "color": "#8B5CF6", "coupon": "REGALO", "message": "Ganaste un regalo sorpresa con tu proxima compra"},
-                    {"name": "5% Descuento", "probability": 15, "color": "#64748B", "coupon": "CAJA5", "message": "Encontraste un 5% de descuento"}
+                    {"name": "20% Descuento", "probability": 10, "color": "#A3E635", "coupon": "SLOT20", "message": "Tres iguales! Ganaste un 20% de descuento"},
+                    {"name": "15% Descuento", "probability": 15, "color": "#8B5CF6", "coupon": "SLOT15", "message": "Gran combinacion! 15% de descuento para ti"},
+                    {"name": "10% Descuento", "probability": 25, "color": "#3B82F6", "coupon": "SLOT10", "message": "Buena jugada! 10% de descuento"},
+                    {"name": "Envio Gratis", "probability": 20, "color": "#F59E0B", "coupon": "SLOTENVIO", "message": "Ganaste envio gratis en tu proxima compra"},
+                    {"name": "5% Descuento", "probability": 30, "color": "#64748B", "coupon": "SLOT5", "message": "Tienes un 5% de descuento: SLOT5"}
                 ],
                 "active": True,
                 "max_plays_per_whatsapp": 1,
@@ -891,13 +891,14 @@ async def startup():
             },
             {
                 "id": str(uuid.uuid4()),
-                "game_type": "lucky_button",
-                "name": "Boton de la Suerte Faculty",
+                "game_type": "scratch_card",
+                "name": "Raspadita Faculty",
                 "prizes": [
-                    {"name": "Descuento 15%", "probability": 20, "color": "#A3E635", "coupon": "SUERTE15", "message": "La suerte esta de tu lado: 15% de descuento"},
-                    {"name": "Descuento 10%", "probability": 30, "color": "#3B82F6", "coupon": "SUERTE10", "message": "Tienes suerte: 10% de descuento"},
-                    {"name": "Envio Gratis", "probability": 20, "color": "#F59E0B", "coupon": "SUERTEENVIO", "message": "Tu suerte trajo envio gratis"},
-                    {"name": "Descuento 5%", "probability": 30, "color": "#64748B", "coupon": "SUERTE5", "message": "Tienes un 5% de descuento"}
+                    {"name": "Descuento 25%", "probability": 5, "color": "#A3E635", "coupon": "RASPA25", "message": "Descubriste un 25% de descuento!"},
+                    {"name": "Descuento 15%", "probability": 15, "color": "#8B5CF6", "coupon": "RASPA15", "message": "Debajo de la capa dorada: 15% de descuento"},
+                    {"name": "Descuento 10%", "probability": 25, "color": "#3B82F6", "coupon": "RASPA10", "message": "Raspa y gana! 10% de descuento"},
+                    {"name": "Envio Gratis", "probability": 25, "color": "#F59E0B", "coupon": "RASPAENVIO", "message": "Encontraste envio gratis"},
+                    {"name": "5% Descuento", "probability": 30, "color": "#64748B", "coupon": "RASPA5", "message": "Un 5% de descuento te espera: RASPA5"}
                 ],
                 "active": True,
                 "max_plays_per_whatsapp": 1,
@@ -906,6 +907,46 @@ async def startup():
         ]
         await db.games_config.insert_many(games)
         logger.info("Game configs seeded")
+    
+    # Migrate old games to new ones
+    old_mystery = await db.games_config.find_one({"game_type": "mystery_box"})
+    if old_mystery:
+        await db.games_config.delete_one({"game_type": "mystery_box"})
+        logger.info("Removed mystery_box game config")
+    old_lucky = await db.games_config.find_one({"game_type": "lucky_button"})
+    if old_lucky:
+        await db.games_config.delete_one({"game_type": "lucky_button"})
+        logger.info("Removed lucky_button game config")
+    if not await db.games_config.find_one({"game_type": "slot_machine"}):
+        await db.games_config.insert_one({
+            "id": str(uuid.uuid4()),
+            "game_type": "slot_machine",
+            "name": "Tragamonedas Faculty",
+            "prizes": [
+                {"name": "20% Descuento", "probability": 10, "color": "#A3E635", "coupon": "SLOT20", "message": "Tres iguales! Ganaste un 20% de descuento"},
+                {"name": "15% Descuento", "probability": 15, "color": "#8B5CF6", "coupon": "SLOT15", "message": "Gran combinacion! 15% de descuento para ti"},
+                {"name": "10% Descuento", "probability": 25, "color": "#3B82F6", "coupon": "SLOT10", "message": "Buena jugada! 10% de descuento"},
+                {"name": "Envio Gratis", "probability": 20, "color": "#F59E0B", "coupon": "SLOTENVIO", "message": "Ganaste envio gratis en tu proxima compra"},
+                {"name": "5% Descuento", "probability": 30, "color": "#64748B", "coupon": "SLOT5", "message": "Tienes un 5% de descuento: SLOT5"}
+            ],
+            "active": True, "max_plays_per_whatsapp": 1, "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        logger.info("Slot machine game config seeded")
+    if not await db.games_config.find_one({"game_type": "scratch_card"}):
+        await db.games_config.insert_one({
+            "id": str(uuid.uuid4()),
+            "game_type": "scratch_card",
+            "name": "Raspadita Faculty",
+            "prizes": [
+                {"name": "Descuento 25%", "probability": 5, "color": "#A3E635", "coupon": "RASPA25", "message": "Descubriste un 25% de descuento!"},
+                {"name": "Descuento 15%", "probability": 15, "color": "#8B5CF6", "coupon": "RASPA15", "message": "Debajo de la capa dorada: 15% de descuento"},
+                {"name": "Descuento 10%", "probability": 25, "color": "#3B82F6", "coupon": "RASPA10", "message": "Raspa y gana! 10% de descuento"},
+                {"name": "Envio Gratis", "probability": 25, "color": "#F59E0B", "coupon": "RASPAENVIO", "message": "Encontraste envio gratis"},
+                {"name": "5% Descuento", "probability": 30, "color": "#64748B", "coupon": "RASPA5", "message": "Un 5% de descuento te espera: RASPA5"}
+            ],
+            "active": True, "max_plays_per_whatsapp": 1, "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        logger.info("Scratch card game config seeded")
     
     # Seed sample leads
     leads_count = await db.leads.count_documents({})

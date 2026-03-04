@@ -148,43 +148,100 @@ function RouletteGame({ config, onPlay }) {
   );
 }
 
-function MysteryBoxGame({ config, onPlay }) {
-  const [phase, setPhase] = useState("idle");
+function SlotMachineGame({ config, onPlay }) {
+  const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState(null);
+  const [reels, setReels] = useState([0, 0, 0]);
+  const [displayReels, setDisplayReels] = useState([0, 0, 0]);
+  const SYMBOLS = ["🦴", "💊", "🌿", "⭐", "💎", "🧬"];
+  const intervalRefs = useRef([]);
 
-  const play = async () => {
-    setPhase("shaking");
+  const spin = async () => {
+    setSpinning(true);
+    setResult(null);
+
+    // Start all 3 reels spinning
+    for (let r = 0; r < 3; r++) {
+      intervalRefs.current[r] = setInterval(() => {
+        setDisplayReels(prev => {
+          const copy = [...prev];
+          copy[r] = (copy[r] + 1) % SYMBOLS.length;
+          return copy;
+        });
+      }, 80 + r * 20);
+    }
+
     try {
       const res = await onPlay();
-      setTimeout(() => setPhase("opening"), 1500);
-      setTimeout(() => { setPhase("revealed"); setResult(res); }, 2300);
+      // Determine final symbols based on prize index
+      const prizeIdx = res.prize_index;
+      let finalReels;
+      if (prizeIdx <= 1) {
+        // Big prizes: 3 matching
+        const sym = prizeIdx;
+        finalReels = [sym, sym, sym];
+      } else if (prizeIdx <= 3) {
+        // Medium: 2 matching
+        finalReels = [prizeIdx, prizeIdx, (prizeIdx + 2) % SYMBOLS.length];
+      } else {
+        // Small: all different
+        finalReels = [0, 2, 4];
+      }
+
+      // Stop reels with staggered timing
+      for (let r = 0; r < 3; r++) {
+        await new Promise(resolve => setTimeout(resolve, 600 + r * 500));
+        clearInterval(intervalRefs.current[r]);
+        setDisplayReels(prev => {
+          const copy = [...prev];
+          copy[r] = finalReels[r];
+          return copy;
+        });
+      }
+
+      setReels(finalReels);
+      setSpinning(false);
+      setResult(res);
     } catch (err) {
-      setPhase("idle");
+      intervalRefs.current.forEach(clearInterval);
+      setSpinning(false);
       toast.error(err.response?.data?.detail || "Error al jugar");
     }
   };
 
+  useEffect(() => {
+    return () => intervalRefs.current.forEach(clearInterval);
+  }, []);
+
   return (
     <div className="flex flex-col items-center gap-6">
       {result && <Confetti />}
-      <div className="relative w-48 h-48 cursor-pointer" onClick={phase === "idle" ? play : undefined} data-testid="mystery-box">
-        {phase !== "revealed" ? (
-          <div className={`w-full h-full rounded-2xl flex items-center justify-center text-7xl transition-all ${phase === "shaking" ? "shake-animation" : ""} ${phase === "opening" ? "box-open" : ""}`}
-            style={{ background: "linear-gradient(135deg, #A3E635 0%, #3F6212 100%)", boxShadow: "0 0 40px rgba(163,230,53,0.3)" }}>
-            🎁
-          </div>
-        ) : (
-          <div className="prize-reveal w-full h-full rounded-2xl flex items-center justify-center bg-muted border-2 border-primary" data-testid="prize-result">
-            <div className="text-center p-4">
-              <p className="text-4xl mb-2">🎉</p>
-              <p className="text-xl font-bold text-primary">{result?.prize}</p>
+      <div className="bg-gradient-to-b from-amber-900/80 to-amber-950/90 rounded-2xl p-6 border-2 border-amber-600/50 shadow-lg" data-testid="slot-machine">
+        <div className="text-center mb-3">
+          <p className="text-amber-400 font-bold text-lg font-heading tracking-wider">TRAGAMONEDAS</p>
+        </div>
+        <div className="flex gap-2 bg-black/60 rounded-xl p-4">
+          {[0, 1, 2].map(r => (
+            <div key={r} className="w-20 h-24 bg-white/10 rounded-lg flex items-center justify-center border border-amber-600/30 overflow-hidden">
+              <span className={`text-5xl transition-transform ${spinning ? "animate-bounce" : ""}`} style={{ animationDelay: `${r * 100}ms` }}>
+                {SYMBOLS[displayReels[r]]}
+              </span>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+        <div className="flex justify-center mt-1">
+          <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+        </div>
       </div>
-      {phase === "idle" && <p className="text-muted-foreground text-sm">Toca la caja para abrirla</p>}
-      {result && (
-        <div className="text-center animate-fade-in-up">
+
+      {!result ? (
+        <Button data-testid="slot-spin-btn" onClick={spin} disabled={spinning}
+          className="bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold rounded-full px-10 py-3 text-lg hover:from-amber-400 hover:to-amber-500 disabled:opacity-50 shadow-lg">
+          {spinning ? "Girando..." : "TIRAR LA PALANCA"}
+        </Button>
+      ) : (
+        <div className="text-center animate-fade-in-up" data-testid="prize-result">
+          <p className="text-2xl font-bold text-primary mb-2">{result.prize}</p>
           <p className="text-muted-foreground">{result.message}</p>
           {result.coupon && <p className="mt-2 text-lg font-bold text-foreground bg-muted px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
         </div>
@@ -193,43 +250,143 @@ function MysteryBoxGame({ config, onPlay }) {
   );
 }
 
-function LuckyButtonGame({ config, onPlay }) {
-  const [pressing, setPressing] = useState(false);
+function ScratchCardGame({ config, onPlay }) {
+  const canvasRef = useRef(null);
+  const [scratching, setScratching] = useState(false);
   const [result, setResult] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [scratchPercent, setScratchPercent] = useState(0);
+  const isDrawing = useRef(false);
+  const resultRef = useRef(null);
 
-  const play = async () => {
-    setPressing(true);
+  const startGame = async () => {
     try {
       const res = await onPlay();
-      setTimeout(() => { setPressing(false); setResult(res); }, 2000);
+      resultRef.current = res;
+      setResult(res);
+      setLoaded(true);
+      // Draw golden scratch layer after result is ready
+      requestAnimationFrame(() => drawScratchLayer());
     } catch (err) {
-      setPressing(false);
       toast.error(err.response?.data?.detail || "Error al jugar");
+    }
+  };
+
+  const drawScratchLayer = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    // Golden gradient overlay
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, "#D4A017");
+    grad.addColorStop(0.3, "#FFD700");
+    grad.addColorStop(0.6, "#DAA520");
+    grad.addColorStop(1, "#B8860B");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    // Add texture dots
+    for (let i = 0; i < 300; i++) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.15})`;
+      ctx.fill();
+    }
+    // "RASPA AQUI" text
+    ctx.fillStyle = "#8B6914";
+    ctx.font = "bold 20px Manrope";
+    ctx.textAlign = "center";
+    ctx.fillText("RASPA AQUI", w / 2, h / 2 - 5);
+    ctx.font = "14px Manrope";
+    ctx.fillText("Usa tu dedo o mouse", w / 2, h / 2 + 20);
+  };
+
+  const scratch = (e) => {
+    if (!loaded || revealed) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    let x, y;
+    if (e.touches) {
+      x = (e.touches[0].clientX - rect.left) * scaleX;
+      y = (e.touches[0].clientY - rect.top) * scaleY;
+    } else {
+      x = (e.clientX - rect.left) * scaleX;
+      y = (e.clientY - rect.top) * scaleY;
+    }
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    // Calculate scratch percentage
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let transparent = 0;
+    for (let i = 3; i < imageData.data.length; i += 4) {
+      if (imageData.data[i] === 0) transparent++;
+    }
+    const pct = (transparent / (imageData.data.length / 4)) * 100;
+    setScratchPercent(pct);
+    if (pct > 45 && !revealed) {
+      setRevealed(true);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
   };
 
   return (
     <div className="flex flex-col items-center gap-6">
-      {result && <Confetti />}
-      {!result ? (
-        <button data-testid="lucky-btn" onClick={play} disabled={pressing}
-          className={`w-40 h-40 rounded-full flex items-center justify-center text-5xl font-bold transition-all ${pressing ? "scale-90 bg-primary/80" : "bg-primary hover:scale-110 lucky-pulse"}`}
-          style={{ color: "#000" }}>
-          {pressing ? (
-            <div className="animate-spin text-3xl">⚡</div>
-          ) : "⚡"}
-        </button>
-      ) : (
-        <div className="w-40 h-40 rounded-full flex items-center justify-center bg-muted border-2 border-primary animate-fade-in-up" data-testid="prize-result">
-          <div className="text-center">
-            <p className="text-3xl mb-1">🎉</p>
-            <p className="text-sm font-bold text-primary">{result.prize}</p>
+      {revealed && <Confetti />}
+      {!loaded ? (
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-72 h-44 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg border-2 border-amber-500/50">
+            <div className="text-center">
+              <p className="text-5xl mb-2">🎟</p>
+              <p className="text-amber-900 font-bold text-lg">Raspadita Faculty</p>
+            </div>
           </div>
+          <Button data-testid="scratch-start-btn" onClick={startGame}
+            className="bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold rounded-full px-10 py-3 text-lg hover:from-amber-400 hover:to-amber-500 shadow-lg">
+            OBTENER MI RASPADITA
+          </Button>
+        </div>
+      ) : (
+        <div className="relative w-72 h-44 select-none" data-testid="scratch-card">
+          {/* Prize underneath */}
+          <div className="absolute inset-0 rounded-2xl bg-card border-2 border-primary flex items-center justify-center">
+            <div className="text-center p-4">
+              <p className="text-3xl mb-2">🎉</p>
+              <p className="text-xl font-bold text-primary">{result?.prize}</p>
+              {result?.coupon && <p className="text-sm text-muted-foreground mt-1">Cupon: {result?.coupon}</p>}
+            </div>
+          </div>
+          {/* Scratch canvas on top */}
+          {!revealed && (
+            <canvas
+              ref={canvasRef}
+              width={288}
+              height={176}
+              className="absolute inset-0 w-full h-full rounded-2xl cursor-pointer touch-none"
+              data-testid="scratch-canvas"
+              onMouseDown={() => { isDrawing.current = true; setScratching(true); }}
+              onMouseUp={() => { isDrawing.current = false; }}
+              onMouseLeave={() => { isDrawing.current = false; }}
+              onMouseMove={e => isDrawing.current && scratch(e)}
+              onTouchStart={() => { isDrawing.current = true; setScratching(true); }}
+              onTouchEnd={() => { isDrawing.current = false; }}
+              onTouchMove={e => { e.preventDefault(); scratch(e); }}
+            />
+          )}
         </div>
       )}
-      {!result && <p className="text-muted-foreground text-sm">{pressing ? "Buscando tu premio..." : "Presiona el boton de la suerte"}</p>}
-      {result && (
-        <div className="text-center animate-fade-in-up">
+      {loaded && !revealed && <p className="text-muted-foreground text-sm">Raspa la zona dorada para descubrir tu premio</p>}
+      {revealed && result && (
+        <div className="text-center animate-fade-in-up" data-testid="prize-result">
+          <p className="text-2xl font-bold text-primary mb-2">{result.prize}</p>
           <p className="text-muted-foreground">{result.message}</p>
           {result.coupon && <p className="mt-2 text-lg font-bold text-foreground bg-muted px-4 py-2 rounded-lg inline-block">Cupon: {result.coupon}</p>}
         </div>
@@ -267,7 +424,7 @@ export default function GamePublicPage() {
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Cargando juego...</div>;
   if (error) return <div className="min-h-screen bg-background flex items-center justify-center text-red-400">{error}</div>;
 
-  const GameComponent = { roulette: RouletteGame, mystery_box: MysteryBoxGame, lucky_button: LuckyButtonGame }[gameType];
+  const GameComponent = { roulette: RouletteGame, slot_machine: SlotMachineGame, scratch_card: ScratchCardGame }[gameType];
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4" data-testid="game-public-page">

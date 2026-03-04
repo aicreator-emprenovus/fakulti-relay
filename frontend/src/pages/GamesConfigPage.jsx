@@ -57,8 +57,8 @@ export default function GamesConfigPage() {
     });
   };
 
-  const gameTypeLabel = { roulette: "Ruleta", mystery_box: "Caja Misteriosa", lucky_button: "Boton de Suerte" };
-  const gameTypeIcon = { roulette: "🎡", mystery_box: "🎁", lucky_button: "⚡" };
+  const gameTypeLabel = { roulette: "Ruleta", slot_machine: "Tragamonedas", scratch_card: "Raspadita" };
+  const gameTypeIcon = { roulette: "🎡", slot_machine: "🎰", scratch_card: "🎟" };
   const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
 
   if (loading) return <div className="text-muted-foreground text-center py-12">Cargando configuracion...</div>;
@@ -156,7 +156,7 @@ export default function GamesConfigPage() {
           <Card className="bg-card border-border rounded-2xl">
             <CardContent className="p-6 space-y-4">
               <p className="text-sm text-muted-foreground">Comparte estos links para que tus clientes jueguen. Puedes generar codigos QR con ellos.</p>
-              {["roulette", "mystery_box", "lucky_button"].map(gt => (
+              {["roulette", "slot_machine", "scratch_card"].map(gt => (
                 <div key={gt} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                   <span className="text-2xl">{gameTypeIcon[gt]}</span>
                   <div className="flex-1">
