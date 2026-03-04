@@ -5,8 +5,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Send, MessageSquare, Bot, User } from "lucide-react";
+import { Send, MessageSquare, Bot, User, Trash2, X } from "lucide-react";
+
+const STAGE_CONFIG = {
+  nuevo: { label: "Nuevo", color: "#3B82F6" },
+  interesado: { label: "Interesado", color: "#8B5CF6" },
+  en_negociacion: { label: "En Negociacion", color: "#F59E0B" },
+  cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
+  cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
+  perdido: { label: "Perdido", color: "#64748B" },
+};
 
 export default function ChatPage() {
   const [sessions, setSessions] = useState([]);
@@ -14,11 +24,14 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [leadInfo, setLeadInfo] = useState(null);
   const messagesEndRef = useRef(null);
 
-  useEffect(() => {
+  const fetchSessions = () => {
     axios.get(`${API}/chat/sessions`).then(res => setSessions(res.data)).catch(() => {});
-  }, []);
+  };
+
+  useEffect(() => { fetchSessions(); }, []);
 
   useEffect(() => {
     if (activeSession) {
@@ -34,6 +47,7 @@ export default function ChatPage() {
     const sid = `session_${Date.now()}`;
     setActiveSession(sid);
     setMessages([]);
+    setLeadInfo(null);
   };
 
   const sendMessage = async () => {
@@ -50,11 +64,37 @@ export default function ChatPage() {
       const res = await axios.post(`${API}/chat/message`, { session_id: sessionId, message: input });
       const botMsg = { role: "assistant", content: res.data.response, timestamp: new Date().toISOString() };
       setMessages(prev => [...prev, botMsg]);
+      if (res.data.lead) setLeadInfo(res.data.lead);
     } catch {
       toast.error("Error al enviar mensaje");
       setMessages(prev => [...prev, { role: "assistant", content: "Error al procesar tu mensaje. Intenta de nuevo.", timestamp: new Date().toISOString() }]);
     }
     setSending(false);
+  };
+
+  const deleteMessage = async (msgId, index) => {
+    if (!msgId) {
+      setMessages(prev => prev.filter((_, i) => i !== index));
+      return;
+    }
+    try {
+      await axios.delete(`${API}/chat/messages/${msgId}`);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+      toast.success("Mensaje eliminado");
+    } catch { toast.error("Error al eliminar mensaje"); }
+  };
+
+  const deleteConversation = async () => {
+    if (!activeSession) return;
+    if (!window.confirm("Eliminar toda la conversacion?")) return;
+    try {
+      await axios.delete(`${API}/chat/sessions/${activeSession}`);
+      setMessages([]);
+      setActiveSession(null);
+      setLeadInfo(null);
+      fetchSessions();
+      toast.success("Conversacion eliminada");
+    } catch { toast.error("Error al eliminar conversacion"); }
   };
 
   return (
@@ -79,7 +119,7 @@ export default function ChatPage() {
                   <button key={s.session_id} onClick={() => setActiveSession(s.session_id)}
                     className={`w-full text-left p-2 rounded-lg text-xs transition-colors ${activeSession === s.session_id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}
                     data-testid={`session-${s.session_id}`}>
-                    <p className="truncate font-medium">{s.last_message?.slice(0, 40) || "Sin mensajes"}</p>
+                    <p className="truncate font-medium">{s.lead_name || s.last_message?.slice(0, 30) || "Sin mensajes"}</p>
                     <p className="text-muted-foreground mt-0.5">{s.message_count} msgs</p>
                   </button>
                 ))}
@@ -91,14 +131,31 @@ export default function ChatPage() {
 
         <Card className="bg-card border-border rounded-2xl md:col-span-3 flex flex-col">
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
-            <div className="p-4 border-b border-input flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <Bot size={16} className="text-primary" />
+            <div className="p-4 border-b border-input flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Bot size={16} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-foreground font-medium">
+                    Asesor Faculty
+                    {leadInfo && <span className="text-muted-foreground font-normal"> — {leadInfo.name}</span>}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">Powered by GPT-5.2</p>
+                    {leadInfo && (
+                      <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
+                        {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-foreground font-medium">Asesor Faculty</p>
-                <p className="text-xs text-muted-foreground">Powered by GPT-5.2</p>
-              </div>
+              {activeSession && messages.length > 0 && (
+                <Button data-testid="delete-conversation-btn" variant="ghost" size="sm" className="text-muted-foreground hover:text-red-400" onClick={deleteConversation}>
+                  <Trash2 size={14} className="mr-1" /> Eliminar
+                </Button>
+              )}
             </div>
 
             <ScrollArea className="flex-1 p-4">
@@ -107,14 +164,24 @@ export default function ChatPage() {
                   <div className="text-center py-12">
                     <Bot size={40} className="text-muted-foreground mx-auto mb-3" />
                     <p className="text-muted-foreground text-sm">Inicia una conversacion con el asesor virtual de Faculty</p>
-                    <p className="text-muted-foreground text-xs mt-1">Puedes preguntar sobre productos, precios, beneficios y mas</p>
+                    <p className="text-muted-foreground text-xs mt-1">El bot saludara al lead y le pedira su nombre para registrarlo automaticamente</p>
                   </div>
                 )}
                 {messages.map((msg, i) => (
-                  <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div key={i} className={`group flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     {msg.role === "assistant" && <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-1"><Bot size={14} className="text-primary" /></div>}
-                    <div className={`max-w-[80%] px-4 py-2.5 text-sm ${msg.role === "user" ? "chat-bubble-user" : "chat-bubble-bot"}`} data-testid={`chat-msg-${i}`}>
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <div className="relative max-w-[80%]">
+                      <div className={`px-4 py-2.5 text-sm ${msg.role === "user" ? "chat-bubble-user" : "chat-bubble-bot"}`} data-testid={`chat-msg-${i}`}>
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                      <button
+                        data-testid={`delete-msg-${i}`}
+                        onClick={() => deleteMessage(msg.id, i)}
+                        className="absolute -top-2 -right-2 hidden group-hover:flex w-5 h-5 rounded-full bg-red-500/90 text-white items-center justify-center text-xs hover:bg-red-600 transition-all"
+                        title="Eliminar mensaje"
+                      >
+                        <X size={10} />
+                      </button>
                     </div>
                     {msg.role === "user" && <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1"><User size={14} className="text-primary" /></div>}
                   </div>

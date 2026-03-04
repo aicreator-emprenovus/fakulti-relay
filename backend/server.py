@@ -34,7 +34,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-FUNNEL_STAGES = ["nuevo", "interesado", "caliente", "cliente_nuevo", "cliente_activo", "frio"]
+FUNNEL_STAGES = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "cliente_activo", "perdido"]
 SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro"]
 
 # ========== PYDANTIC MODELS ==========
@@ -476,7 +476,7 @@ async def create_quotation(req: QuotationCreate, user=Depends(get_current_user))
     
     await db.leads.update_one(
         {"id": req.lead_id},
-        {"$set": {"funnel_stage": "caliente", "last_interaction": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"funnel_stage": "en_negociacion", "last_interaction": datetime.now(timezone.utc).isoformat()}}
     )
     return doc
 
@@ -577,8 +577,51 @@ async def send_chat_message(req: ChatMessageRequest, user=Depends(get_current_us
     products = await db.products.find({}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
     
+    # Check session metadata for existing lead
+    session_meta = await db.chat_sessions_meta.find_one({"session_id": req.session_id}, {"_id": 0})
+    lead = None
+    lead_name = ""
+    has_name = False
+    
+    if session_meta and session_meta.get("lead_id"):
+        lead = await db.leads.find_one({"id": session_meta["lead_id"]}, {"_id": 0})
+        if lead:
+            lead_name = lead.get("name", "")
+            has_name = True
+    elif req.lead_id:
+        lead = await db.leads.find_one({"id": req.lead_id}, {"_id": 0})
+        if lead:
+            lead_name = lead.get("name", "")
+            has_name = True
+            await db.chat_sessions_meta.update_one(
+                {"session_id": req.session_id},
+                {"$set": {"session_id": req.session_id, "lead_id": lead["id"], "lead_name": lead_name}},
+                upsert=True
+            )
+    
+    # Check for pending quotation
+    pending_quote = ""
+    if lead:
+        quote = await db.quotations.find_one({"lead_id": lead["id"], "status": "pendiente"}, {"_id": 0})
+        if quote:
+            pending_quote = f"\nEste cliente tiene una cotizacion pendiente por ${quote['total']:.2f}. Pregunta si desea continuar con ella."
+    
+    # Build context-aware system prompt
+    name_instruction = ""
+    if not has_name:
+        name_instruction = """
+IMPORTANTE - REGISTRO DE LEAD:
+- Este es un lead NUEVO. Saluda cordialmente y pregunta su nombre y apellido.
+- Una vez que proporcione su nombre, confirma diciendo su nombre y continua con el flujo de productos.
+- Cuando el usuario diga su nombre, incluye al FINAL de tu respuesta (en una linea separada): [LEAD_NAME:Nombre Apellido]
+- Solo incluye [LEAD_NAME:] cuando el usuario efectivamente diga su nombre."""
+    else:
+        name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversacion."
+
     system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Faculty).
 Tu funcion: Atender leads, calificar, cotizar y cerrar venta.
+{name_instruction}
+{pending_quote}
 
 PRODUCTOS DISPONIBLES:
 {product_info}
@@ -592,7 +635,17 @@ REGLAS:
 - Responde siempre en espanol.
 - Se conciso pero util.
 - Si el usuario pide precio, proporciona la informacion.
-- Si pide comprar, indica los pasos."""
+- Si pide comprar, indica los pasos.
+
+CLASIFICACION AUTOMATICA:
+Al final de CADA respuesta, incluye en una linea separada la etapa del lead basada en la conversacion:
+[STAGE:nuevo] - Primer contacto, aun no muestra interes especifico
+[STAGE:interesado] - Pregunta por productos, precios o beneficios
+[STAGE:en_negociacion] - Solicita cotizacion, forma de pago, envio o stock
+[STAGE:cliente_nuevo] - Confirma compra
+[STAGE:perdido] - Dice que no le interesa o rechaza explicitamente
+
+Incluye SIEMPRE el tag [STAGE:] al final."""
 
     history = await db.chat_messages.find(
         {"session_id": req.session_id}, {"_id": 0}
@@ -611,7 +664,7 @@ REGLAS:
     user_msg_doc = {
         "id": str(uuid.uuid4()),
         "session_id": req.session_id,
-        "lead_id": req.lead_id,
+        "lead_id": req.lead_id or (lead["id"] if lead else None),
         "role": "user",
         "content": req.message,
         "timestamp": datetime.now(timezone.utc).isoformat()
@@ -623,19 +676,90 @@ REGLAS:
         assistant_content = response if isinstance(response, str) else str(response)
     except Exception as e:
         logger.error(f"Chat error: {e}")
-        assistant_content = "Disculpa, tuve un problema tecnico. ¿Puedes repetir tu consulta?"
+        assistant_content = "Disculpa, tuve un problema tecnico. Puedes repetir tu consulta?"
+    
+    # Parse lead name from response
+    lead_id_for_session = req.lead_id or (lead["id"] if lead else None)
+    name_match = re.search(r'\[LEAD_NAME:([^\]]+)\]', assistant_content)
+    if name_match and not has_name:
+        detected_name = name_match.group(1).strip()
+        assistant_content = re.sub(r'\[LEAD_NAME:[^\]]+\]', '', assistant_content).strip()
+        # Create new lead
+        new_lead = {
+            "id": str(uuid.uuid4()),
+            "name": detected_name,
+            "whatsapp": "",
+            "city": "",
+            "email": "",
+            "product_interest": "",
+            "source": "Chat IA",
+            "game_used": None,
+            "prize_obtained": None,
+            "funnel_stage": "nuevo",
+            "status": "activo",
+            "purchase_history": [],
+            "coupon_used": None,
+            "recompra_date": None,
+            "notes": f"Registrado via Chat IA",
+            "last_interaction": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.leads.insert_one(new_lead)
+        lead_id_for_session = new_lead["id"]
+        await db.chat_sessions_meta.update_one(
+            {"session_id": req.session_id},
+            {"$set": {"session_id": req.session_id, "lead_id": new_lead["id"], "lead_name": detected_name}},
+            upsert=True
+        )
+        # Update all messages in this session with the lead_id
+        await db.chat_messages.update_many(
+            {"session_id": req.session_id, "lead_id": None},
+            {"$set": {"lead_id": new_lead["id"]}}
+        )
+        logger.info(f"New lead created from chat: {detected_name} -> {new_lead['id']}")
+    
+    # Parse stage classification
+    stage_match = re.search(r'\[STAGE:(\w+)\]', assistant_content)
+    if stage_match:
+        new_stage = stage_match.group(1).strip()
+        assistant_content = re.sub(r'\[STAGE:\w+\]', '', assistant_content).strip()
+        if new_stage in FUNNEL_STAGES and lead_id_for_session:
+            await db.leads.update_one(
+                {"id": lead_id_for_session},
+                {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}}
+            )
     
     assistant_msg_doc = {
         "id": str(uuid.uuid4()),
         "session_id": req.session_id,
-        "lead_id": req.lead_id,
+        "lead_id": lead_id_for_session,
         "role": "assistant",
         "content": assistant_content,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.chat_messages.insert_one(assistant_msg_doc)
     
-    return {"response": assistant_content, "session_id": req.session_id}
+    # Get updated lead info for response
+    lead_info = None
+    if lead_id_for_session:
+        lead_doc = await db.leads.find_one({"id": lead_id_for_session}, {"_id": 0})
+        if lead_doc:
+            lead_info = {"id": lead_doc["id"], "name": lead_doc["name"], "funnel_stage": lead_doc["funnel_stage"]}
+    
+    return {"response": assistant_content, "session_id": req.session_id, "lead": lead_info}
+
+@api_router.delete("/chat/messages/{message_id}")
+async def delete_chat_message(message_id: str, user=Depends(get_current_user)):
+    result = await db.chat_messages.delete_one({"id": message_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+    return {"message": "Mensaje eliminado"}
+
+@api_router.delete("/chat/sessions/{session_id}")
+async def delete_chat_session(session_id: str, user=Depends(get_current_user)):
+    result = await db.chat_messages.delete_many({"session_id": session_id})
+    await db.chat_sessions_meta.delete_one({"session_id": session_id})
+    return {"message": f"Conversacion eliminada ({result.deleted_count} mensajes)"}
 
 @api_router.get("/chat/history/{session_id}")
 async def get_chat_history(session_id: str, user=Depends(get_current_user)):
@@ -650,7 +774,12 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         {"$limit": 50}
     ]
     sessions = await db.chat_messages.aggregate(pipeline).to_list(50)
-    return [{"session_id": s["_id"], "lead_id": s.get("lead_id"), "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"]} for s in sessions]
+    result = []
+    for s in sessions:
+        meta = await db.chat_sessions_meta.find_one({"session_id": s["_id"]}, {"_id": 0})
+        lead_name = meta.get("lead_name", "") if meta else ""
+        result.append({"session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name, "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"]})
+    return result
 
 # ========== BULK ROUTES ==========
 
@@ -788,6 +917,96 @@ async def bulk_download(
     buffer.seek(0)
     filename = f"leads_faculty_{download_type}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+# ========== WHATSAPP WEBHOOK ==========
+
+class WhatsAppMessage(BaseModel):
+    from_number: str
+    message: str
+
+@api_router.post("/whatsapp/webhook")
+async def whatsapp_webhook(req: WhatsAppMessage):
+    """Webhook for incoming WhatsApp messages. Handles greeting and lead registration."""
+    phone = req.from_number.strip()
+    existing_lead = await db.leads.find_one({"whatsapp": phone}, {"_id": 0})
+    
+    is_new = existing_lead is None
+    lead_name = existing_lead.get("name", "") if existing_lead else ""
+    
+    # Check if user is providing their name (simple heuristic: short message, no question marks, not a product query)
+    providing_name = False
+    msg_lower = req.message.strip().lower()
+    if is_new or (existing_lead and not lead_name):
+        words = req.message.strip().split()
+        if 1 <= len(words) <= 4 and "?" not in req.message and not any(kw in msg_lower for kw in ["precio", "producto", "comprar", "cotiz", "hola", "info"]):
+            providing_name = True
+    
+    if providing_name and is_new:
+        new_lead = {
+            "id": str(uuid.uuid4()),
+            "name": req.message.strip().title(),
+            "whatsapp": phone,
+            "city": "", "email": "", "product_interest": "",
+            "source": "WhatsApp",
+            "game_used": None, "prize_obtained": None,
+            "funnel_stage": "nuevo",
+            "status": "activo",
+            "purchase_history": [],
+            "coupon_used": None, "recompra_date": None,
+            "notes": "Registrado via WhatsApp",
+            "last_interaction": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.leads.insert_one(new_lead)
+        return {"reply": f"Mucho gusto {req.message.strip().title()}! Bienvenido a Fakulti Laboratorios. Somos especialistas en suplementos naturales. En que producto puedo ayudarte?", "lead_id": new_lead["id"], "is_new": True}
+    
+    if providing_name and existing_lead and not lead_name:
+        await db.leads.update_one({"whatsapp": phone}, {"$set": {"name": req.message.strip().title(), "last_interaction": datetime.now(timezone.utc).isoformat()}})
+        return {"reply": f"Gracias {req.message.strip().title()}! Ya te tengo registrado. En que puedo ayudarte hoy?", "lead_id": existing_lead["id"], "is_new": False}
+    
+    if is_new:
+        new_lead = {
+            "id": str(uuid.uuid4()),
+            "name": "",
+            "whatsapp": phone,
+            "city": "", "email": "", "product_interest": "",
+            "source": "WhatsApp",
+            "game_used": None, "prize_obtained": None,
+            "funnel_stage": "nuevo",
+            "status": "activo",
+            "purchase_history": [],
+            "coupon_used": None, "recompra_date": None,
+            "notes": "Lead sin nombre - pendiente registro",
+            "last_interaction": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.leads.insert_one(new_lead)
+        return {"reply": "Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. Para brindarte una mejor atencion, me podrias decir tu nombre?", "lead_id": new_lead["id"], "is_new": True}
+    
+    # Returning lead
+    greeting = f"Hola de nuevo{(' ' + lead_name) if lead_name else ''}! Que gusto tenerte de vuelta."
+    
+    # Auto-stage based on keywords
+    new_stage = None
+    if any(kw in msg_lower for kw in ["precio", "cuanto", "costo", "vale"]):
+        new_stage = "interesado"
+    elif any(kw in msg_lower for kw in ["cotiz", "envio", "pago", "forma de pago", "transferencia", "stock"]):
+        new_stage = "en_negociacion"
+    elif any(kw in msg_lower for kw in ["comprar", "quiero", "confirmo", "listo"]):
+        new_stage = "en_negociacion"
+    elif any(kw in msg_lower for kw in ["no me interesa", "no gracias", "no quiero"]):
+        new_stage = "perdido"
+    
+    if new_stage and existing_lead.get("funnel_stage") != new_stage:
+        current_priority = FUNNEL_STAGES.index(existing_lead.get("funnel_stage", "nuevo")) if existing_lead.get("funnel_stage") in FUNNEL_STAGES else 0
+        new_priority = FUNNEL_STAGES.index(new_stage)
+        # Only advance stage forward (except perdido)
+        if new_stage == "perdido" or new_priority > current_priority:
+            await db.leads.update_one({"whatsapp": phone}, {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
+    else:
+        await db.leads.update_one({"whatsapp": phone}, {"$set": {"last_interaction": datetime.now(timezone.utc).isoformat()}})
+    
+    return {"reply": f"{greeting} En que puedo ayudarte hoy?", "lead_id": existing_lead["id"], "is_new": False, "stage_updated": new_stage}
 
 # ========== HUMAN AGENT DERIVATION ==========
 
@@ -955,9 +1174,9 @@ async def startup():
             {"id": str(uuid.uuid4()), "name": "Maria Garcia", "whatsapp": "+593991234567", "city": "Quito", "email": "maria@email.com", "product_interest": "Bombro", "source": "TV", "funnel_stage": "cliente_activo", "status": "activo", "game_used": "roulette", "prize_obtained": "10% Descuento", "purchase_history": [{"id": str(uuid.uuid4()), "product_name": "Bombro - Bone Broth Hidrolizado", "quantity": 2, "price": 111.90, "date": "2025-12-15"}], "coupon_used": "RULETA10", "recompra_date": "2026-01-15", "notes": "Cliente frecuente"},
             {"id": str(uuid.uuid4()), "name": "Carlos Lopez", "whatsapp": "+593987654321", "city": "Guayaquil", "email": "carlos@email.com", "product_interest": "Colageno CBD", "source": "QR", "funnel_stage": "interesado", "status": "activo", "game_used": "mystery_box", "prize_obtained": "Envio Gratis", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Interesado en CBD"},
             {"id": str(uuid.uuid4()), "name": "Ana Martinez", "whatsapp": "+593976543210", "city": "Cuenca", "email": "ana@email.com", "product_interest": "Gomitas Melatonina", "source": "Fibeca", "funnel_stage": "cliente_nuevo", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [{"id": str(uuid.uuid4()), "product_name": "Gomitas Melatonina", "quantity": 1, "price": 13.25, "date": "2026-01-20"}], "coupon_used": None, "recompra_date": "2026-02-20", "notes": "Compro en Fibeca"},
-            {"id": str(uuid.uuid4()), "name": "Pedro Sanchez", "whatsapp": "+593965432109", "city": "Quito", "email": "", "product_interest": "Pitch Up", "source": "pauta_digital", "funnel_stage": "caliente", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Pidio cotizacion"},
+            {"id": str(uuid.uuid4()), "name": "Pedro Sanchez", "whatsapp": "+593965432109", "city": "Quito", "email": "", "product_interest": "Pitch Up", "source": "pauta_digital", "funnel_stage": "en_negociacion", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Pidio cotizacion"},
             {"id": str(uuid.uuid4()), "name": "Laura Fernandez", "whatsapp": "+593954321098", "city": "Guayaquil", "email": "laura@email.com", "product_interest": "Bombro", "source": "TV", "funnel_stage": "nuevo", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": ""},
-            {"id": str(uuid.uuid4()), "name": "Roberto Diaz", "whatsapp": "+593943210987", "city": "Ambato", "email": "", "product_interest": "", "source": "web", "funnel_stage": "frio", "status": "inactivo", "game_used": "lucky_button", "prize_obtained": "5% Descuento", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Sin respuesta 48h"},
+            {"id": str(uuid.uuid4()), "name": "Roberto Diaz", "whatsapp": "+593943210987", "city": "Ambato", "email": "", "product_interest": "", "source": "web", "funnel_stage": "perdido", "status": "inactivo", "game_used": "slot_machine", "prize_obtained": "5% Descuento", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Sin respuesta despues de 3 recordatorios"},
         ]
         for lead in sample_leads:
             lead["last_interaction"] = datetime.now(timezone.utc).isoformat()
@@ -969,6 +1188,13 @@ async def startup():
     await db.leads.create_index("funnel_stage")
     await db.leads.create_index("source")
     await db.game_plays.create_index("whatsapp")
+    
+    # Migrate old funnel stages
+    migrated_caliente = await db.leads.update_many({"funnel_stage": "caliente"}, {"$set": {"funnel_stage": "en_negociacion"}})
+    migrated_frio = await db.leads.update_many({"funnel_stage": "frio"}, {"$set": {"funnel_stage": "perdido"}})
+    if migrated_caliente.modified_count or migrated_frio.modified_count:
+        logger.info(f"Migrated stages: caliente->en_negociacion ({migrated_caliente.modified_count}), frio->perdido ({migrated_frio.modified_count})")
+    
     logger.info("Faculty CRM Backend ready")
 
 @app.on_event("shutdown")

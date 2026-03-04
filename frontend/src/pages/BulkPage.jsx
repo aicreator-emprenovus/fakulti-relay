@@ -109,10 +109,10 @@ export default function BulkPage() {
                   <SelectContent className="bg-muted border-input">
                     <SelectItem value="nuevo">Nuevo</SelectItem>
                     <SelectItem value="interesado">Interesado</SelectItem>
-                    <SelectItem value="caliente">Caliente</SelectItem>
+                    <SelectItem value="en_negociacion">En Negociacion</SelectItem>
                     <SelectItem value="cliente_nuevo">Cliente Nuevo</SelectItem>
                     <SelectItem value="cliente_activo">Cliente Activo</SelectItem>
-                    <SelectItem value="frio">Frio</SelectItem>
+                    <SelectItem value="perdido">Perdido</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

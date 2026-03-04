@@ -9,10 +9,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 const STAGE_CONFIG = {
   nuevo: { label: "Nuevo", color: "#3B82F6" },
   interesado: { label: "Interesado", color: "#8B5CF6" },
-  caliente: { label: "Caliente", color: "#F59E0B" },
+  en_negociacion: { label: "En Negociacion", color: "#F59E0B" },
   cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
   cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
-  frio: { label: "Frio", color: "#64748B" },
+  perdido: { label: "Perdido", color: "#64748B" },
 };
 
 export default function DashboardPage() {
