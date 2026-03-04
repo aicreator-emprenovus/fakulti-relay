@@ -310,6 +310,37 @@ async def add_purchase(lead_id: str, req: PurchaseAdd, user=Depends(get_current_
             }
         }
     )
+    # Auto-enroll in loyalty sequence if one exists for this product
+    seq = await db.loyalty_sequences.find_one({"product_id": req.product_id, "active": True}, {"_id": 0})
+    if seq:
+        existing_enrollment = await db.loyalty_enrollments.find_one({"lead_id": lead_id, "sequence_id": seq["id"]})
+        if not existing_enrollment:
+            lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+            now = datetime.now(timezone.utc)
+            messages_schedule = []
+            for msg in seq.get("messages", []):
+                if msg.get("active", True):
+                    send_date = now + timedelta(days=msg.get("day", 1))
+                    messages_schedule.append({
+                        "day": msg["day"],
+                        "content": msg["content"],
+                        "scheduled_date": send_date.isoformat(),
+                        "status": "pendiente"
+                    })
+            enrollment = {
+                "id": str(uuid.uuid4()),
+                "lead_id": lead_id,
+                "lead_name": lead.get("name", "") if lead else "",
+                "lead_whatsapp": lead.get("whatsapp", "") if lead else "",
+                "sequence_id": seq["id"],
+                "sequence_name": seq.get("product_name", ""),
+                "messages": messages_schedule,
+                "status": "activo",
+                "enrolled_at": now.isoformat(),
+                "completed_at": None
+            }
+            await db.loyalty_enrollments.insert_one(enrollment)
+            logger.info(f"Auto-enrolled lead {lead_id} in loyalty sequence {seq['id']}")
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     return lead
 
@@ -567,6 +598,90 @@ async def update_loyalty_sequence(sequence_id: str, req: LoyaltySequenceCreate, 
 async def delete_loyalty_sequence(sequence_id: str, user=Depends(get_current_user)):
     await db.loyalty_sequences.delete_one({"id": sequence_id})
     return {"message": "Secuencia eliminada"}
+
+# ---- Loyalty Enrollments ----
+
+@api_router.get("/loyalty/enrollments")
+async def get_loyalty_enrollments(user=Depends(get_current_user)):
+    enrollments = await db.loyalty_enrollments.find({}, {"_id": 0}).sort("enrolled_at", -1).to_list(200)
+    return enrollments
+
+@api_router.post("/loyalty/enroll")
+async def enroll_lead_loyalty(lead_id: str = Query(...), sequence_id: str = Query(...), user=Depends(get_current_user)):
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    seq = await db.loyalty_sequences.find_one({"id": sequence_id}, {"_id": 0})
+    if not seq:
+        raise HTTPException(status_code=404, detail="Secuencia no encontrada")
+    existing = await db.loyalty_enrollments.find_one({"lead_id": lead_id, "sequence_id": sequence_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Lead ya esta inscrito en esta secuencia")
+    now = datetime.now(timezone.utc)
+    messages_schedule = []
+    for msg in seq.get("messages", []):
+        if msg.get("active", True):
+            send_date = now + timedelta(days=msg.get("day", 1))
+            messages_schedule.append({
+                "day": msg["day"],
+                "content": msg["content"],
+                "scheduled_date": send_date.isoformat(),
+                "status": "pendiente"
+            })
+    enrollment = {
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "lead_name": lead.get("name", ""),
+        "lead_whatsapp": lead.get("whatsapp", ""),
+        "sequence_id": sequence_id,
+        "sequence_name": seq.get("product_name", ""),
+        "messages": messages_schedule,
+        "status": "activo",
+        "enrolled_at": now.isoformat(),
+        "completed_at": None
+    }
+    await db.loyalty_enrollments.insert_one(enrollment)
+    enrollment.pop("_id", None)
+    return enrollment
+
+@api_router.delete("/loyalty/enrollments/{enrollment_id}")
+async def delete_enrollment(enrollment_id: str, user=Depends(get_current_user)):
+    result = await db.loyalty_enrollments.delete_one({"id": enrollment_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Inscripcion no encontrada")
+    return {"message": "Inscripcion eliminada"}
+
+@api_router.post("/loyalty/process")
+async def process_loyalty_messages(user=Depends(get_current_user)):
+    """Process all pending loyalty messages that are due."""
+    now = datetime.now(timezone.utc)
+    enrollments = await db.loyalty_enrollments.find({"status": "activo"}, {"_id": 0}).to_list(500)
+    sent_count = 0
+    for enrollment in enrollments:
+        updated = False
+        all_done = True
+        for msg in enrollment.get("messages", []):
+            if msg["status"] == "pendiente":
+                scheduled = datetime.fromisoformat(msg["scheduled_date"].replace("Z", "+00:00")) if "Z" in msg.get("scheduled_date", "") else datetime.fromisoformat(msg["scheduled_date"])
+                if scheduled.tzinfo is None:
+                    scheduled = scheduled.replace(tzinfo=timezone.utc)
+                if now >= scheduled:
+                    msg["status"] = "enviado"
+                    msg["sent_at"] = now.isoformat()
+                    sent_count += 1
+                    updated = True
+                    logger.info(f"Loyalty msg sent to {enrollment['lead_name']} ({enrollment['lead_whatsapp']}): Day {msg['day']}")
+                else:
+                    all_done = False
+            elif msg["status"] != "enviado":
+                all_done = False
+        if updated:
+            update_data = {"messages": enrollment["messages"]}
+            if all_done:
+                update_data["status"] = "completado"
+                update_data["completed_at"] = now.isoformat()
+            await db.loyalty_enrollments.update_one({"id": enrollment["id"]}, {"$set": update_data})
+    return {"processed": sent_count, "message": f"{sent_count} mensajes procesados"}
 
 # ========== CHAT ROUTES ==========
 
