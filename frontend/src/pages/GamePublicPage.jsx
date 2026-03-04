@@ -41,7 +41,7 @@ function RouletteGame({ config, onPlay }) {
     const ctx = canvas.getContext("2d");
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-    const r = Math.min(cx, cy) - 10;
+    const r = Math.min(cx, cy) - 50;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
@@ -73,12 +73,21 @@ function RouletteGame({ config, onPlay }) {
 
     ctx.restore();
 
-    // Draw pointer
+    // Draw pointer - big red triangle
     ctx.beginPath();
-    ctx.moveTo(cx + r + 5, cy);
-    ctx.lineTo(cx + r + 25, cy - 12);
-    ctx.lineTo(cx + r + 25, cy + 12);
-    ctx.fillStyle = "#A3E635";
+    ctx.moveTo(cx + r - 5, cy);
+    ctx.lineTo(cx + r + 45, cy - 26);
+    ctx.lineTo(cx + r + 45, cy + 26);
+    ctx.closePath();
+    ctx.fillStyle = "#DC2626";
+    ctx.fill();
+    ctx.strokeStyle = "#7F1D1D";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // White dot on pointer
+    ctx.beginPath();
+    ctx.arc(cx + r + 30, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
     ctx.fill();
 
     // Center circle
@@ -132,7 +141,7 @@ function RouletteGame({ config, onPlay }) {
   return (
     <div className="flex flex-col items-center gap-6">
       {result && <Confetti />}
-      <canvas ref={canvasRef} width={340} height={340} className="max-w-full" data-testid="roulette-canvas" />
+      <canvas ref={canvasRef} width={400} height={360} className="max-w-full" data-testid="roulette-canvas" />
       {!result ? (
         <Button data-testid="spin-btn" onClick={spin} disabled={spinning} className="bg-primary text-primary-foreground font-bold rounded-full px-10 py-3 text-lg hover:bg-primary/90 shadow-sm disabled:opacity-50">
           {spinning ? "Girando..." : "GIRAR LA RULETA"}
