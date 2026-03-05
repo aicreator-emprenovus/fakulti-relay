@@ -55,7 +55,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="admin@faculty.com"
+                  placeholder="admin@fakulti.com"
                   className="pl-10 bg-muted/50 border-input focus:border-primary/50 text-foreground h-12 rounded-lg"
                   required
                 />
@@ -85,7 +85,7 @@ export default function LoginPage() {
               {loading ? "Ingresando..." : "Ingresar"}
             </Button>
             <p className="text-center text-xs text-muted-foreground mt-4">
-              Demo: admin@faculty.com / admin123
+              Demo: admin@fakulti.com / admin123
             </p>
           </form>
         </CardContent>

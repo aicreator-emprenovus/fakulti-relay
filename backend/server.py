@@ -1299,14 +1299,14 @@ async def startup():
     if admin_count == 0:
         admin_doc = {
             "id": str(uuid.uuid4()),
-            "email": "admin@faculty.com",
+            "email": "admin@fakulti.com",
             "password_hash": pwd_context.hash("admin123"),
             "name": "Admin Faculty",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.admin_users.insert_one(admin_doc)
-        logger.info("Admin user seeded: admin@faculty.com / admin123")
+        logger.info("Admin user seeded: admin@fakulti.com / admin123")
     
     product_count = await db.products.count_documents({})
     if product_count == 0:
