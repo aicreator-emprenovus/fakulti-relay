@@ -65,7 +65,7 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 ## Pending / Future Tasks
 - **P2: Fibeca QR Code Flow** - Journey for physical store customers scanning QR
 - **P2: Human Agent Handover** - Pause automation and alert human agent
-- **P3: Real WhatsApp API** - Connect webhook to actual WhatsApp Business API
+- **P2: Real WhatsApp API** - Connect webhook to actual WhatsApp Business API
 - **P3: Scheduled Loyalty Processing** - Background job for automatic message sending
 
 ## MOCKED Integrations
