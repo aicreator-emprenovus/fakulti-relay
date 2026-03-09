@@ -1330,6 +1330,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
 
 # Meta WhatsApp webhook verification (GET)
 from fastapi import Request
+from fastapi.responses import PlainTextResponse
 
 @api_router.get("/webhook/whatsapp")
 async def whatsapp_verify(request: Request):
@@ -1341,7 +1342,7 @@ async def whatsapp_verify(request: Request):
     config = await get_whatsapp_config()
     if mode == "subscribe" and token == config.get("verify_token", ""):
         logger.info("WhatsApp webhook verified successfully")
-        return int(challenge)
+        return PlainTextResponse(content=challenge, status_code=200)
     raise HTTPException(status_code=403, detail="Verification failed")
 
 # Meta WhatsApp incoming message (POST)
