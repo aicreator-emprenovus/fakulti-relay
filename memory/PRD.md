@@ -37,6 +37,7 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 11. **Loyalty System** - Sequence CRUD, lead enrollment, auto-enrollment on purchase, message processing with progress tracking
 12. **Loyalty Metrics Dashboard** - Repurchase rates, retention rates, revenue by product, sequence effectiveness, top buyers with charts
 13. **Custom Branding** - Fakulti title, Emprenovus footer, hidden Emergent badge
+14. **Configuracion Panel** - 3 tabs: Automatizacion (10 bot rules CRUD), WhatsApp Business Cloud API (real webhook, verification, message send/receive), IA config (4 feature toggles)
 
 ### Funnel Stages
 - `nuevo`, `interesado`, `en_negociacion`, `cliente_nuevo`, `cliente_activo`, `perdido`
