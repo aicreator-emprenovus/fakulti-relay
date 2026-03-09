@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useSearchParams } from "react-router-dom";
 import { API } from "@/App";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { toast } from "sonner";
 import { Send, MessageSquare, Bot, User, Trash2, X } from "lucide-react";
 
 const STAGE_CONFIG = {
-  nuevo: { label: "Nuevo", color: "#3B82F6" },
+  nuevo: { label: "Prospecto", color: "#3B82F6" },
   interesado: { label: "Interesado", color: "#8B5CF6" },
   en_negociacion: { label: "En Negociacion", color: "#F59E0B" },
   cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
@@ -19,12 +20,15 @@ const STAGE_CONFIG = {
 };
 
 export default function ChatPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
+  const [activeLeadId, setActiveLeadId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [leadInfo, setLeadInfo] = useState(null);
+  const [initialized, setInitialized] = useState(false);
   const messagesEndRef = useRef(null);
 
   const fetchSessions = () => {
@@ -33,19 +37,51 @@ export default function ChatPage() {
 
   useEffect(() => { fetchSessions(); }, []);
 
+  // Handle lead_id from URL params
   useEffect(() => {
-    if (activeSession) {
-      axios.get(`${API}/chat/history/${activeSession}`).then(res => setMessages(res.data)).catch(() => {});
+    if (initialized) return;
+    const leadId = searchParams.get("lead_id");
+    if (leadId) {
+      axios.get(`${API}/chat/lead-session/${leadId}`).then(res => {
+        setActiveSession(res.data.session_id);
+        setActiveLeadId(leadId);
+        setMessages(res.data.messages || []);
+        if (res.data.lead) {
+          setLeadInfo({ id: res.data.lead.id, name: res.data.lead.name, funnel_stage: res.data.lead.funnel_stage });
+        }
+        setInitialized(true);
+        // Clean the URL param
+        setSearchParams({}, { replace: true });
+      }).catch(() => {
+        toast.error("Lead no encontrado");
+        setInitialized(true);
+      });
+    } else {
+      setInitialized(true);
     }
-  }, [activeSession]);
+  }, [searchParams, initialized, setSearchParams]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const loadSession = (sessionId, leadId) => {
+    setActiveSession(sessionId);
+    setActiveLeadId(leadId || null);
+    axios.get(`${API}/chat/history/${sessionId}`).then(res => setMessages(res.data)).catch(() => {});
+    // Load lead info from session meta
+    const session = sessions.find(s => s.session_id === sessionId);
+    if (session?.lead_id) {
+      setLeadInfo({ name: session.lead_name, funnel_stage: null });
+    } else {
+      setLeadInfo(null);
+    }
+  };
+
   const startNewSession = () => {
     const sid = `session_${Date.now()}`;
     setActiveSession(sid);
+    setActiveLeadId(null);
     setMessages([]);
     setLeadInfo(null);
   };
@@ -61,10 +97,16 @@ export default function ChatPage() {
     setSending(true);
 
     try {
-      const res = await axios.post(`${API}/chat/message`, { session_id: sessionId, message: input });
+      const payload = { session_id: sessionId, message: input };
+      if (activeLeadId) payload.lead_id = activeLeadId;
+      const res = await axios.post(`${API}/chat/message`, payload);
       const botMsg = { role: "assistant", content: res.data.response, timestamp: new Date().toISOString() };
       setMessages(prev => [...prev, botMsg]);
-      if (res.data.lead) setLeadInfo(res.data.lead);
+      if (res.data.lead) {
+        setLeadInfo(res.data.lead);
+        if (!activeLeadId) setActiveLeadId(res.data.lead.id);
+      }
+      fetchSessions();
     } catch {
       toast.error("Error al enviar mensaje");
       setMessages(prev => [...prev, { role: "assistant", content: "Error al procesar tu mensaje. Intenta de nuevo.", timestamp: new Date().toISOString() }]);
@@ -91,6 +133,7 @@ export default function ChatPage() {
       await axios.delete(`${API}/chat/sessions/${activeSession}`);
       setMessages([]);
       setActiveSession(null);
+      setActiveLeadId(null);
       setLeadInfo(null);
       fetchSessions();
       toast.success("Conversacion eliminada");
@@ -102,7 +145,7 @@ export default function ChatPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground font-heading">Chat IA</h1>
-          <p className="text-sm text-muted-foreground">Asesor Virtual Faculty con GPT-5.2</p>
+          <p className="text-sm text-muted-foreground">Asesor Virtual Fakulti con GPT-5.2</p>
         </div>
         <Button data-testid="new-chat-btn" onClick={startNewSession} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
           <MessageSquare size={16} className="mr-1" /> Nueva Conversacion
@@ -116,7 +159,7 @@ export default function ChatPage() {
             <ScrollArea className="h-[calc(100vh-280px)]">
               <div className="space-y-1">
                 {sessions.map(s => (
-                  <button key={s.session_id} onClick={() => setActiveSession(s.session_id)}
+                  <button key={s.session_id} onClick={() => loadSession(s.session_id, s.lead_id)}
                     className={`w-full text-left p-2 rounded-lg text-xs transition-colors ${activeSession === s.session_id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}
                     data-testid={`session-${s.session_id}`}>
                     <p className="truncate font-medium">{s.lead_name || s.last_message?.slice(0, 30) || "Sin mensajes"}</p>
@@ -138,12 +181,12 @@ export default function ChatPage() {
                 </div>
                 <div>
                   <p className="text-sm text-foreground font-medium">
-                    Asesor Faculty
-                    {leadInfo && <span className="text-muted-foreground font-normal"> — {leadInfo.name}</span>}
+                    Asesor Fakulti
+                    {leadInfo?.name && <span className="text-muted-foreground font-normal"> — {leadInfo.name}</span>}
                   </p>
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-muted-foreground">Powered by GPT-5.2</p>
-                    {leadInfo && (
+                    {leadInfo?.funnel_stage && (
                       <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
                         {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
                       </Badge>
@@ -163,8 +206,8 @@ export default function ChatPage() {
                 {messages.length === 0 && (
                   <div className="text-center py-12">
                     <Bot size={40} className="text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground text-sm">Inicia una conversacion con el asesor virtual de Faculty</p>
-                    <p className="text-muted-foreground text-xs mt-1">El bot saludara al lead y le pedira su nombre para registrarlo automaticamente</p>
+                    <p className="text-muted-foreground text-sm">Inicia una conversacion con el asesor virtual de Fakulti</p>
+                    <p className="text-muted-foreground text-xs mt-1">El bot solicitara los datos del cliente para registrarlo automaticamente</p>
                   </div>
                 )}
                 {messages.map((msg, i) => (

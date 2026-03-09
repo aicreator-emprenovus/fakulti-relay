@@ -858,12 +858,26 @@ async def send_chat_message(req: ChatMessageRequest, user=Depends(get_current_us
     if not has_name:
         name_instruction = """
 IMPORTANTE - REGISTRO DE LEAD:
-- Este es un lead NUEVO. Saluda cordialmente y pregunta su nombre y apellido.
-- Una vez que proporcione su nombre, confirma diciendo su nombre y continua con el flujo de productos.
+- Este es un lead NUEVO. Saluda cordialmente y pregunta su nombre completo.
+- Una vez que proporcione su nombre, confirma diciendo su nombre y pregunta su numero de WhatsApp.
+- Despues pregunta su ciudad y que producto le interesa.
 - Cuando el usuario diga su nombre, incluye al FINAL de tu respuesta (en una linea separada): [LEAD_NAME:Nombre Apellido]
-- Solo incluye [LEAD_NAME:] cuando el usuario efectivamente diga su nombre."""
+- Solo incluye [LEAD_NAME:] cuando el usuario efectivamente diga su nombre.
+- Recopila los datos uno por uno de forma natural, no todos de golpe."""
     else:
-        name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversacion."
+        # Check what data is missing on existing lead
+        missing_fields = []
+        if lead and not lead.get("whatsapp"):
+            missing_fields.append("numero de WhatsApp")
+        if lead and not lead.get("city"):
+            missing_fields.append("ciudad")
+        if lead and not lead.get("product_interest"):
+            missing_fields.append("que producto le interesa")
+        missing_instruction = ""
+        if missing_fields:
+            missing_instruction = f"\nDATOS FALTANTES DEL CLIENTE: Necesitas preguntarle su {', '.join(missing_fields)}. Hazlo de forma natural durante la conversacion."
+            missing_instruction += "\nCuando el cliente proporcione datos, incluye al final: [UPDATE_LEAD:campo=valor] donde campo puede ser: whatsapp, city, product_interest"
+        name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversacion.{missing_instruction}"
 
     system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Faculty).
 Tu funcion: Atender leads, calificar, cotizar y cerrar venta.
@@ -965,6 +979,20 @@ Incluye SIEMPRE el tag [STAGE:] al final."""
         )
         logger.info(f"New lead created from chat: {detected_name} -> {new_lead['id']}")
     
+    # Parse lead data updates from response
+    update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', assistant_content)
+    if update_matches and lead_id_for_session:
+        update_fields = {}
+        allowed_fields = {"whatsapp", "city", "product_interest", "email"}
+        for field, value in update_matches:
+            if field in allowed_fields:
+                update_fields[field] = value.strip()
+        if update_fields:
+            update_fields["last_interaction"] = datetime.now(timezone.utc).isoformat()
+            await db.leads.update_one({"id": lead_id_for_session}, {"$set": update_fields})
+            logger.info(f"Lead {lead_id_for_session} updated via chat: {update_fields}")
+        assistant_content = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]+\]', '', assistant_content).strip()
+    
     # Parse stage classification
     stage_match = re.search(r'\[STAGE:(\w+)\]', assistant_content)
     if stage_match:
@@ -1027,6 +1055,20 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         lead_name = meta.get("lead_name", "") if meta else ""
         result.append({"session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name, "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"]})
     return result
+
+@api_router.get("/chat/lead-session/{lead_id}")
+async def get_or_create_lead_session(lead_id: str, user=Depends(get_current_user)):
+    """Find existing chat session for a lead, or return a new session_id to use."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
+    if meta:
+        msgs = await db.chat_messages.find({"session_id": meta["session_id"]}, {"_id": 0}).sort("timestamp", 1).to_list(100)
+        return {"session_id": meta["session_id"], "lead": lead, "messages": msgs, "is_new": False}
+    new_sid = f"lead_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
+    await db.chat_sessions_meta.insert_one({"session_id": new_sid, "lead_id": lead_id, "lead_name": lead.get("name", "")})
+    return {"session_id": new_sid, "lead": lead, "messages": [], "is_new": True}
 
 # ========== BULK ROUTES ==========
 

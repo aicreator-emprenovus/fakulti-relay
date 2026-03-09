@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { API } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ const STAGE_KEYS = Object.keys(STAGE_CONFIG);
 const SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro", "WhatsApp", "Chat IA", "Carga masiva"];
 
 export default function LeadsPage() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -90,10 +92,8 @@ export default function LeadsPage() {
     } catch { toast.error("Error al cambiar etapa"); }
   };
 
-  const openWhatsApp = (whatsapp) => {
-    if (!whatsapp) return toast.error("Sin numero de WhatsApp");
-    const clean = whatsapp.replace(/[^0-9]/g, "");
-    window.open(`https://wa.me/${clean}`, "_blank");
+  const openChat = (leadId) => {
+    navigate(`/chat?lead_id=${leadId}`);
   };
 
   const formatDate = (d) => {
@@ -194,7 +194,7 @@ export default function LeadsPage() {
                         onView={() => setShowDetail(lead)}
                         onEdit={() => openEdit(lead)}
                         onDelete={() => handleDelete(lead.id)}
-                        onWhatsApp={() => openWhatsApp(lead.whatsapp)}
+                        onWhatsApp={() => openChat(lead.id)}
                         onStageChange={(s) => handleStageChange(lead.id, s)}
                         onDragStart={(e) => onDragStart(e, lead)}
                         onDragEnd={onDragEnd}
@@ -325,7 +325,7 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
             <button onClick={onEdit} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Editar" data-testid={`edit-lead-${lead.id}`}>
               <Edit size={13} />
             </button>
-            <button onClick={onWhatsApp} className="p-1 rounded hover:bg-muted text-emerald-500 hover:text-emerald-400 transition-colors" title="WhatsApp" data-testid={`whatsapp-lead-${lead.id}`}>
+            <button onClick={onWhatsApp} className="p-1 rounded hover:bg-muted text-emerald-500 hover:text-emerald-400 transition-colors" title="Chat IA" data-testid={`chat-lead-${lead.id}`}>
               <MessageSquare size={13} />
             </button>
             <button onClick={onDelete} className="p-1 rounded hover:bg-muted text-red-400 hover:text-red-500 transition-colors" title="Eliminar" data-testid={`delete-lead-${lead.id}`}>
