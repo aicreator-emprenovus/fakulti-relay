@@ -11,6 +11,7 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 - **Loyalty System**: Configurable post-sale messaging sequences (up to 24 messages)
 - **WhatsApp Integration**: Real WhatsApp Cloud API via Meta for Developers with live bot
 - **Automation Panel**: Rules engine for bot behavior management
+- **WhatsApp Monitoring**: Real-time monitoring of WhatsApp conversations, response times, and human handover alerts integrated into Chat IA page
 
 ## Tech Stack
 - **Frontend**: React, Tailwind CSS, Shadcn/UI, Recharts, react-beautiful-dnd
@@ -29,16 +30,23 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 2. **Lead Management** - Kanban board with 6 stage columns, drag-and-drop, lead cards with action icons, search and filters
 3. **Gamification** - Roulette, Slot Machine, Scratch Card with public-facing pages
 4. **AI Chat** - GPT-5.2 powered assistant with auto lead registration and stage classification
-5. **Bulk Operations** - Page exists, backend library (openpyxl) installed
-6. **Light/Dark Mode** - System-wide theme toggle (light default)
-7. **WhatsApp Live Integration** - FULLY WORKING. Real WhatsApp Cloud API via Meta, Railway relay for webhook forwarding, auto-greeting, name registration, auto-staging by keywords
-8. **Lead Stage Renaming** - "En Negociacion" and "Perdido" stages with DB migration
-9. **Chat Delete Functions** - Delete individual messages and clear entire conversations
-10. **Loyalty System** - Sequence CRUD, lead enrollment, auto-enrollment on purchase, message processing with progress tracking
-11. **Loyalty Metrics Dashboard** - Repurchase rates, retention rates, revenue by product, sequence effectiveness, top buyers with charts
-12. **Custom Branding** - Fakulti title, Emprenovus footer
-13. **Configuracion Panel** - 3 tabs: Automatizacion (bot rules CRUD), WhatsApp Business Cloud API (credentials, webhook), IA config (feature toggles)
-14. **Quotations Module** - Removed as requested
+5. **Light/Dark Mode** - System-wide theme toggle (light default)
+6. **WhatsApp Live Integration** - FULLY WORKING. Real WhatsApp Cloud API via Meta, Railway relay for webhook forwarding, auto-greeting, name registration, auto-staging by keywords
+7. **Lead Stage Renaming** - "En Negociacion" and "Perdido" stages with DB migration
+8. **Chat Delete Functions** - Delete individual messages and clear entire conversations
+9. **Loyalty System** - Sequence CRUD, lead enrollment, auto-enrollment on purchase, message processing with progress tracking
+10. **Loyalty Metrics Dashboard** - Repurchase rates, retention rates, revenue by product, sequence effectiveness, top buyers with charts
+11. **Custom Branding** - Fakulti title, Emprenovus footer
+12. **Configuracion Panel** - 3 tabs: Automatizacion (bot rules CRUD), WhatsApp Business Cloud API (credentials, webhook), IA config (feature toggles)
+13. **WhatsApp Real-Time Monitor** - Integrated into Chat IA page with:
+    - Stats bar (Active convos 24h, Avg response time, Messages today, Pending alerts)
+    - Session filters (All/WhatsApp/Chat IA)
+    - WhatsApp sessions with WA badge and EN VIVO indicator
+    - Human handover detection (keywords: agente, humano, persona real, etc.)
+    - Alert panel for pending human handover requests
+    - CRM agent can reply directly to WhatsApp conversations
+    - Auto-refresh every 10 seconds for new messages
+    - Response time tracking on WhatsApp bot responses
 
 ### Funnel Stages
 - `nuevo`, `interesado`, `en_negociacion`, `cliente_nuevo`, `cliente_activo`, `perdido`
@@ -51,7 +59,7 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
   pages/
     DashboardPage.jsx      - Dashboard with metrics
     LeadsPage.jsx          - Kanban board lead management
-    ChatPage.jsx           - AI chat with delete functions
+    ChatPage.jsx           - AI chat + WhatsApp real-time monitor
     LoyaltyPage.jsx        - Sequences + Enrollments + Metrics tabs
     BulkPage.jsx           - Excel upload/download (UI pending)
     GamesConfigPage.jsx    - Game configuration
@@ -70,11 +78,21 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 - **Credentials**: Stored in MongoDB `whatsapp_config` collection, managed via /config page
 - **Phone Number ID**: 994356967089829
 - **Flow**: User WhatsApp -> Meta -> Railway Relay -> Backend /api/webhook/whatsapp -> AI Process -> WhatsApp Cloud API response
+- **Handover Detection**: Keywords trigger alerts in `handover_alerts` collection
+- **CRM Reply**: Admin can reply via POST /api/chat/whatsapp-reply, message sent directly to user's WhatsApp
+
+## Key API Endpoints
+- `/api/chat/whatsapp-stats` - GET WhatsApp monitoring KPIs
+- `/api/chat/alerts` - GET human handover alerts
+- `/api/chat/alerts/{id}/resolve` - PUT resolve an alert
+- `/api/chat/whatsapp-reply` - POST send CRM reply via WhatsApp
+- `/api/chat/sessions` - GET all sessions (includes source, lead_phone, has_alert)
+- `/api/webhook/whatsapp` - POST receive Meta webhook (with handover detection)
 
 ## Pending / Future Tasks
 - **P1: Excel Bulk Upload/Download** - Implement functionality on BulkPage.jsx for .xlsx upload and filtered downloads
 - **P2: Fibeca QR Code Flow** - Journey for physical store customers scanning QR
-- **P2: Human Agent Handover** - Pause automation and alert human agent
+- **P2: Human Agent Handover** - Full implementation (pause automation on handover, resume after)
 - **P3: Scheduled Loyalty Processing** - Background job for automatic message sending
 
 ## LIVE Integrations
