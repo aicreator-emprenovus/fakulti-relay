@@ -399,11 +399,16 @@ export default function ChatPage() {
                         <div className={`px-4 py-2.5 text-sm ${isUser ? "chat-bubble-user" : "chat-bubble-bot"} ${isCrmAgent ? "!border-l-2 !border-l-blue-500" : ""}`} data-testid={`chat-msg-${i}`}>
                           {isCrmAgent && <p className="text-[10px] text-blue-500 font-medium mb-1">Agente CRM</p>}
                           <p className="whitespace-pre-wrap">{msg.content}</p>
-                          {msg.response_time_ms && (
-                            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                              <Clock size={9} /> {(msg.response_time_ms / 1000).toFixed(1)}s
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-[10px] text-muted-foreground">
+                              {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }) : ""}
                             </p>
-                          )}
+                            {msg.response_time_ms && (
+                              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <Clock size={9} /> {(msg.response_time_ms / 1000).toFixed(1)}s
+                              </p>
+                            )}
+                          </div>
                         </div>
                         <button
                           data-testid={`delete-msg-${i}`}
