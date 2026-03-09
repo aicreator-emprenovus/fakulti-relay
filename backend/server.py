@@ -1232,7 +1232,7 @@ async def bulk_download(
 
 # ========== WHATSAPP CLOUD API ==========
 
-WHATSAPP_API_URL = "https://graph.facebook.com/v21.0"
+WHATSAPP_API_URL = "https://graph.facebook.com/v22.0"
 
 async def get_whatsapp_config():
     config = await db.whatsapp_config.find_one({"id": "main"}, {"_id": 0})
