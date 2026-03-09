@@ -11,7 +11,6 @@ import GamePublicPage from "@/pages/GamePublicPage";
 import LoyaltyPage from "@/pages/LoyaltyPage";
 import ChatPage from "@/pages/ChatPage";
 import SettingsPage from "@/pages/SettingsPage";
-import QuotationsPage from "@/pages/QuotationsPage";
 import BulkPage from "@/pages/BulkPage";
 import Sidebar from "@/components/Sidebar";
 
@@ -145,7 +144,6 @@ function AppContent() {
         <Route path="/games" element={<ProtectedRoute><AdminLayout><GamesConfigPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/loyalty" element={<ProtectedRoute><AdminLayout><LoyaltyPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><AdminLayout><ChatPage /></AdminLayout></ProtectedRoute>} />
-        <Route path="/quotations" element={<ProtectedRoute><AdminLayout><QuotationsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/bulk" element={<ProtectedRoute><AdminLayout><BulkPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><AdminLayout><SettingsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
