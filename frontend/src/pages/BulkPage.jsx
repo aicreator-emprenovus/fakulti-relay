@@ -34,12 +34,23 @@ export default function BulkPage() {
     setUploading(false);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     let url = `${API}/bulk/download?download_type=${downloadType}`;
     if (downloadType === "stage" && downloadStage) url += `&stage=${downloadStage}`;
-    if (downloadType === "product" && downloadProduct) url += `&product=${downloadProduct}`;
-    window.open(url, "_blank");
-    toast.success("Descarga iniciada");
+    if (downloadType === "product" && downloadProduct) url += `&product=${encodeURIComponent(downloadProduct)}`;
+    try {
+      const res = await axios.get(url, { responseType: "blob" });
+      const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      const disposition = res.headers["content-disposition"];
+      link.download = disposition ? disposition.split("filename=")[1] : "fakulti_reporte.xlsx";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast.success("Descarga completada");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Error al descargar");
+    }
   };
 
   return (

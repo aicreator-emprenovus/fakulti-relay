@@ -1292,6 +1292,8 @@ async def bulk_download(
     user=Depends(get_current_user)
 ):
     import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
     
     query = {}
     if download_type == "stage" and stage:
@@ -1306,35 +1308,218 @@ async def bulk_download(
         query["funnel_stage"] = {"$in": ["cliente_nuevo", "cliente_activo"]}
     
     leads = await db.leads.find(query, {"_id": 0}).to_list(10000)
+    all_leads = await db.leads.find({}, {"_id": 0}).to_list(10000)
+    products_list = await db.products.find({}, {"_id": 0}).to_list(100)
     
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Leads Faculty"
     
-    headers_list = ["Nombre", "WhatsApp", "Email", "Ciudad", "Producto Interes", "Fuente", "Etapa Embudo", "Estado", "Juego Usado", "Premio", "Cupon", "Ultima Interaccion", "Fecha Registro"]
-    ws.append(headers_list)
+    # Styles
+    header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1A6B3C", end_color="1A6B3C", fill_type="solid")
+    header_fill2 = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    header_fill3 = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
+    accent_fill = PatternFill(start_color="F0FFF4", end_color="F0FFF4", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin", color="D1D5DB"), right=Side(style="thin", color="D1D5DB"),
+        top=Side(style="thin", color="D1D5DB"), bottom=Side(style="thin", color="D1D5DB")
+    )
+    center_align = Alignment(horizontal="center", vertical="center")
+    wrap_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
     
-    for lead in leads:
-        ws.append([
+    def style_header(ws, row, fill):
+        for cell in ws[row]:
+            cell.font = header_font
+            cell.fill = fill
+            cell.alignment = center_align
+            cell.border = thin_border
+    
+    def style_data(ws, start_row):
+        for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row):
+            for cell in row:
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical="center")
+    
+    def auto_width(ws):
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+            ws.column_dimensions[col_letter].width = min(max_len + 4, 35)
+    
+    # ===== SHEET 1: Base de Datos de Leads =====
+    ws1 = wb.active
+    ws1.title = "Base de Datos"
+    
+    stage_labels = {"nuevo": "Prospecto", "interesado": "Interesado", "en_negociacion": "En Negociación", "cliente_nuevo": "Cliente Nuevo", "cliente_activo": "Cliente Activo", "perdido": "Perdido"}
+    
+    headers = ["#", "Nombre", "WhatsApp", "Email", "Ciudad", "Producto de Interés", "Fuente", "Etapa del Embudo", "Estado", "Juego Usado", "Premio Obtenido", "Cupón", "Última Interacción", "Fecha de Registro"]
+    ws1.append(headers)
+    style_header(ws1, 1, header_fill)
+    
+    for i, lead in enumerate(leads, 1):
+        ws1.append([
+            i,
             lead.get("name", ""),
             lead.get("whatsapp", ""),
             lead.get("email", ""),
             lead.get("city", ""),
             lead.get("product_interest", ""),
             lead.get("source", ""),
-            lead.get("funnel_stage", ""),
+            stage_labels.get(lead.get("funnel_stage", ""), lead.get("funnel_stage", "")),
             lead.get("status", ""),
-            lead.get("game_used", ""),
-            lead.get("prize_obtained", ""),
-            lead.get("coupon_used", ""),
-            lead.get("last_interaction", ""),
-            lead.get("created_at", "")
+            lead.get("game_used", "") or "",
+            lead.get("prize_obtained", "") or "",
+            lead.get("coupon_used", "") or "",
+            (lead.get("last_interaction", "") or "")[:19],
+            (lead.get("created_at", "") or "")[:19]
         ])
+    style_data(ws1, 2)
+    auto_width(ws1)
+    ws1.freeze_panes = "B2"
+    ws1.auto_filter.ref = f"A1:N{len(leads)+1}"
+    
+    # ===== SHEET 2: Resumen por Etapa del Embudo =====
+    ws2 = wb.create_sheet("Embudo de Ventas")
+    ws2.append(["Etapa del Embudo", "Cantidad de Leads", "Porcentaje", "Tasa de Conversión"])
+    style_header(ws2, 1, header_fill2)
+    
+    stage_order = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "cliente_activo", "perdido"]
+    total_leads = len(all_leads)
+    for s in stage_order:
+        count = sum(1 for l in all_leads if l.get("funnel_stage") == s)
+        pct = f"{(count/total_leads*100):.1f}%" if total_leads > 0 else "0%"
+        conv = ""
+        if s == "cliente_nuevo" or s == "cliente_activo":
+            conv = f"{(count/total_leads*100):.1f}%" if total_leads > 0 else "0%"
+        ws2.append([stage_labels.get(s, s), count, pct, conv])
+    ws2.append([])
+    ws2.append(["TOTAL LEADS", total_leads, "100%", ""])
+    ws2[ws2.max_row][0].font = Font(bold=True)
+    ws2[ws2.max_row][1].font = Font(bold=True)
+    style_data(ws2, 2)
+    auto_width(ws2)
+    
+    # ===== SHEET 3: Leads por Fuente =====
+    ws3 = wb.create_sheet("Fuentes de Tráfico")
+    ws3.append(["Fuente", "Total Leads", "Porcentaje", "Clientes Convertidos", "Tasa de Conversión"])
+    style_header(ws3, 1, header_fill3)
+    
+    sources = {}
+    for l in all_leads:
+        src = l.get("source", "Desconocido") or "Desconocido"
+        if src not in sources:
+            sources[src] = {"total": 0, "clientes": 0}
+        sources[src]["total"] += 1
+        if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]:
+            sources[src]["clientes"] += 1
+    
+    for src, data in sorted(sources.items(), key=lambda x: x[1]["total"], reverse=True):
+        pct = f"{(data['total']/total_leads*100):.1f}%" if total_leads > 0 else "0%"
+        conv = f"{(data['clientes']/data['total']*100):.1f}%" if data["total"] > 0 else "0%"
+        ws3.append([src, data["total"], pct, data["clientes"], conv])
+    style_data(ws3, 2)
+    auto_width(ws3)
+    
+    # ===== SHEET 4: Productos =====
+    ws4 = wb.create_sheet("Catálogo de Productos")
+    ws4.append(["Producto", "Código", "Precio", "Precio Original", "Stock", "Categoría", "Leads Interesados"])
+    style_header(ws4, 1, header_fill)
+    
+    for p in products_list:
+        interested = sum(1 for l in all_leads if p["name"].lower() in (l.get("product_interest", "") or "").lower())
+        ws4.append([p["name"], p.get("code", ""), f"${p['price']}", f"${p.get('original_price', '')}", p.get("stock", ""), p.get("category", ""), interested])
+    style_data(ws4, 2)
+    auto_width(ws4)
+    
+    # ===== SHEET 5: Leads por Ciudad =====
+    ws5 = wb.create_sheet("Leads por Ciudad")
+    ws5.append(["Ciudad", "Total Leads", "Porcentaje", "Clientes"])
+    style_header(ws5, 1, header_fill2)
+    
+    cities = {}
+    for l in all_leads:
+        city = l.get("city", "Sin ciudad") or "Sin ciudad"
+        if city not in cities:
+            cities[city] = {"total": 0, "clientes": 0}
+        cities[city]["total"] += 1
+        if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]:
+            cities[city]["clientes"] += 1
+    
+    for city, data in sorted(cities.items(), key=lambda x: x[1]["total"], reverse=True):
+        pct = f"{(data['total']/total_leads*100):.1f}%" if total_leads > 0 else "0%"
+        ws5.append([city, data["total"], pct, data["clientes"]])
+    style_data(ws5, 2)
+    auto_width(ws5)
+    
+    # ===== SHEET 6: Leads por Período =====
+    ws6 = wb.create_sheet("Leads por Período")
+    ws6.append(["Período", "Nuevos Leads", "Leads Interesados", "En Negociación", "Clientes Nuevos", "Perdidos", "Total"])
+    style_header(ws6, 1, header_fill3)
+    
+    months = {}
+    for l in all_leads:
+        created = l.get("created_at", "")
+        if created:
+            month_key = created[:7]
+            if month_key not in months:
+                months[month_key] = {"nuevo": 0, "interesado": 0, "en_negociacion": 0, "cliente_nuevo": 0, "perdido": 0, "total": 0}
+            stage_val = l.get("funnel_stage", "nuevo")
+            if stage_val in months[month_key]:
+                months[month_key][stage_val] += 1
+            months[month_key]["total"] += 1
+    
+    for period in sorted(months.keys()):
+        d = months[period]
+        ws6.append([period, d["nuevo"], d["interesado"], d["en_negociacion"], d["cliente_nuevo"], d["perdido"], d["total"]])
+    style_data(ws6, 2)
+    auto_width(ws6)
+    
+    # ===== SHEET 7: Resumen Ejecutivo =====
+    ws7 = wb.create_sheet("Resumen Ejecutivo")
+    ws7.sheet_properties.tabColor = "FFD700"
+    ws7.move_range("A1", rows=0, cols=0)
+    
+    title_font = Font(name="Calibri", bold=True, size=16, color="1A6B3C")
+    subtitle_font = Font(name="Calibri", bold=True, size=12, color="333333")
+    
+    ws7.append(["REPORTE EJECUTIVO - FAKULTI LABORATORIOS"])
+    ws7["A1"].font = title_font
+    ws7.merge_cells("A1:D1")
+    ws7.append([f"Generado: {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')} UTC"])
+    ws7["A2"].font = Font(italic=True, color="666666")
+    ws7.append([])
+    
+    ws7.append(["KPI", "Valor"])
+    ws7["A4"].font = subtitle_font
+    ws7["B4"].font = subtitle_font
+    
+    clientes = sum(1 for l in all_leads if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"])
+    interesados = sum(1 for l in all_leads if l.get("funnel_stage") == "interesado")
+    negociacion = sum(1 for l in all_leads if l.get("funnel_stage") == "en_negociacion")
+    perdidos = sum(1 for l in all_leads if l.get("funnel_stage") == "perdido")
+    
+    kpis = [
+        ("Total Leads", total_leads),
+        ("Clientes Activos", clientes),
+        ("Leads Interesados", interesados),
+        ("En Negociación", negociacion),
+        ("Leads Perdidos", perdidos),
+        ("Tasa de Conversión", f"{(clientes/total_leads*100):.1f}%" if total_leads > 0 else "0%"),
+        ("Fuente Principal", max(sources.items(), key=lambda x: x[1]["total"])[0] if sources else "N/A"),
+        ("Ciudad Principal", max(cities.items(), key=lambda x: x[1]["total"])[0] if cities else "N/A"),
+    ]
+    for kpi, val in kpis:
+        ws7.append([kpi, val])
+    
+    style_data(ws7, 4)
+    auto_width(ws7)
     
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
-    filename = f"leads_faculty_{download_type}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx"
+    filename = f"fakulti_reporte_{download_type}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 # ========== WHATSAPP CLOUD API ==========
