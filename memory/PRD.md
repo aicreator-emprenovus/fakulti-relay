@@ -7,7 +7,7 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 - **AI Agent**: Virtual assistant using GPT-5.2 via WhatsApp for lead qualification, product education, and sales
 - **Intelligent Funnel**: Automated lead categorization (Nuevo > Interesado > En Negociacion > Cliente Nuevo > Cliente Activo > Perdido)
 - **CRM Panel**: Full admin dashboard with metrics, lead management, bulk operations
-- **Gamification**: Roulette, Slot Machine, Scratch Card games for lead engagement
+- **Gamification**: Premium Roulette, Slot Machine, and Golden Ticket (scratch card) games
 - **Loyalty System**: Configurable post-sale messaging sequences (up to 24 messages)
 - **WhatsApp Integration**: Real WhatsApp Cloud API via Meta with GPT-5.2 powered bot
 - **Automation Panel**: Rules engine for bot behavior management
@@ -27,25 +27,19 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 ### Completed Features
 1. **Dashboard** - KPI cards, funnel visualization, charts (products, traffic sources), recent leads
 2. **Lead Management** - Kanban board with 6 stage columns, drag-and-drop, lead cards with action icons
-3. **Gamification** - Roulette, Slot Machine, Scratch Card with public-facing pages
+3. **Gamification (Premium UI)** - Three games with product images:
+    - **Ruleta**: Dark premium design, LED lights ring, neon segment colors, product images in segments, FAKULTI center, glowing CTA button
+    - **Tragamonedas**: Casino-style with red marquee sign, gold rivets, real product images in reels (Bombro, Gomitas, etc.), red payline, decorative lights
+    - **Golden Ticket**: Willy Wonka style scratch card, golden gradient with shimmer animation, perforated border, coin cursor for scratching, star decorations
 4. **Light/Dark Mode** - System-wide theme toggle
-5. **WhatsApp Bot (GPT-5.2)** - FULLY WORKING. Conversational AI bot that:
-    - Greets new users and asks name naturally
-    - Follows Faculty brand voice (natural, cercano, humano, profesional)
-    - Explains Bone Broth Hidrolizado (Bombro) product in simple terms
-    - Asks qualification questions naturally during conversation
+5. **WhatsApp Bot (GPT-5.2)** - FULLY WORKING with detailed Faculty brand voice prompt:
+    - Natural, human-like conversation flow
     - Auto-extracts: nombre, apellido, ciudad, email, producto de interes
-    - Auto-classifies funnel stage based on conversation context
-    - Maintains conversation history for context
+    - Auto-classifies funnel stage
+    - Explains Bone Broth in simple terms
     - Never makes medical claims
-    - Responds in short messages (1-4 lines)
-6. **WhatsApp Monitor** - Real-time CRM view with:
-    - Stats bar (Active convos 24h, Avg response time, Messages today, Alerts)
-    - All WhatsApp conversations visible
-    - CRM agent can reply directly to any WhatsApp conversation
-    - Human handover alerts with resolve functionality
-    - Auto-refresh every 8 seconds
-    - Response time tracking
+    - Permanent token configured
+6. **WhatsApp Monitor** - Real-time CRM view with stats, alerts, CRM agent reply
 7. **Loyalty System** - Sequence CRUD, enrollment, auto-enrollment, metrics dashboard
 8. **Configuracion Panel** - Automation rules, WhatsApp credentials, AI settings
 9. **Custom Branding** - Fakulti title, Emprenovus footer
@@ -57,41 +51,34 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 ```
 /app/backend/server.py     - All API routes, models, AI bot logic
 /app/frontend/src/
-  App.js                   - Router, Auth, Theme providers
   pages/
-    DashboardPage.jsx      - Dashboard with metrics
-    LeadsPage.jsx          - Kanban board lead management
-    ChatPage.jsx           - WhatsApp Bot monitor (ONLY WhatsApp, no internal chat)
-    LoyaltyPage.jsx        - Sequences + Enrollments + Metrics tabs
+    DashboardPage.jsx      - Dashboard
+    LeadsPage.jsx          - Kanban board
+    ChatPage.jsx           - WhatsApp Bot monitor (WhatsApp only)
+    LoyaltyPage.jsx        - Loyalty system
     BulkPage.jsx           - Excel upload/download (UI pending)
     GamesConfigPage.jsx    - Game configuration
-    GamePublicPage.jsx     - Public game pages
-    ConfigPage.jsx         - Automation, WhatsApp, AI settings
-    LoginPage.jsx          - Authentication
-    AdminLayout.jsx        - Main layout wrapper
-  components/
-    Sidebar.jsx            - Navigation (shows "WhatsApp Bot")
-    Footer.jsx             - Custom footer
+    GamePublicPage.jsx     - Premium game UIs (roulette, slot, scratch)
+    ConfigPage.jsx         - Settings
+    LoginPage.jsx          - Auth
 ```
 
 ## WhatsApp Architecture
 - **Railway Relay**: `https://relay-production-8a3a.up.railway.app`
-- **Railway Variables**: BACKEND_URL and TARGET_URL = base URL only (no path suffix)
-- **Credentials**: MongoDB `whatsapp_config` collection
+- **WABA ID**: 1445540157191817 (subscribed to Fakulti Bot app)
 - **Phone Number ID**: 994356967089829
-- **Flow**: User WhatsApp -> Meta -> Railway Relay -> Backend /api/webhook/whatsapp -> GPT-5.2 -> WhatsApp API
-- **Bot Prompt**: Detailed Faculty brand voice with product knowledge, conversational flow, and automatic data extraction
-- **Data Extraction Tags**: [LEAD_NAME:], [UPDATE_LEAD:field=value], [STAGE:stage] - parsed by backend, stripped before sending
+- **Token**: Permanent system user token
+- **Flow**: WhatsApp -> Meta -> Railway -> Backend -> GPT-5.2 -> WhatsApp API
 
 ## Pending / Future Tasks
-- **P1: Excel Bulk Upload/Download** - Implement functionality on BulkPage.jsx
-- **P2: Fibeca QR Code Flow** - Journey for physical store QR scanning
+- **P1: Excel Bulk Upload/Download** - BulkPage.jsx
+- **P2: Fibeca QR Code Flow** - Physical store QR journey
 - **P2: Human Agent Handover** - Full pause/resume automation
 - **P3: Scheduled Loyalty Processing** - Background job
 
 ## LIVE Integrations
-- WhatsApp Cloud API via Meta (LIVE)
+- WhatsApp Cloud API via Meta (LIVE, permanent token)
 - OpenAI GPT-5.2 via Emergent LLM Key (LIVE)
 
 ## MOCKED Integrations
-- Loyalty message delivery (logged in DB, not actually sent)
+- Loyalty message delivery (logged in DB, not actually sent via WhatsApp)
