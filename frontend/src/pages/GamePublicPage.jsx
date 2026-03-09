@@ -316,15 +316,15 @@ function SlotMachineGame({ config, onPlay, products }) {
       <div className="relative" data-testid="slot-machine">
         {/* Top sign */}
         <div className="relative z-10 text-center -mb-3">
-          <div className="inline-block bg-gradient-to-r from-red-700 via-red-500 to-red-700 px-8 py-2 rounded-t-2xl border-2 border-yellow-500/60">
-            <p className="text-yellow-300 font-black text-xl tracking-[0.3em] uppercase" style={{ textShadow: "0 0 10px rgba(255,215,0,0.5)" }}>
+          <div className="inline-block bg-gradient-to-r from-red-700 via-red-500 to-red-700 px-10 py-3 rounded-t-2xl border-2 border-yellow-500/60">
+            <p className="text-yellow-300 font-black text-2xl tracking-[0.3em] uppercase" style={{ textShadow: "0 0 10px rgba(255,215,0,0.5)" }}>
               Tragamonedas
             </p>
           </div>
         </div>
 
         {/* Machine body */}
-        <div className="bg-gradient-to-b from-[#2a0a0a] via-[#1a0505] to-[#0a0000] rounded-2xl p-5 border-2 border-yellow-600/40 shadow-[0_0_40px_rgba(200,50,50,0.15)] relative overflow-hidden">
+        <div className="bg-gradient-to-b from-[#2a0a0a] via-[#1a0505] to-[#0a0000] rounded-2xl p-6 border-2 border-yellow-600/40 shadow-[0_0_40px_rgba(200,50,50,0.15)] relative overflow-hidden">
           {/* Decorative rivets */}
           <div className="absolute top-3 left-3 w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-700 shadow-inner" />
           <div className="absolute top-3 right-3 w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-700 shadow-inner" />
@@ -332,16 +332,16 @@ function SlotMachineGame({ config, onPlay, products }) {
           <div className="absolute bottom-3 right-3 w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-700 shadow-inner" />
 
           {/* Display window */}
-          <div className="bg-black/80 rounded-xl p-4 border border-yellow-600/20 relative">
+          <div className="bg-black/80 rounded-xl p-5 border border-yellow-600/20 relative">
             {/* Win line */}
             <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-red-500/40 z-10" />
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-6 bg-red-500 rounded-r-sm z-10" />
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-6 bg-red-500 rounded-l-sm z-10" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-7 bg-red-500 rounded-r-sm z-10" />
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-7 bg-red-500 rounded-l-sm z-10" />
 
-            <div className="flex gap-3 justify-center">
+            <div className="flex gap-4 justify-center">
               {[0, 1, 2].map(r => (
                 <div key={r}
-                  className="w-24 h-28 rounded-xl flex flex-col items-center justify-center border border-yellow-600/20 overflow-hidden relative"
+                  className="w-28 h-32 rounded-xl flex flex-col items-center justify-center border border-yellow-600/20 overflow-hidden relative"
                   style={{ background: "linear-gradient(180deg, rgba(255,215,0,0.05) 0%, rgba(0,0,0,0.3) 50%, rgba(255,215,0,0.05) 100%)" }}>
                   {/* Reel content */}
                   <div className={`flex flex-col items-center justify-center transition-transform ${spinning ? "animate-bounce" : ""}`} style={{ animationDelay: `${r * 80}ms` }}>
@@ -349,7 +349,7 @@ function SlotMachineGame({ config, onPlay, products }) {
                       <img
                         src={SYMBOLS[displayReels[r]].image}
                         alt={SYMBOLS[displayReels[r]].name}
-                        className="w-14 h-14 object-contain drop-shadow-[0_0_8px_rgba(163,230,53,0.4)]"
+                        className="w-16 h-16 object-contain drop-shadow-[0_0_8px_rgba(163,230,53,0.4)]"
                       />
                     ) : (
                       <span className="text-5xl">{SYMBOLS[displayReels[r]]?.emoji}</span>
@@ -684,7 +684,7 @@ export default function GamePublicPage() {
   const gameTitle = { roulette: "Ruleta de Premios", slot_machine: "Tragamonedas", scratch_card: "Golden Ticket" }[gameType] || config?.name;
 
   return (
-    <div className="min-h-screen bg-[#050510] flex flex-col items-center justify-center p-4 relative overflow-hidden" data-testid="game-public-page">
+    <div className="min-h-screen bg-[#050510] flex flex-col items-center p-4 relative overflow-hidden" data-testid="game-public-page">
       {/* Background effects */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-primary/3 rounded-full blur-[120px]" />
@@ -692,7 +692,7 @@ export default function GamePublicPage() {
         <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-blue-500/3 rounded-full blur-[80px]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-md mx-auto">
+      <div className="relative z-10 w-full max-w-md mx-auto flex-1 flex flex-col justify-center py-8">
         <div className="text-center mb-6">
           <img src={LOGO_URL} alt="Faculty" className="h-10 mx-auto mb-3 drop-shadow-[0_0_10px_rgba(163,230,53,0.3)]" />
           <h1 className="text-3xl font-black text-white tracking-tight">{gameTitle}</h1>
@@ -733,7 +733,7 @@ export default function GamePublicPage() {
           GameComponent && <GameComponent config={config} onPlay={handlePlay} products={products} />
         )}
       </div>
-      <div className="absolute bottom-0 left-0 right-0 z-10">
+      <div className="relative z-10 w-full mt-auto pt-4">
         <Footer />
       </div>
     </div>
