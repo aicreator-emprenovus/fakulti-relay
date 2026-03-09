@@ -25,7 +25,7 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 
 ### Completed Features
 1. **Dashboard** - KPI cards, funnel visualization, charts (products, traffic sources), recent leads
-2. **Lead Management** - CRUD, search, filter by stage/source, stage change dropdown, detail view
+2. **Lead Management** - Kanban board with 6 stage columns, drag-and-drop, lead cards with view/edit/WhatsApp/delete icons, stage dropdown, search and filters
 3. **Gamification** - Roulette, Slot Machine, Scratch Card with public-facing pages
 4. **AI Chat** - GPT-5.2 powered assistant with auto lead registration and stage classification
 5. **Quotations** - Create quotations, PDF generation and download
