@@ -5,39 +5,40 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
 
 ## Core Requirements
 - **AI Agent**: Virtual assistant using GPT-5.2 for lead qualification, quoting, and sales
-- **Intelligent Funnel**: Automated lead categorization (Prospecto → Interesado → En Negociación → Cliente → Perdido)
+- **Intelligent Funnel**: Automated lead categorization (Nuevo > Interesado > En Negociacion > Cliente Nuevo > Cliente Activo > Perdido)
 - **CRM Panel**: Full admin dashboard with metrics, lead management, bulk operations
 - **Gamification**: Roulette, Slot Machine, Scratch Card games for lead engagement
 - **Loyalty System**: Configurable post-sale messaging sequences (up to 24 messages)
-- **Quote Generation**: PDF quotation generation and download
-- **WhatsApp Integration**: Webhook for incoming messages with auto-greeting and lead registration
+- **WhatsApp Integration**: Real WhatsApp Cloud API via Meta for Developers with live bot
+- **Automation Panel**: Rules engine for bot behavior management
 
 ## Tech Stack
-- **Frontend**: React, Tailwind CSS, Shadcn/UI, Recharts
-- **Backend**: FastAPI, Motor (async MongoDB), Pydantic
+- **Frontend**: React, Tailwind CSS, Shadcn/UI, Recharts, react-beautiful-dnd
+- **Backend**: FastAPI, Motor (async MongoDB), Pydantic, httpx
 - **AI**: OpenAI GPT-5.2 via Emergent LLM Key
 - **Database**: MongoDB
+- **External**: WhatsApp Cloud API (Meta), Railway relay service
 
 ## User Credentials
-- Admin: admin@faculty.com / admin123
+- Admin: admin@fakulti.com / admin123
 
 ## What's Been Implemented
 
 ### Completed Features
 1. **Dashboard** - KPI cards, funnel visualization, charts (products, traffic sources), recent leads
-2. **Lead Management** - Kanban board with 6 stage columns, drag-and-drop, lead cards with view/edit/WhatsApp/delete icons, stage dropdown, search and filters
+2. **Lead Management** - Kanban board with 6 stage columns, drag-and-drop, lead cards with action icons, search and filters
 3. **Gamification** - Roulette, Slot Machine, Scratch Card with public-facing pages
 4. **AI Chat** - GPT-5.2 powered assistant with auto lead registration and stage classification
-5. **Quotations** - Create quotations, PDF generation and download
-6. **Bulk Operations** - Excel upload/download with duplicate detection
-7. **Light/Dark Mode** - System-wide theme toggle (light default)
-8. **WhatsApp Webhook** - New/returning lead greeting, name registration, auto-staging by keywords
-9. **Lead Stage Renaming** - "En Negociación" and "Perdido" replacing old names, with DB migration
-10. **Chat Delete Functions** - Delete individual messages and clear entire conversations
-11. **Loyalty System** - Sequence CRUD, lead enrollment, auto-enrollment on purchase, message processing with progress tracking
-12. **Loyalty Metrics Dashboard** - Repurchase rates, retention rates, revenue by product, sequence effectiveness, top buyers with charts
-13. **Custom Branding** - Fakulti title, Emprenovus footer, hidden Emergent badge
-14. **Configuracion Panel** - 3 tabs: Automatizacion (10 bot rules CRUD), WhatsApp Business Cloud API (real webhook, verification, message send/receive), IA config (4 feature toggles)
+5. **Bulk Operations** - Page exists, backend library (openpyxl) installed
+6. **Light/Dark Mode** - System-wide theme toggle (light default)
+7. **WhatsApp Live Integration** - FULLY WORKING. Real WhatsApp Cloud API via Meta, Railway relay for webhook forwarding, auto-greeting, name registration, auto-staging by keywords
+8. **Lead Stage Renaming** - "En Negociacion" and "Perdido" stages with DB migration
+9. **Chat Delete Functions** - Delete individual messages and clear entire conversations
+10. **Loyalty System** - Sequence CRUD, lead enrollment, auto-enrollment on purchase, message processing with progress tracking
+11. **Loyalty Metrics Dashboard** - Repurchase rates, retention rates, revenue by product, sequence effectiveness, top buyers with charts
+12. **Custom Branding** - Fakulti title, Emprenovus footer
+13. **Configuracion Panel** - 3 tabs: Automatizacion (bot rules CRUD), WhatsApp Business Cloud API (credentials, webhook), IA config (feature toggles)
+14. **Quotations Module** - Removed as requested
 
 ### Funnel Stages
 - `nuevo`, `interesado`, `en_negociacion`, `cliente_nuevo`, `cliente_activo`, `perdido`
@@ -49,26 +50,36 @@ Build a comprehensive CRM and sales funnel automation platform for "Fakulti" bra
   App.js                   - Router, Auth, Theme providers
   pages/
     DashboardPage.jsx      - Dashboard with metrics
-    LeadsPage.jsx          - Lead management
+    LeadsPage.jsx          - Kanban board lead management
     ChatPage.jsx           - AI chat with delete functions
-    LoyaltyPage.jsx        - Sequences + Enrollments with tabs
-    QuotationsPage.jsx     - Quote creation + PDF
-    BulkPage.jsx           - Excel upload/download
+    LoyaltyPage.jsx        - Sequences + Enrollments + Metrics tabs
+    BulkPage.jsx           - Excel upload/download (UI pending)
     GamesConfigPage.jsx    - Game configuration
     GamePublicPage.jsx     - Public game pages
+    ConfigPage.jsx         - Automation, WhatsApp, AI settings
     LoginPage.jsx          - Authentication
-    SettingsPage.jsx       - Settings
+    AdminLayout.jsx        - Main layout wrapper
   components/
     Sidebar.jsx            - Navigation
     Footer.jsx             - Custom footer
 ```
 
+## WhatsApp Architecture
+- **Railway Relay**: `https://relay-production-8a3a.up.railway.app` forwards Meta webhooks to backend
+- **Railway Variables**: BACKEND_URL and TARGET_URL must be set to base URL only (no path suffix)
+- **Credentials**: Stored in MongoDB `whatsapp_config` collection, managed via /config page
+- **Phone Number ID**: 994356967089829
+- **Flow**: User WhatsApp -> Meta -> Railway Relay -> Backend /api/webhook/whatsapp -> AI Process -> WhatsApp Cloud API response
+
 ## Pending / Future Tasks
+- **P1: Excel Bulk Upload/Download** - Implement functionality on BulkPage.jsx for .xlsx upload and filtered downloads
 - **P2: Fibeca QR Code Flow** - Journey for physical store customers scanning QR
 - **P2: Human Agent Handover** - Pause automation and alert human agent
-- **P2: Real WhatsApp API** - Connect webhook to actual WhatsApp Business API
 - **P3: Scheduled Loyalty Processing** - Background job for automatic message sending
 
+## LIVE Integrations
+- WhatsApp Cloud API via Meta (LIVE, working through Railway relay)
+- OpenAI GPT-5.2 via Emergent LLM Key (LIVE)
+
 ## MOCKED Integrations
-- WhatsApp webhook is standalone (not connected to WhatsApp Business API)
 - Loyalty message delivery is simulated (logged, marked as sent in DB)
