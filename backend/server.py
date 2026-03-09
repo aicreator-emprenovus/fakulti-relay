@@ -1370,21 +1370,18 @@ async def send_whatsapp_message(to_phone: str, text: str):
         return False
 
 async def process_whatsapp_incoming(phone: str, message_text: str):
-    """Process an incoming WhatsApp message through the AI bot."""
+    """Process an incoming WhatsApp message through GPT-5.2 AI bot."""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
     existing_lead = await db.leads.find_one({"whatsapp": phone}, {"_id": 0})
     is_new = existing_lead is None
+    lead_id = existing_lead["id"] if existing_lead else None
     lead_name = existing_lead.get("name", "") if existing_lead else ""
-    msg_lower = message_text.strip().lower()
-
-    providing_name = False
-    if is_new or (existing_lead and not lead_name):
-        words = message_text.strip().split()
-        if 1 <= len(words) <= 4 and "?" not in message_text and not any(kw in msg_lower for kw in ["precio", "producto", "comprar", "cotiz", "hola", "info"]):
-            providing_name = True
-
-    if providing_name and is_new:
+    
+    # Create lead if new
+    if is_new:
         new_lead = {
-            "id": str(uuid.uuid4()), "name": message_text.strip().title(), "whatsapp": phone,
+            "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
             "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
             "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
             "purchase_history": [], "coupon_used": None, "recompra_date": None,
@@ -1393,49 +1390,122 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.leads.insert_one(new_lead)
-        reply = f"Mucho gusto {message_text.strip().title()}! Bienvenido a Fakulti Laboratorios. Somos especialistas en suplementos naturales. En que producto puedo ayudarte?"
-        return reply, new_lead["id"]
+        lead_id = new_lead["id"]
+        existing_lead = new_lead
+    
+    # Build product catalog
+    products = await db.products.find({}, {"_id": 0}).to_list(100)
+    product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
+    
+    # Build context-aware system prompt
+    missing_fields = []
+    if not lead_name:
+        missing_fields.append("nombre completo")
+    if not existing_lead.get("city"):
+        missing_fields.append("ciudad")
+    if not existing_lead.get("product_interest"):
+        missing_fields.append("que producto le interesa")
+    
+    missing_instruction = ""
+    if missing_fields:
+        missing_instruction = f"\nDATOS FALTANTES: Necesitas preguntarle al cliente su {', '.join(missing_fields)}. Hazlo de forma natural, uno por uno."
+    
+    name_context = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural." if lead_name else "\nEste es un lead NUEVO sin nombre. Saluda y pregunta su nombre."
+    
+    system_msg = f"""Eres el Asesor Virtual de Fakulti Laboratorios por WhatsApp.
+Tu funcion: Atender leads, calificar, recomendar productos y cerrar ventas.
+{name_context}
+{missing_instruction}
 
-    if providing_name and existing_lead and not lead_name:
-        await db.leads.update_one({"whatsapp": phone}, {"$set": {"name": message_text.strip().title(), "last_interaction": datetime.now(timezone.utc).isoformat()}})
-        reply = f"Gracias {message_text.strip().title()}! Ya te tengo registrado. En que puedo ayudarte hoy?"
-        return reply, existing_lead["id"]
+PRODUCTOS DISPONIBLES:
+{product_info}
 
-    if is_new:
-        new_lead = {
-            "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
-            "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
-            "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
-            "purchase_history": [], "coupon_used": None, "recompra_date": None,
-            "notes": "Lead sin nombre - pendiente registro",
-            "last_interaction": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.leads.insert_one(new_lead)
-        reply = "Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. Para brindarte una mejor atencion, me podrias decir tu nombre?"
-        return reply, new_lead["id"]
+REGLAS:
+- Responde SIEMPRE en espanol.
+- Se amigable, profesional y conciso (maximo 3-4 oraciones por mensaje).
+- Nunca hacer promesas medicas ni afirmar que cura enfermedades.
+- Nunca recomendar reemplazar tratamiento medico.
+- Bombro es Bone Broth Hidrolizado, producto unico en Ecuador.
+- Si preguntan precio, da la informacion directamente.
+- Si quieren comprar, indica los pasos de pago y envio.
+- Si piden hablar con un humano, responde amablemente que un agente se comunicara pronto.
+- NO uses markdown, negritas ni formatos especiales. Solo texto plano.
+- NO uses emojis excesivos, maximo 1-2 por mensaje.
 
-    # Returning lead - auto-stage based on keywords
-    new_stage = None
-    if any(kw in msg_lower for kw in ["precio", "cuanto", "costo", "vale"]):
-        new_stage = "interesado"
-    elif any(kw in msg_lower for kw in ["cotiz", "envio", "pago", "forma de pago", "transferencia"]):
-        new_stage = "en_negociacion"
-    elif any(kw in msg_lower for kw in ["comprar", "quiero", "confirmo", "listo"]):
-        new_stage = "en_negociacion"
-    elif any(kw in msg_lower for kw in ["no me interesa", "no gracias", "no quiero"]):
-        new_stage = "perdido"
+EXTRACCION DE DATOS - Al final de CADA respuesta incluye en lineas separadas:
+- Si detectas el nombre del cliente: [LEAD_NAME:Nombre Apellido]
+- Si detectas ciudad: [UPDATE_LEAD:city=Ciudad]
+- Si detectas interes en producto: [UPDATE_LEAD:product_interest=NombreProducto]
+- Clasifica la etapa del lead:
+  [STAGE:nuevo] - Primer contacto, sin interes especifico
+  [STAGE:interesado] - Pregunta por productos, precios o beneficios
+  [STAGE:en_negociacion] - Solicita cotizacion, pago, envio
+  [STAGE:cliente_nuevo] - Confirma compra
+  [STAGE:perdido] - Rechaza explicitamente
+Incluye SIEMPRE el tag [STAGE:] al final."""
 
-    if new_stage and existing_lead.get("funnel_stage") != new_stage:
-        current_priority = FUNNEL_STAGES.index(existing_lead.get("funnel_stage", "nuevo")) if existing_lead.get("funnel_stage") in FUNNEL_STAGES else 0
-        new_priority = FUNNEL_STAGES.index(new_stage)
-        if new_stage == "perdido" or new_priority > current_priority:
-            await db.leads.update_one({"whatsapp": phone}, {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
-    else:
-        await db.leads.update_one({"whatsapp": phone}, {"$set": {"last_interaction": datetime.now(timezone.utc).isoformat()}})
-
-    greeting = f"Hola de nuevo{(' ' + lead_name) if lead_name else ''}! Que gusto tenerte de vuelta. En que puedo ayudarte hoy?"
-    return greeting, existing_lead["id"]
+    # Load conversation history
+    session_id = f"wa_{phone}"
+    history = await db.chat_messages.find(
+        {"session_id": session_id}, {"_id": 0}
+    ).sort("timestamp", 1).limit(20).to_list(20)
+    
+    llm_key = os.environ.get('EMERGENT_LLM_KEY')
+    chat = LlmChat(api_key=llm_key, session_id=session_id, system_message=system_msg)
+    chat.with_model("openai", "gpt-5.2")
+    
+    for msg in history:
+        if msg["role"] == "user":
+            chat.messages.append({"role": "user", "content": msg["content"]})
+        else:
+            chat.messages.append({"role": "assistant", "content": msg["content"]})
+    
+    try:
+        response = await chat.send_message(UserMessage(text=message_text))
+        reply = response if isinstance(response, str) else str(response)
+    except Exception as e:
+        logger.error(f"WhatsApp GPT error: {e}")
+        reply = "Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. En que puedo ayudarte?"
+    
+    # Parse lead name
+    name_match = re.search(r'\[LEAD_NAME:([^\]]+)\]', reply)
+    if name_match and not lead_name:
+        detected_name = name_match.group(1).strip()
+        await db.leads.update_one({"id": lead_id}, {"$set": {"name": detected_name, "last_interaction": datetime.now(timezone.utc).isoformat()}})
+        await db.chat_sessions_meta.update_one({"session_id": session_id}, {"$set": {"lead_name": detected_name}}, upsert=True)
+        logger.info(f"WhatsApp lead name detected: {detected_name} for {phone}")
+    reply = re.sub(r'\[LEAD_NAME:[^\]]+\]', '', reply)
+    
+    # Parse lead data updates
+    update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', reply)
+    if update_matches:
+        update_fields = {}
+        allowed_fields = {"whatsapp", "city", "product_interest", "email"}
+        for field, value in update_matches:
+            if field in allowed_fields:
+                update_fields[field] = value.strip()
+        if update_fields:
+            update_fields["last_interaction"] = datetime.now(timezone.utc).isoformat()
+            await db.leads.update_one({"id": lead_id}, {"$set": update_fields})
+            logger.info(f"WhatsApp lead {lead_id} updated: {update_fields}")
+    reply = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]+\]', '', reply)
+    
+    # Parse stage classification
+    stage_match = re.search(r'\[STAGE:(\w+)\]', reply)
+    if stage_match:
+        new_stage = stage_match.group(1).strip()
+        if new_stage in FUNNEL_STAGES:
+            current_stage = existing_lead.get("funnel_stage", "nuevo")
+            current_priority = FUNNEL_STAGES.index(current_stage) if current_stage in FUNNEL_STAGES else 0
+            new_priority = FUNNEL_STAGES.index(new_stage)
+            if new_stage == "perdido" or new_priority > current_priority:
+                await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
+    reply = re.sub(r'\[STAGE:\w+\]', '', reply).strip()
+    
+    # Update last interaction
+    await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": datetime.now(timezone.utc).isoformat()}})
+    
+    return reply, lead_id
 
 # Meta WhatsApp webhook verification (GET)
 from fastapi import Request
