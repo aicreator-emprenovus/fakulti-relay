@@ -95,11 +95,10 @@ function SessionItem({ s, isActive, onClick }) {
             <span className="truncate font-medium text-foreground">{s.lead_name || "Sin nombre"}</span>
             {s.has_alert && <AlertTriangle size={11} className="text-red-500 flex-shrink-0" />}
           </div>
-          <p className="truncate text-muted-foreground mt-0.5">{s.last_message?.slice(0, 35) || "Sin mensajes"}</p>
+          <p className="truncate text-muted-foreground mt-0.5">{s.lead_phone || s.session_id.replace("wa_", "")}</p>
         </div>
       </div>
       <div className="flex items-center justify-between mt-1 pl-9">
-        <span className="text-muted-foreground">{s.lead_phone || s.session_id.replace("wa_", "")}</span>
         <span className="text-muted-foreground">{timeAgo}</span>
       </div>
       {s.has_alert && (
