@@ -18,7 +18,7 @@ const TRIGGER_TYPES = {
   lead_sin_datos: "Lead sin datos",
   sin_respuesta: "Sin respuesta (horas)",
   intencion_ia: "Intencion IA",
-  analisis_conversacion: "Analisis conversacion",
+  analisis_conversacion: "Análisis conversación",
   compra_realizada: "Compra realizada",
   dias_post_compra: "Dias post-compra",
 };
@@ -101,7 +101,7 @@ export default function ConfigPage() {
   const saveWaConfig = async () => {
     try {
       await axios.put(`${API}/config/whatsapp`, waForm);
-      toast.success("Configuracion de WhatsApp guardada");
+      toast.success("Configuración de WhatsApp guardada");
       fetchAll();
     } catch { toast.error("Error al guardar"); }
   };
@@ -134,13 +134,13 @@ export default function ConfigPage() {
   return (
     <div data-testid="config-page" className="space-y-6 animate-fade-in-up">
       <div>
-        <h1 className="text-3xl font-bold text-foreground font-heading">Configuracion</h1>
-        <p className="text-sm text-muted-foreground">Automatizaciones y configuracion del sistema</p>
+        <h1 className="text-3xl font-bold text-foreground font-heading">Configuración</h1>
+        <p className="text-sm text-muted-foreground">Automatizaciones y configuración del sistema</p>
       </div>
 
       <div className="flex gap-1 border border-border rounded-lg p-1 w-fit bg-muted/30">
         {[
-          { key: "automation", icon: Zap, label: "Automatizacion" },
+          { key: "automation", icon: Zap, label: "Automatización" },
           { key: "whatsapp", icon: MessageSquare, label: "WhatsApp" },
           { key: "ai", icon: Bot, label: "IA" },
         ].map(t => (
@@ -155,7 +155,7 @@ export default function ConfigPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Reglas de Automatizacion</h2>
+              <h2 className="text-lg font-semibold text-foreground">Reglas de Automatización</h2>
               <p className="text-xs text-muted-foreground">{rules.length} reglas configuradas</p>
             </div>
             <Button data-testid="add-rule-btn" onClick={() => { setEditRule(null); setForm({ name: "", trigger_type: "nuevo_lead", trigger_value: "", action_type: "enviar_mensaje", action_value: "", description: "", active: true }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
@@ -197,13 +197,13 @@ export default function ConfigPage() {
         <div className="space-y-4">
           <Card className="bg-card border-border rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base"><MessageSquare size={18} className="text-emerald-500" /> Configuracion de WhatsApp Business</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><MessageSquare size={18} className="text-emerald-500" /> Configuración de WhatsApp Business</CardTitle>
               <p className="text-xs text-muted-foreground">Conecta tu cuenta de WhatsApp Business API</p>
             </CardHeader>
             <CardContent className="space-y-4">
               {(!waConfig.phone_number_id || !waConfig.access_token || waConfig.access_token === "****") ? (
                 <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2">
-                  <h4 className="text-sm font-semibold text-amber-600 flex items-center gap-1.5"><AlertTriangle size={14} /> Configuracion pendiente</h4>
+                  <h4 className="text-sm font-semibold text-amber-600 flex items-center gap-1.5"><AlertTriangle size={14} /> Configuración pendiente</h4>
                   <p className="text-xs text-muted-foreground">Para conectar WhatsApp Business API necesitas:</p>
                   <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
                     <li>Una cuenta de Meta Business</li>
@@ -250,7 +250,7 @@ export default function ConfigPage() {
                   <Input value={waForm.business_name} onChange={e => setWaForm(f => ({ ...f, business_name: e.target.value }))} className="bg-muted/50 border-input text-foreground" />
                 </div>
                 <div className="flex gap-2">
-                  <Button data-testid="save-wa-config" onClick={saveWaConfig} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Guardar Configuracion</Button>
+                  <Button data-testid="save-wa-config" onClick={saveWaConfig} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Guardar Configuración</Button>
                   <Button data-testid="test-wa-btn" variant="outline" onClick={testWaConnection} disabled={testing} className="border-input text-foreground rounded-full">
                     <Wifi size={14} className="mr-1" /> {testing ? "Probando..." : "Probar Conexion"}
                   </Button>
@@ -271,8 +271,8 @@ export default function ConfigPage() {
         <div className="space-y-4">
           <Card className="bg-card border-border rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base"><Bot size={18} className="text-primary" /> Configuracion de IA</CardTitle>
-              <p className="text-xs text-muted-foreground">Analisis automatico de mensajes con GPT-5.2</p>
+              <CardTitle className="flex items-center gap-2 text-base"><Bot size={18} className="text-primary" /> Configuración de IA</CardTitle>
+              <p className="text-xs text-muted-foreground">Análisis automático de mensajes con GPT-5.2</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
@@ -281,10 +281,10 @@ export default function ConfigPage() {
               </div>
 
               {[
-                { key: "intent_analysis", label: "Analisis de intencion", desc: "Clasifica automaticamente la intencion del mensaje" },
-                { key: "lead_classification", label: "Clasificacion de leads", desc: "Determina la etapa del lead basandose en la conversacion" },
-                { key: "product_recommendation", label: "Recomendacion de productos", desc: "Sugiere productos basados en el mensaje del cliente" },
-                { key: "suggested_responses", label: "Respuestas sugeridas", desc: "Genera respuestas automaticas para el asesor" },
+                { key: "intent_analysis", label: "Análisis de intención", desc: "Clasifica automáticamente la intención del mensaje" },
+                { key: "lead_classification", label: "Clasificación de leads", desc: "Determina la etapa del lead basándose en la conversación" },
+                { key: "product_recommendation", label: "Recomendación de productos", desc: "Sugiere productos basados en el mensaje del cliente" },
+                { key: "suggested_responses", label: "Respuestas sugeridas", desc: "Genera respuestas automáticas para el asesor" },
               ].map(item => (
                 <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50" data-testid={`ai-toggle-${item.key}`}>
                   <div>
@@ -319,7 +319,7 @@ export default function ConfigPage() {
               </div>
             </div>
             <div><Label className="text-xs text-muted-foreground">Valor del disparador</Label><Input value={form.trigger_value} onChange={e => setForm(f => ({ ...f, trigger_value: e.target.value }))} placeholder="Ej: 4 (horas), keywords separados por coma" className="bg-muted border-input text-foreground" /></div>
-            <div><Label className="text-xs text-muted-foreground">Contenido / Valor de la accion</Label><Textarea value={form.action_value} onChange={e => setForm(f => ({ ...f, action_value: e.target.value }))} className="bg-muted border-input text-foreground" rows={3} /></div>
+            <div><Label className="text-xs text-muted-foreground">Contenido / Valor de la acción</Label><Textarea value={form.action_value} onChange={e => setForm(f => ({ ...f, action_value: e.target.value }))} className="bg-muted border-input text-foreground" rows={3} /></div>
             <div><Label className="text-xs text-muted-foreground">Descripcion</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
             <div className="flex items-center gap-2"><Label className="text-xs text-muted-foreground">Activa</Label><Switch checked={form.active} onCheckedChange={v => setForm(f => ({ ...f, active: v }))} /></div>
             <Button data-testid="save-rule-btn" onClick={saveRule} className="w-full bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">{editRule ? "Actualizar" : "Crear Regla"}</Button>

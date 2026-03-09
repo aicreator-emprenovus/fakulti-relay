@@ -55,12 +55,12 @@ export default function BulkPage() {
             <CardTitle className="text-lg text-foreground flex items-center gap-2"><Upload size={18} className="text-primary" /> Carga Masiva</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Sube un archivo Excel (.xlsx) con los datos de tus leads. Campos minimos: Nombre, WhatsApp, Ciudad, Producto, Fecha compra.</p>
+            <p className="text-sm text-muted-foreground">Sube un archivo Excel (.xlsx) con los datos de tus leads. Campos mínimos: Nombre, WhatsApp, Ciudad, Producto, Fecha compra.</p>
             <div className="border-2 border-dashed border-input rounded-xl p-8 text-center hover:border-primary/30 transition-colors">
               <FileSpreadsheet size={40} className="text-muted-foreground mx-auto mb-3" />
               <input ref={fileRef} type="file" accept=".xlsx" className="hidden" id="upload-file" data-testid="upload-file-input" />
               <label htmlFor="upload-file" className="cursor-pointer">
-                <p className="text-sm text-muted-foreground">Arrastra tu archivo aqui o <span className="text-primary underline">selecciona</span></p>
+                <p className="text-sm text-muted-foreground">Arrastra tu archivo aquí o <span className="text-primary underline">selecciona</span></p>
                 <p className="text-xs text-muted-foreground mt-1">Solo archivos .xlsx</p>
               </label>
             </div>
@@ -109,7 +109,7 @@ export default function BulkPage() {
                   <SelectContent className="bg-muted border-input">
                     <SelectItem value="nuevo">Nuevo</SelectItem>
                     <SelectItem value="interesado">Interesado</SelectItem>
-                    <SelectItem value="en_negociacion">En Negociacion</SelectItem>
+                    <SelectItem value="en_negociacion">En Negociación</SelectItem>
                     <SelectItem value="cliente_nuevo">Cliente Nuevo</SelectItem>
                     <SelectItem value="cliente_activo">Cliente Activo</SelectItem>
                     <SelectItem value="perdido">Perdido</SelectItem>

@@ -16,7 +16,7 @@ import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical } from "lu
 const STAGE_CONFIG = {
   nuevo: { label: "Prospecto", color: "#3B82F6", bg: "#DBEAFE" },
   interesado: { label: "Interesado", color: "#8B5CF6", bg: "#EDE9FE" },
-  en_negociacion: { label: "En Negociacion", color: "#F59E0B", bg: "#FEF3C7" },
+  en_negociacion: { label: "En Negociación", color: "#F59E0B", bg: "#FEF3C7" },
   cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981", bg: "#D1FAE5" },
   cliente_activo: { label: "Cliente Activo", color: "#059669", bg: "#A7F3D0" },
   perdido: { label: "Perdido", color: "#EF4444", bg: "#FEE2E2" },
@@ -149,7 +149,7 @@ export default function LeadsPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input data-testid="leads-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o telefono..." className="pl-10 bg-muted/50 border-input text-foreground h-10" />
+          <Input data-testid="leads-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o teléfono..." className="pl-10 bg-muted/50 border-input text-foreground h-10" />
         </div>
         <Select value={sourceFilter || "all"} onValueChange={v => setSourceFilter(v === "all" ? "" : v)}>
           <SelectTrigger data-testid="source-filter" className="w-36 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Todas" /></SelectTrigger>
@@ -305,7 +305,7 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
         </Badge>
       </div>
 
-      <p className="text-xs text-muted-foreground mb-1">{lead.whatsapp || "Sin telefono"}</p>
+      <p className="text-xs text-muted-foreground mb-1">{lead.whatsapp || "Sin teléfono"}</p>
 
       {(lead.source || lead.city || lead.product_interest) && (
         <div className="text-[11px] text-muted-foreground/70 mb-1.5 space-y-0">

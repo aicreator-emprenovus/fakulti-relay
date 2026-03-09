@@ -878,7 +878,7 @@ async def send_chat_message(req: ChatMessageRequest, user=Depends(get_current_us
     if lead:
         quote = await db.quotations.find_one({"lead_id": lead["id"], "status": "pendiente"}, {"_id": 0})
         if quote:
-            pending_quote = f"\nEste cliente tiene una cotizacion pendiente por ${quote['total']:.2f}. Pregunta si desea continuar con ella."
+            pending_quote = f"\nEste cliente tiene una cotización pendiente por ${quote['total']:.2f}. Pregunta si desea continuar con ella."
     
     # Build context-aware system prompt
     name_instruction = ""
@@ -922,14 +922,14 @@ REGLAS:
 - Bombro es Bone Broth Hidrolizado, producto unico en Ecuador.
 - Responde siempre en espanol.
 - Se conciso pero util.
-- Si el usuario pide precio, proporciona la informacion.
+- Si el usuario pide precio, proporciona la información.
 - Si pide comprar, indica los pasos.
 
 CLASIFICACION AUTOMATICA:
 Al final de CADA respuesta, incluye en una linea separada la etapa del lead basada en la conversacion:
 [STAGE:nuevo] - Primer contacto, aun no muestra interes especifico
 [STAGE:interesado] - Pregunta por productos, precios o beneficios
-[STAGE:en_negociacion] - Solicita cotizacion, forma de pago, envio o stock
+[STAGE:en_negociacion] - Solicita cotización, forma de pago, envio o stock
 [STAGE:cliente_nuevo] - Confirma compra
 [STAGE:perdido] - Dice que no le interesa o rechaza explicitamente
 
@@ -988,7 +988,7 @@ Incluye SIEMPRE el tag [STAGE:] al final."""
             "purchase_history": [],
             "coupon_used": None,
             "recompra_date": None,
-            "notes": f"Registrado via Chat IA",
+            "notes": f"Registrado vía Chat IA",
             "last_interaction": datetime.now(timezone.utc).isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1385,7 +1385,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
             "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
             "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
             "purchase_history": [], "coupon_used": None, "recompra_date": None,
-            "notes": "Registrado via WhatsApp",
+            "notes": "Registrado vía WhatsApp",
             "last_interaction": datetime.now(timezone.utc).isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1503,7 +1503,7 @@ Durante o al final de CADA respuesta, incluye en lineas separadas (el cliente NO
 - Clasifica la etapa:
   [STAGE:nuevo] - Primer contacto, sin interes especifico
   [STAGE:interesado] - Pregunta por productos, precios o beneficios
-  [STAGE:en_negociacion] - Solicita compra, pago, envio, cotizacion
+  [STAGE:en_negociacion] - Solicita compra, pago, envío, cotización
   [STAGE:cliente_nuevo] - Confirma compra
   [STAGE:perdido] - Rechaza explicitamente
 Incluye SIEMPRE el tag [STAGE:] al final de cada respuesta."""
@@ -1926,16 +1926,16 @@ async def startup():
     rules_count = await db.automation_rules.count_documents({})
     if rules_count == 0:
         default_rules = [
-            {"id": str(uuid.uuid4()), "name": "Bienvenida automatica", "trigger_type": "nuevo_lead", "trigger_value": "", "action_type": "respuesta_ia", "action_value": "Saluda al cliente con: Hola! Gracias por contactarnos. Soy el asesor virtual de Fakulti Laboratorios. Somos especialistas en suplementos naturales de alta calidad. Para brindarte una mejor atencion, me podrias decir tu nombre?", "description": "Saluda automaticamente a cada nuevo lead que ingresa al sistema y solicita sus datos.", "active": True, "order": 1},
-            {"id": str(uuid.uuid4()), "name": "Solicitar datos del cliente", "trigger_type": "lead_sin_datos", "trigger_value": "nombre,whatsapp,ciudad", "action_type": "respuesta_ia", "action_value": "Pregunta de forma natural los datos faltantes: nombre completo, numero de WhatsApp, ciudad y producto de interes.", "description": "Cuando un lead no tiene datos completos, el bot los solicita durante la conversacion.", "active": True, "order": 2},
-            {"id": str(uuid.uuid4()), "name": "Clasificar etapa automaticamente", "trigger_type": "analisis_conversacion", "trigger_value": "", "action_type": "cambiar_etapa", "action_value": "Analiza keywords: precio/cuanto=interesado, cotiz/pago/envio=en_negociacion, comprar/confirmo=en_negociacion, no me interesa=perdido", "description": "Clasifica automaticamente la etapa del lead basandose en las palabras clave de la conversacion.", "active": True, "order": 3},
-            {"id": str(uuid.uuid4()), "name": "Primer recordatorio (4 horas)", "trigger_type": "sin_respuesta", "trigger_value": "4", "action_type": "enviar_mensaje", "action_value": "Hola, solo para saber si pudiste revisar la informacion que te envie. Si quieres te ayudo con mas detalles sobre nuestros productos.", "description": "Envia un recordatorio amable despues de 4 horas sin respuesta del lead.", "active": True, "order": 4},
-            {"id": str(uuid.uuid4()), "name": "Segundo recordatorio (24 horas)", "trigger_type": "sin_respuesta", "trigger_value": "24", "action_type": "enviar_mensaje", "action_value": "Hola de nuevo, queria saber si aun tienes interes en los productos de Fakulti. Estoy aqui para ayudarte cuando lo necesites.", "description": "Segundo recordatorio despues de 24 horas sin respuesta.", "active": True, "order": 5},
-            {"id": str(uuid.uuid4()), "name": "Marcar como perdido", "trigger_type": "sin_respuesta", "trigger_value": "48", "action_type": "cambiar_etapa", "action_value": "perdido", "description": "Marca automaticamente al lead como perdido despues de 48 horas sin respuesta.", "active": True, "order": 6},
-            {"id": str(uuid.uuid4()), "name": "Transferir a humano", "trigger_type": "intencion_ia", "trigger_value": "queja,problema,reclamo,hablar con persona,agente", "action_type": "asignar_agente", "action_value": "Transfiere la conversacion a un asesor humano cuando el bot detecta una queja, problema complejo o solicitud explicita de hablar con una persona.", "description": "Detecta intenciones criticas y deriva a un agente humano.", "active": True, "order": 7},
-            {"id": str(uuid.uuid4()), "name": "Recomendacion de producto", "trigger_type": "intencion_ia", "trigger_value": "consulta_producto,interes,salud,dolor,suplemento", "action_type": "respuesta_ia", "action_value": "Recomienda productos del catalogo de Fakulti basandose en las necesidades del cliente. Menciona beneficios sin hacer claims medicos.", "description": "Sugiere productos relevantes basados en el mensaje del cliente.", "active": True, "order": 8},
-            {"id": str(uuid.uuid4()), "name": "Seguimiento post-compra", "trigger_type": "compra_realizada", "trigger_value": "", "action_type": "iniciar_secuencia", "action_value": "Inscribe automaticamente al cliente en la secuencia de fidelizacion del producto comprado.", "description": "Al registrar una compra, inicia la secuencia de mensajes de fidelizacion.", "active": True, "order": 9},
-            {"id": str(uuid.uuid4()), "name": "Recordatorio de recompra (30 dias)", "trigger_type": "dias_post_compra", "trigger_value": "30", "action_type": "enviar_mensaje", "action_value": "Hola! Ya paso un mes desde tu ultima compra en Fakulti. Te gustaria repetir tu pedido? Tenemos nuevas promociones disponibles.", "description": "Envia un recordatorio para recompra 30 dias despues de la ultima compra.", "active": True, "order": 10},
+            {"id": str(uuid.uuid4()), "name": "Bienvenida automática", "trigger_type": "nuevo_lead", "trigger_value": "", "action_type": "respuesta_ia", "action_value": "Saluda al cliente con: Hola! Gracias por contactarnos. Soy el asesor virtual de Fakulti Laboratorios. Somos especialistas en suplementos naturales de alta calidad. Para brindarte una mejor atención, me podrías decir tu nombre?", "description": "Saluda automáticamente a cada nuevo lead que ingresa al sistema y solicita sus datos.", "active": True, "order": 1},
+            {"id": str(uuid.uuid4()), "name": "Solicitar datos del cliente", "trigger_type": "lead_sin_datos", "trigger_value": "nombre,whatsapp,ciudad", "action_type": "respuesta_ia", "action_value": "Pregunta de forma natural los datos faltantes: nombre completo, número de WhatsApp, ciudad y producto de interés.", "description": "Cuando un lead no tiene datos completos, el bot los solicita durante la conversación.", "active": True, "order": 2},
+            {"id": str(uuid.uuid4()), "name": "Clasificar etapa automáticamente", "trigger_type": "analisis_conversacion", "trigger_value": "", "action_type": "cambiar_etapa", "action_value": "Analiza keywords: precio/cuanto=interesado, cotiz/pago/envio=en_negociacion, comprar/confirmo=en_negociacion, no me interesa=perdido", "description": "Clasifica automáticamente la etapa del lead basándose en las palabras clave de la conversación.", "active": True, "order": 3},
+            {"id": str(uuid.uuid4()), "name": "Primer recordatorio (4 horas)", "trigger_type": "sin_respuesta", "trigger_value": "4", "action_type": "enviar_mensaje", "action_value": "Hola, solo para saber si pudiste revisar la información que te envié. Si quieres te ayudo con más detalles sobre nuestros productos.", "description": "Envía un recordatorio amable después de 4 horas sin respuesta del lead.", "active": True, "order": 4},
+            {"id": str(uuid.uuid4()), "name": "Segundo recordatorio (24 horas)", "trigger_type": "sin_respuesta", "trigger_value": "24", "action_type": "enviar_mensaje", "action_value": "Hola de nuevo, quería saber si aún tienes interés en los productos de Fakulti. Estoy aquí para ayudarte cuando lo necesites.", "description": "Segundo recordatorio después de 24 horas sin respuesta.", "active": True, "order": 5},
+            {"id": str(uuid.uuid4()), "name": "Marcar como perdido", "trigger_type": "sin_respuesta", "trigger_value": "48", "action_type": "cambiar_etapa", "action_value": "perdido", "description": "Marca automáticamente al lead como perdido después de 48 horas sin respuesta.", "active": True, "order": 6},
+            {"id": str(uuid.uuid4()), "name": "Transferir a humano", "trigger_type": "intencion_ia", "trigger_value": "queja,problema,reclamo,hablar con persona,agente", "action_type": "asignar_agente", "action_value": "Transfiere la conversación a un asesor humano cuando el bot detecta una queja, problema complejo o solicitud explícita de hablar con una persona.", "description": "Detecta intenciones críticas y deriva a un agente humano.", "active": True, "order": 7},
+            {"id": str(uuid.uuid4()), "name": "Recomendación de producto", "trigger_type": "intencion_ia", "trigger_value": "consulta_producto,interes,salud,dolor,suplemento", "action_type": "respuesta_ia", "action_value": "Recomienda productos del catálogo de Fakulti basándose en las necesidades del cliente. Menciona beneficios sin hacer claims médicos.", "description": "Sugiere productos relevantes basados en el mensaje del cliente.", "active": True, "order": 8},
+            {"id": str(uuid.uuid4()), "name": "Seguimiento post-compra", "trigger_type": "compra_realizada", "trigger_value": "", "action_type": "iniciar_secuencia", "action_value": "Inscribe automáticamente al cliente en la secuencia de fidelización del producto comprado.", "description": "Al registrar una compra, inicia la secuencia de mensajes de fidelización.", "active": True, "order": 9},
+            {"id": str(uuid.uuid4()), "name": "Recordatorio de recompra (30 días)", "trigger_type": "dias_post_compra", "trigger_value": "30", "action_type": "enviar_mensaje", "action_value": "Hola! Ya pasó un mes desde tu última compra en Fakulti. Te gustaría repetir tu pedido? Tenemos nuevas promociones disponibles.", "description": "Envía un recordatorio para recompra 30 días después de la última compra.", "active": True, "order": 10},
         ]
         for r in default_rules:
             r["created_at"] = datetime.now(timezone.utc).isoformat()

@@ -10,10 +10,10 @@ const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Dashboard" },
   { path: "/leads", icon: Users, label: "Leads" },
   { path: "/games", icon: Gamepad2, label: "Juegos" },
-  { path: "/loyalty", icon: Heart, label: "Fidelizacion" },
+  { path: "/loyalty", icon: Heart, label: "Fidelización" },
   { path: "/chat", icon: Phone, label: "WhatsApp Bot" },
   { path: "/bulk", icon: Upload, label: "Carga / Descarga" },
-  { path: "/config", icon: Zap, label: "Configuracion" },
+  { path: "/config", icon: Zap, label: "Configuración" },
   { path: "/settings", icon: Settings, label: "Productos" },
 ];
 
@@ -84,7 +84,7 @@ export default function Sidebar({ currentPath }) {
           onClick={logout}
         >
           <LogOut size={16} />
-          Cerrar Sesion
+          Cerrar Sesión
         </Button>
       </div>
     </div>

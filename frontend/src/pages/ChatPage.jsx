@@ -16,7 +16,7 @@ import {
 const STAGE_CONFIG = {
   nuevo: { label: "Prospecto", color: "#3B82F6" },
   interesado: { label: "Interesado", color: "#8B5CF6" },
-  en_negociacion: { label: "En Negociacion", color: "#F59E0B" },
+  en_negociacion: { label: "En Negociación", color: "#F59E0B" },
   cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
   cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
   perdido: { label: "Perdido", color: "#64748B" },
@@ -266,7 +266,7 @@ export default function ChatPage() {
   };
 
   const deleteConversation = async () => {
-    if (!activeSession || !window.confirm("Eliminar toda la conversacion?")) return;
+    if (!activeSession || !window.confirm("¿Eliminar toda la conversación?")) return;
     try {
       await axios.delete(`${API}/chat/sessions/${activeSession}`);
       setMessages([]);
@@ -274,8 +274,8 @@ export default function ChatPage() {
       setActiveLeadId(null);
       setLeadInfo(null);
       fetchSessions();
-      toast.success("Conversacion eliminada");
-    } catch { toast.error("Error al eliminar conversacion"); }
+      toast.success("Conversación eliminada");
+    } catch { toast.error("Error al eliminar conversación"); }
   };
 
   const resolveAlert = async (alertId) => {
@@ -343,7 +343,7 @@ export default function ChatPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-foreground font-medium">
-                      {leadInfo?.name || "Selecciona una conversacion"}
+                      {leadInfo?.name || "Selecciona una conversación"}
                     </span>
                     {leadInfo?.funnel_stage && (
                       <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
@@ -373,7 +373,7 @@ export default function ChatPage() {
                 {!activeSession && messages.length === 0 && (
                   <div className="text-center py-12">
                     <Activity size={40} className="text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground text-sm">Selecciona una conversacion de WhatsApp</p>
+                    <p className="text-muted-foreground text-sm">Selecciona una conversación de WhatsApp</p>
                     <p className="text-muted-foreground text-xs mt-1">Los mensajes del bot aparecen en tiempo real</p>
                   </div>
                 )}
@@ -451,7 +451,7 @@ export default function ChatPage() {
                   data-testid="chat-input"
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder={activeSession ? "Responder como agente por WhatsApp..." : "Selecciona una conversacion..."}
+                  placeholder={activeSession ? "Responder como agente por WhatsApp..." : "Selecciona una conversación..."}
                   className="flex-1 bg-muted/50 border-input text-foreground h-10"
                   disabled={sending || !activeSession}
                 />

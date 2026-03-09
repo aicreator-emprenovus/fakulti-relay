@@ -252,7 +252,7 @@ function RouletteGame({ config, onPlay, products }) {
           <p className="text-muted-foreground text-sm">{result.message}</p>
           {result.coupon && (
             <div className="mt-3 bg-primary/10 border border-primary/30 rounded-xl px-5 py-2 inline-block">
-              <p className="text-xs text-muted-foreground">Tu codigo</p>
+              <p className="text-xs text-muted-foreground">Tu código</p>
               <p className="text-lg font-black text-primary tracking-widest">{result.coupon}</p>
             </div>
           )}
@@ -273,7 +273,7 @@ function SlotMachineGame({ config, onPlay, products }) {
   const productSymbols = products.map(p => ({
     name: p.name.split(" ")[0],
     image: p.image_url,
-    emoji: p.category === "nutricion" ? "🦴" : p.category === "bienestar" ? "💊" : p.category === "cbd" ? "🌿" : "⚡"
+    emoji: p.category === "nutrición" ? "🦴" : p.category === "bienestar" ? "💊" : p.category === "cbd" ? "🌿" : "⚡"
   }));
   // Add extra symbols
   const SYMBOLS = [
@@ -389,7 +389,7 @@ function SlotMachineGame({ config, onPlay, products }) {
           <p className="text-muted-foreground text-sm">{result.message}</p>
           {result.coupon && (
             <div className="mt-3 bg-primary/10 border border-primary/30 rounded-xl px-5 py-2 inline-block">
-              <p className="text-xs text-muted-foreground">Tu codigo</p>
+              <p className="text-xs text-muted-foreground">Tu código</p>
               <p className="text-lg font-black text-primary tracking-widest">{result.coupon}</p>
             </div>
           )}
@@ -628,7 +628,7 @@ function ScratchCardGame({ config, onPlay }) {
           <p className="text-muted-foreground text-sm">{result.message}</p>
           {result.coupon && (
             <div className="mt-3 bg-primary/10 border border-primary/30 rounded-xl px-5 py-2 inline-block">
-              <p className="text-xs text-muted-foreground">Tu codigo</p>
+              <p className="text-xs text-muted-foreground">Tu código</p>
               <p className="text-lg font-black text-primary tracking-widest">{result.coupon}</p>
             </div>
           )}
@@ -706,7 +706,7 @@ export default function GamePublicPage() {
                 <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3 border border-primary/20">
                   <Star size={24} className="text-primary" />
                 </div>
-                <p className="text-white font-bold">Registrate para jugar</p>
+                <p className="text-white font-bold">Regístrate para jugar</p>
                 <p className="text-gray-400 text-xs mt-1">Solo toma unos segundos</p>
               </div>
               <form onSubmit={handleRegister} className="space-y-3">

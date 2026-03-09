@@ -36,7 +36,7 @@ export default function GamesConfigPage() {
         active: config.active,
         max_plays_per_whatsapp: config.max_plays_per_whatsapp
       });
-      toast.success("Configuracion guardada");
+      toast.success("Configuración guardada");
     } catch { toast.error("Error al guardar"); }
   };
 
@@ -61,7 +61,7 @@ export default function GamesConfigPage() {
   const gameTypeIcon = { roulette: "🎡", slot_machine: "🎰", scratch_card: "🎟" };
   const backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
 
-  if (loading) return <div className="text-muted-foreground text-center py-12">Cargando configuracion...</div>;
+  if (loading) return <div className="text-muted-foreground text-center py-12">Cargando configuración...</div>;
 
   return (
     <div data-testid="games-config-page" className="space-y-6 animate-fade-in-up">
@@ -72,7 +72,7 @@ export default function GamesConfigPage() {
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="bg-muted border border-input">
-          <TabsTrigger value="config" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"><Settings size={14} className="mr-1" /> Configuracion</TabsTrigger>
+          <TabsTrigger value="config" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"><Settings size={14} className="mr-1" /> Configuración</TabsTrigger>
           <TabsTrigger value="history" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"><Trophy size={14} className="mr-1" /> Historial</TabsTrigger>
           <TabsTrigger value="links" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"><Users size={14} className="mr-1" /> Links QR</TabsTrigger>
         </TabsList>
@@ -155,7 +155,7 @@ export default function GamesConfigPage() {
         <TabsContent value="links" className="mt-4">
           <Card className="bg-card border-border rounded-2xl">
             <CardContent className="p-6 space-y-4">
-              <p className="text-sm text-muted-foreground">Comparte estos links para que tus clientes jueguen. Puedes generar codigos QR con ellos.</p>
+              <p className="text-sm text-muted-foreground">Comparte estos links para que tus clientes jueguen. Puedes generar códigos QR con ellos.</p>
               {["roulette", "slot_machine", "scratch_card"].map(gt => (
                 <div key={gt} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                   <span className="text-2xl">{gameTypeIcon[gt]}</span>

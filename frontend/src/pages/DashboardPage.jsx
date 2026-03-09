@@ -9,7 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 const STAGE_CONFIG = {
   nuevo: { label: "Nuevo", color: "#3B82F6" },
   interesado: { label: "Interesado", color: "#8B5CF6" },
-  en_negociacion: { label: "En Negociacion", color: "#F59E0B" },
+  en_negociacion: { label: "En Negociación", color: "#F59E0B" },
   cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
   cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
   perdido: { label: "Perdido", color: "#64748B" },
@@ -27,7 +27,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Cargando dashboard...</div>;
-  if (!stats) return <div className="text-zinc-500">Error al cargar estadisticas</div>;
+  if (!stats) return <div className="text-zinc-500">Error al cargar estadísticas</div>;
 
   const funnelData = Object.entries(stats.stages).map(([key, value]) => ({
     name: STAGE_CONFIG[key]?.label || key,
@@ -39,10 +39,10 @@ export default function DashboardPage() {
   const statCards = [
     { label: "Total Leads", value: stats.total_leads, icon: Users, color: "text-blue-400" },
     { label: "Ventas Totales", value: `$${stats.total_sales}`, icon: DollarSign, color: "text-lime-400" },
-    { label: "Ordenes", value: stats.total_orders, icon: ShoppingCart, color: "text-amber-400" },
+    { label: "Órdenes", value: stats.total_orders, icon: ShoppingCart, color: "text-amber-400" },
     { label: "Clientes", value: stats.total_clients, icon: UserCheck, color: "text-emerald-400" },
     { label: "Juegos Jugados", value: stats.game_plays, icon: Gamepad2, color: "text-purple-400" },
-    { label: "Conversion", value: `${stats.conversion_rate}%`, icon: TrendingUp, color: "text-lime-400" },
+    { label: "Conversión", value: `${stats.conversion_rate}%`, icon: TrendingUp, color: "text-lime-400" },
   ];
 
   return (
@@ -119,7 +119,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-card border-border rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-foreground">Fuentes de Trafico</CardTitle>
+            <CardTitle className="text-lg text-foreground">Fuentes de Tráfico</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.source_stats.length > 0 ? (

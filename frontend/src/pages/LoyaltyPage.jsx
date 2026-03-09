@@ -35,7 +35,7 @@ function MetricsDashboard({ metrics }) {
         {[
           { label: "Clientes", value: summary.total_clients, icon: Users, color: "text-blue-400" },
           { label: "Recompra", value: `${summary.repeat_rate}%`, icon: Repeat, color: "text-lime-400" },
-          { label: "Retencion", value: `${summary.retention_rate}%`, icon: ShieldCheck, color: "text-emerald-400" },
+          { label: "Retención", value: `${summary.retention_rate}%`, icon: ShieldCheck, color: "text-emerald-400" },
           { label: "Revenue Total", value: `$${summary.total_revenue}`, icon: DollarSign, color: "text-amber-400" },
           { label: "Ticket Promedio", value: `$${summary.avg_order_value}`, icon: TrendingUp, color: "text-purple-400" },
           { label: "Compras/Cliente", value: summary.avg_purchases_per_client, icon: BarChart3, color: "text-pink-400" },
@@ -71,7 +71,7 @@ function MetricsDashboard({ metrics }) {
 
         <Card className="bg-card border-border rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-foreground">Retencion de Clientes</CardTitle>
+            <CardTitle className="text-base text-foreground">Retención de Clientes</CardTitle>
           </CardHeader>
           <CardContent>
             {retentionData.length > 0 ? (
@@ -296,7 +296,7 @@ export default function LoyaltyPage() {
   };
 
   const handleDeleteEnrollment = async (id) => {
-    if (!window.confirm("Eliminar esta inscripcion?")) return;
+    if (!window.confirm("¿Eliminar esta inscripción?")) return;
     try {
       await axios.delete(`${API}/loyalty/enrollments/${id}`);
       toast.success("Inscripcion eliminada");
@@ -324,7 +324,7 @@ export default function LoyaltyPage() {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground font-heading">Fidelizacion</h1>
-          <p className="text-sm text-muted-foreground">Secuencias automaticas postventa (hasta 24 mensajes)</p>
+          <p className="text-sm text-muted-foreground">Secuencias automáticas postventa (hasta 24 mensajes)</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button data-testid="process-messages-btn" variant="outline" onClick={processMessages} className="border-primary text-primary hover:bg-primary/10 rounded-full">
@@ -360,7 +360,7 @@ export default function LoyaltyPage() {
 
       <div className="flex gap-2 border-b border-border">
         <button onClick={() => setTab("metrics")} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === "metrics" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} data-testid="tab-metrics">
-          Metricas
+          Métricas
         </button>
         <button onClick={() => setTab("sequences")} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === "sequences" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} data-testid="tab-sequences">
           Secuencias ({sequences.length})
