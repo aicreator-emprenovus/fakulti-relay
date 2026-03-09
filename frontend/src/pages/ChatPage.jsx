@@ -370,7 +370,7 @@ export default function ChatPage() {
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-6 pb-4">
+              <div className="space-y-8 pb-4">
                 {!activeSession && messages.length === 0 && (
                   <div className="text-center py-12">
                     <Activity size={40} className="text-muted-foreground mx-auto mb-3" />
