@@ -1,56 +1,53 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { API } from "@/App";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Search, Filter, Trash2, Edit, Eye, Phone, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical } from "lucide-react";
 
 const STAGE_CONFIG = {
-  nuevo: { label: "Nuevo", color: "#3B82F6" },
-  interesado: { label: "Interesado", color: "#8B5CF6" },
-  en_negociacion: { label: "En Negociacion", color: "#F59E0B" },
-  cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
-  cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
-  perdido: { label: "Perdido", color: "#64748B" },
+  nuevo: { label: "Prospecto", color: "#3B82F6", bg: "#DBEAFE" },
+  interesado: { label: "Interesado", color: "#8B5CF6", bg: "#EDE9FE" },
+  en_negociacion: { label: "En Negociacion", color: "#F59E0B", bg: "#FEF3C7" },
+  cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981", bg: "#D1FAE5" },
+  cliente_activo: { label: "Cliente Activo", color: "#059669", bg: "#A7F3D0" },
+  perdido: { label: "Perdido", color: "#EF4444", bg: "#FEE2E2" },
 };
-
-const SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro"];
+const STAGE_KEYS = Object.keys(STAGE_CONFIG);
+const SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro", "WhatsApp", "Chat IA", "Carga masiva"];
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
   const [editLead, setEditLead] = useState(null);
+  const [draggedLead, setDraggedLead] = useState(null);
+  const [dragOverStage, setDragOverStage] = useState(null);
   const [form, setForm] = useState({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" });
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { page, limit: 20 };
+      const params = { limit: 500 };
       if (search) params.search = search;
-      if (stageFilter) params.stage = stageFilter;
       if (sourceFilter) params.source = sourceFilter;
       const res = await axios.get(`${API}/leads`, { params });
       setLeads(res.data.leads);
       setTotal(res.data.total);
-      setPages(res.data.pages);
     } catch { toast.error("Error al cargar leads"); }
     setLoading(false);
-  }, [page, search, stageFilter, sourceFilter]);
+  }, [search, sourceFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -88,108 +85,132 @@ export default function LeadsPage() {
   const handleStageChange = async (leadId, newStage) => {
     try {
       await axios.put(`${API}/leads/${leadId}/stage?stage=${newStage}`);
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, funnel_stage: newStage } : l));
       toast.success("Etapa actualizada");
-      fetchLeads();
-      if (showDetail?.id === leadId) setShowDetail(prev => ({ ...prev, funnel_stage: newStage }));
     } catch { toast.error("Error al cambiar etapa"); }
   };
 
+  const openWhatsApp = (whatsapp) => {
+    if (!whatsapp) return toast.error("Sin numero de WhatsApp");
+    const clean = whatsapp.replace(/[^0-9]/g, "");
+    window.open(`https://wa.me/${clean}`, "_blank");
+  };
+
+  const formatDate = (d) => {
+    if (!d) return "";
+    try {
+      const date = new Date(d);
+      return date.toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " + date.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
+    } catch { return d.slice(0, 16); }
+  };
+
+  // Drag and drop handlers
+  const onDragStart = (e, lead) => {
+    setDraggedLead(lead);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", lead.id);
+  };
+  const onDragOver = (e, stage) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverStage(stage);
+  };
+  const onDragLeave = () => { setDragOverStage(null); };
+  const onDrop = (e, stage) => {
+    e.preventDefault();
+    setDragOverStage(null);
+    if (draggedLead && draggedLead.funnel_stage !== stage) {
+      handleStageChange(draggedLead.id, stage);
+    }
+    setDraggedLead(null);
+  };
+  const onDragEnd = () => { setDraggedLead(null); setDragOverStage(null); };
+
+  const leadsByStage = {};
+  STAGE_KEYS.forEach(s => { leadsByStage[s] = []; });
+  leads.forEach(l => {
+    const s = l.funnel_stage || "nuevo";
+    if (leadsByStage[s]) leadsByStage[s].push(l);
+    else leadsByStage["nuevo"].push(l);
+  });
+
   return (
-    <div data-testid="leads-page" className="space-y-6 animate-fade-in-up">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div data-testid="leads-page" className="space-y-4 animate-fade-in-up h-full flex flex-col">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-foreground font-heading">Leads</h1>
-          <p className="text-sm text-muted-foreground">{total} leads en total</p>
+          <h1 className="text-3xl font-bold text-foreground font-heading">Gestion de Leads</h1>
+          <p className="text-sm text-muted-foreground">Funnel de ventas con IA &middot; {total} leads</p>
         </div>
         <Button data-testid="add-lead-btn" onClick={() => { setEditLead(null); setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" }); setShowAdd(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 shadow-sm">
-          <Plus size={16} className="mr-1" /> Agregar Lead
+          <Plus size={16} className="mr-1" /> Nuevo Lead
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input data-testid="leads-search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por nombre, WhatsApp..." className="pl-10 bg-muted/50 border-input text-foreground h-10" />
+          <Input data-testid="leads-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o telefono..." className="pl-10 bg-muted/50 border-input text-foreground h-10" />
         </div>
-        <Select value={stageFilter} onValueChange={v => { setStageFilter(v === "all" ? "" : v); setPage(1); }}>
-          <SelectTrigger data-testid="stage-filter" className="w-44 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Etapa" /></SelectTrigger>
-          <SelectContent className="bg-muted border-input">
-            <SelectItem value="all">Todas las etapas</SelectItem>
-            {Object.entries(STAGE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={sourceFilter} onValueChange={v => { setSourceFilter(v === "all" ? "" : v); setPage(1); }}>
-          <SelectTrigger data-testid="source-filter" className="w-40 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Fuente" /></SelectTrigger>
-          <SelectContent className="bg-muted border-input">
+        <Select value={sourceFilter || "all"} onValueChange={v => setSourceFilter(v === "all" ? "" : v)}>
+          <SelectTrigger data-testid="source-filter" className="w-36 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Todas" /></SelectTrigger>
+          <SelectContent className="bg-card border-input">
             <SelectItem value="all">Todas</SelectItem>
             {SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-muted/50 border-b border-border">
-              <th className="text-left p-3 text-muted-foreground font-medium">Nombre</th>
-              <th className="text-left p-3 text-muted-foreground font-medium hidden md:table-cell">WhatsApp</th>
-              <th className="text-left p-3 text-muted-foreground font-medium hidden lg:table-cell">Ciudad</th>
-              <th className="text-left p-3 text-muted-foreground font-medium hidden lg:table-cell">Fuente</th>
-              <th className="text-left p-3 text-muted-foreground font-medium">Etapa</th>
-              <th className="text-right p-3 text-muted-foreground font-medium">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leads.map(lead => (
-              <tr key={lead.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors" data-testid={`lead-row-${lead.id}`}>
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: STAGE_CONFIG[lead.funnel_stage]?.color + "20", color: STAGE_CONFIG[lead.funnel_stage]?.color }}>
-                      {lead.name?.[0]}
-                    </div>
-                    <div>
-                      <p className="text-foreground font-medium">{lead.name}</p>
-                      <p className="text-xs text-muted-foreground md:hidden">{lead.whatsapp}</p>
-                    </div>
+      {loading ? (
+        <div className="flex items-center justify-center h-48 text-muted-foreground">Cargando leads...</div>
+      ) : (
+        <div className="flex-1 overflow-x-auto pb-4">
+          <div className="flex gap-3 min-w-max h-full">
+            {STAGE_KEYS.map(stageKey => {
+              const cfg = STAGE_CONFIG[stageKey];
+              const stageLeads = leadsByStage[stageKey];
+              const isOver = dragOverStage === stageKey;
+              return (
+                <div
+                  key={stageKey}
+                  className={`flex flex-col w-[240px] flex-shrink-0 rounded-xl transition-all ${isOver ? "ring-2 ring-primary/50" : ""}`}
+                  onDragOver={e => onDragOver(e, stageKey)}
+                  onDragLeave={onDragLeave}
+                  onDrop={e => onDrop(e, stageKey)}
+                  data-testid={`stage-column-${stageKey}`}
+                >
+                  <div className="flex items-center justify-between px-3 py-2.5 rounded-lg mb-2" style={{ backgroundColor: cfg.bg }}>
+                    <span className="text-sm font-semibold" style={{ color: cfg.color }}>{cfg.label}</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/70 text-foreground">{stageLeads.length}</span>
                   </div>
-                </td>
-                <td className="p-3 text-muted-foreground hidden md:table-cell">{lead.whatsapp}</td>
-                <td className="p-3 text-muted-foreground hidden lg:table-cell">{lead.city}</td>
-                <td className="p-3 hidden lg:table-cell">
-                  <Badge variant="outline" className="text-xs" style={{ borderColor: "#52525b" }}>{lead.source}</Badge>
-                </td>
-                <td className="p-3">
-                  <Select value={lead.funnel_stage} onValueChange={v => handleStageChange(lead.id, v)}>
-                    <SelectTrigger className="h-7 text-xs w-32 border-0 p-1" style={{ color: STAGE_CONFIG[lead.funnel_stage]?.color, backgroundColor: STAGE_CONFIG[lead.funnel_stage]?.color + "15" }}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-muted border-input">
-                      {Object.entries(STAGE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}><span style={{ color: v.color }}>{v.label}</span></SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </td>
-                <td className="p-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => setShowDetail(lead)} data-testid={`view-lead-${lead.id}`}><Eye size={14} /></Button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={() => openEdit(lead)} data-testid={`edit-lead-${lead.id}`}><Edit size={14} /></Button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400" onClick={() => handleDelete(lead.id)} data-testid={`delete-lead-${lead.id}`}><Trash2 size={14} /></Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {leads.length === 0 && <div className="text-center py-12 text-muted-foreground">No se encontraron leads</div>}
-      </div>
 
-      {pages > 1 && (
-        <div className="flex justify-center gap-2">
-          <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
-          <span className="text-sm text-muted-foreground flex items-center">{page} / {pages}</span>
-          <Button variant="ghost" size="sm" disabled={page >= pages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+                  <div className="flex-1 space-y-2 overflow-y-auto max-h-[calc(100vh-310px)] pr-1 pb-1 kanban-scroll">
+                    {stageLeads.length === 0 && (
+                      <div className="text-center py-8 text-xs text-muted-foreground">Sin leads</div>
+                    )}
+                    {stageLeads.map(lead => (
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        onView={() => setShowDetail(lead)}
+                        onEdit={() => openEdit(lead)}
+                        onDelete={() => handleDelete(lead.id)}
+                        onWhatsApp={() => openWhatsApp(lead.whatsapp)}
+                        onStageChange={(s) => handleStageChange(lead.id, s)}
+                        onDragStart={(e) => onDragStart(e, lead)}
+                        onDragEnd={onDragEnd}
+                        isDragging={draggedLead?.id === lead.id}
+                        formatDate={formatDate}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
+      {/* Add/Edit Dialog */}
       <Dialog open={showAdd} onOpenChange={v => { setShowAdd(v); if (!v) setEditLead(null); }}>
         <DialogContent className="bg-card border-input text-foreground max-w-md" data-testid="lead-form-dialog">
           <DialogHeader><DialogTitle>{editLead ? "Editar Lead" : "Nuevo Lead"}</DialogTitle></DialogHeader>
@@ -203,10 +224,10 @@ export default function LeadsPage() {
             <div><Label className="text-muted-foreground text-xs">Producto Interes</Label><Input value={form.product_interest} onChange={e => setForm(f => ({ ...f, product_interest: e.target.value }))} className="bg-muted border-input text-foreground" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-muted-foreground text-xs">Fuente</Label>
-                <Select value={form.source} onValueChange={v => setForm(f => ({ ...f, source: v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue /></SelectTrigger><SelectContent className="bg-muted border-input">{SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.source} onValueChange={v => setForm(f => ({ ...f, source: v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue /></SelectTrigger><SelectContent className="bg-card border-input">{SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
               </div>
               <div><Label className="text-muted-foreground text-xs">Etapa</Label>
-                <Select value={form.funnel_stage} onValueChange={v => setForm(f => ({ ...f, funnel_stage: v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue /></SelectTrigger><SelectContent className="bg-muted border-input">{Object.entries(STAGE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.funnel_stage} onValueChange={v => setForm(f => ({ ...f, funnel_stage: v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue /></SelectTrigger><SelectContent className="bg-card border-input">{Object.entries(STAGE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select>
               </div>
             </div>
             <div><Label className="text-muted-foreground text-xs">Notas</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
@@ -215,11 +236,19 @@ export default function LeadsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Detail Dialog */}
       <Dialog open={!!showDetail} onOpenChange={() => setShowDetail(null)}>
         <DialogContent className="bg-card border-input text-foreground max-w-lg" data-testid="lead-detail-dialog">
           {showDetail && (
             <>
-              <DialogHeader><DialogTitle className="flex items-center gap-2">{showDetail.name} <Badge style={{ borderColor: STAGE_CONFIG[showDetail.funnel_stage]?.color, color: STAGE_CONFIG[showDetail.funnel_stage]?.color }}>{STAGE_CONFIG[showDetail.funnel_stage]?.label}</Badge></DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {showDetail.name || "Sin nombre"}
+                  <Badge style={{ borderColor: STAGE_CONFIG[showDetail.funnel_stage]?.color, color: STAGE_CONFIG[showDetail.funnel_stage]?.color }}>
+                    {STAGE_CONFIG[showDetail.funnel_stage]?.label}
+                  </Badge>
+                </DialogTitle>
+              </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div><span className="text-muted-foreground">WhatsApp:</span><p className="text-foreground">{showDetail.whatsapp}</p></div>
@@ -248,6 +277,81 @@ export default function LeadsPage() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, onDragStart, onDragEnd, isDragging, formatDate }) {
+  const cfg = STAGE_CONFIG[lead.funnel_stage] || STAGE_CONFIG.nuevo;
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`bg-card border border-border rounded-xl p-3 cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${isDragging ? "opacity-40 scale-95" : "opacity-100"}`}
+      data-testid={`lead-card-${lead.id}`}
+    >
+      <div className="flex items-start justify-between gap-1 mb-1.5">
+        <p className="text-sm font-semibold text-foreground leading-tight truncate flex-1">
+          {lead.name || "Sin nombre"}
+        </p>
+        <Badge
+          variant="outline"
+          className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0 whitespace-nowrap"
+          style={{ borderColor: cfg.color, color: cfg.color, backgroundColor: cfg.bg }}
+        >
+          {cfg.label}
+        </Badge>
+      </div>
+
+      <p className="text-xs text-muted-foreground mb-1">{lead.whatsapp || "Sin telefono"}</p>
+
+      {(lead.source || lead.city || lead.product_interest) && (
+        <div className="text-[11px] text-muted-foreground/70 mb-1.5 space-y-0">
+          {lead.source && <p>{lead.source}</p>}
+          {lead.city && <p>{lead.city}</p>}
+          {lead.product_interest && <p>{lead.product_interest}</p>}
+        </div>
+      )}
+
+      <div className="border-t border-border/50 pt-1.5 mt-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">{formatDate(lead.last_interaction || lead.created_at)}</span>
+          <div className="flex items-center gap-0.5">
+            <button onClick={onView} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Ver datos" data-testid={`view-lead-${lead.id}`}>
+              <Eye size={13} />
+            </button>
+            <button onClick={onEdit} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Editar" data-testid={`edit-lead-${lead.id}`}>
+              <Edit size={13} />
+            </button>
+            <button onClick={onWhatsApp} className="p-1 rounded hover:bg-muted text-emerald-500 hover:text-emerald-400 transition-colors" title="WhatsApp" data-testid={`whatsapp-lead-${lead.id}`}>
+              <MessageSquare size={13} />
+            </button>
+            <button onClick={onDelete} className="p-1 rounded hover:bg-muted text-red-400 hover:text-red-500 transition-colors" title="Eliminar" data-testid={`delete-lead-${lead.id}`}>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-1.5">
+        <Select value={lead.funnel_stage} onValueChange={onStageChange}>
+          <SelectTrigger
+            className="h-7 text-xs w-full border-border/60 bg-muted/30 text-muted-foreground"
+            data-testid={`stage-select-${lead.id}`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-card border-input">
+            {Object.entries(STAGE_CONFIG).map(([k, v]) => (
+              <SelectItem key={k} value={k}>
+                <span style={{ color: v.color }}>{v.label}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }
