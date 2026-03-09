@@ -135,7 +135,7 @@ export default function LeadsPage() {
   });
 
   return (
-    <div data-testid="leads-page" className="space-y-4 animate-fade-in-up h-full flex flex-col">
+    <div data-testid="leads-page" className="space-y-4 animate-fade-in-up">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-foreground font-heading">Gestion de Leads</h1>
@@ -163,7 +163,7 @@ export default function LeadsPage() {
       {loading ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground">Cargando leads...</div>
       ) : (
-        <div className="overflow-x-scroll kanban-board" style={{ height: "calc(100vh - 280px)" }}>
+        <div className="overflow-x-scroll kanban-board w-full" style={{ maxWidth: "calc(100vw - 18rem)", maxHeight: "calc(100vh - 250px)" }}>
           <div className="flex gap-3 min-w-max h-full pb-2">
             {STAGE_KEYS.map(stageKey => {
               const cfg = STAGE_CONFIG[stageKey];
@@ -183,7 +183,7 @@ export default function LeadsPage() {
                     <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/70 text-foreground">{stageLeads.length}</span>
                   </div>
 
-                  <div className="flex-1 space-y-2 overflow-y-auto pr-1 pb-1 kanban-scroll" style={{ maxHeight: "calc(100vh - 350px)" }}>
+                  <div className="flex-1 space-y-2 overflow-y-auto pr-1 pb-1 kanban-scroll" style={{ maxHeight: "calc(100vh - 320px)" }}>
                     {stageLeads.length === 0 && (
                       <div className="text-center py-8 text-xs text-muted-foreground">Sin leads</div>
                     )}
