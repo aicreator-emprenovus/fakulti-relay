@@ -370,7 +370,7 @@ export default function ChatPage() {
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-8 pb-4">
+              <div className="space-y-2 pb-4">
                 {!activeSession && messages.length === 0 && (
                   <div className="text-center py-12">
                     <Activity size={40} className="text-muted-foreground mx-auto mb-3" />
@@ -388,7 +388,7 @@ export default function ChatPage() {
                   const isUser = msg.role === "user";
                   const isCrmAgent = msg.sent_by === "crm_agent";
                   return (
-                    <div key={msg.id || i} className={`group flex gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
+                    <div key={msg.id || i} className={`group flex gap-2 mb-6 ${isUser ? "justify-end" : "justify-start"}`}>
                       {!isUser && (
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
                           isCrmAgent ? "bg-blue-500/10" : "bg-green-500/10"
