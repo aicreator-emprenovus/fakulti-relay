@@ -17,6 +17,8 @@ import json
 import random
 import re
 
+import httpx
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -115,6 +117,27 @@ class PurchaseAdd(BaseModel):
     product_name: str
     quantity: int = 1
     price: float
+
+class AutomationRuleCreate(BaseModel):
+    name: str
+    trigger_type: str
+    trigger_value: Optional[str] = ""
+    action_type: str
+    action_value: Optional[str] = ""
+    description: Optional[str] = ""
+    active: Optional[bool] = True
+
+class WhatsAppConfigUpdate(BaseModel):
+    phone_number_id: Optional[str] = ""
+    access_token: Optional[str] = ""
+    verify_token: Optional[str] = "fakulti-whatsapp-verify-token"
+    business_name: Optional[str] = "Fakulti Laboratorios"
+
+class AIConfigUpdate(BaseModel):
+    intent_analysis: Optional[bool] = True
+    lead_classification: Optional[bool] = True
+    product_recommendation: Optional[bool] = True
+    suggested_responses: Optional[bool] = True
 
 # ========== AUTH UTILITIES ==========
 
@@ -1207,95 +1230,254 @@ async def bulk_download(
     filename = f"leads_faculty_{download_type}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
-# ========== WHATSAPP WEBHOOK ==========
+# ========== WHATSAPP CLOUD API ==========
 
-class WhatsAppMessage(BaseModel):
-    from_number: str
-    message: str
+WHATSAPP_API_URL = "https://graph.facebook.com/v21.0"
 
-@api_router.post("/whatsapp/webhook")
-async def whatsapp_webhook(req: WhatsAppMessage):
-    """Webhook for incoming WhatsApp messages. Handles greeting and lead registration."""
-    phone = req.from_number.strip()
+async def get_whatsapp_config():
+    config = await db.whatsapp_config.find_one({"id": "main"}, {"_id": 0})
+    return config or {"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios"}
+
+async def send_whatsapp_message(to_phone: str, text: str):
+    """Send a message via WhatsApp Cloud API."""
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        logger.warning("WhatsApp not configured - message not sent")
+        return False
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
+    headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
+    payload = {"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}}
+    try:
+        async with httpx.AsyncClient() as client_http:
+            resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                logger.info(f"WhatsApp message sent to {to_phone}")
+                return True
+            else:
+                logger.error(f"WhatsApp send error: {resp.status_code} {resp.text}")
+                return False
+    except Exception as e:
+        logger.error(f"WhatsApp send exception: {e}")
+        return False
+
+async def process_whatsapp_incoming(phone: str, message_text: str):
+    """Process an incoming WhatsApp message through the AI bot."""
     existing_lead = await db.leads.find_one({"whatsapp": phone}, {"_id": 0})
-    
     is_new = existing_lead is None
     lead_name = existing_lead.get("name", "") if existing_lead else ""
-    
-    # Check if user is providing their name (simple heuristic: short message, no question marks, not a product query)
+    msg_lower = message_text.strip().lower()
+
     providing_name = False
-    msg_lower = req.message.strip().lower()
     if is_new or (existing_lead and not lead_name):
-        words = req.message.strip().split()
-        if 1 <= len(words) <= 4 and "?" not in req.message and not any(kw in msg_lower for kw in ["precio", "producto", "comprar", "cotiz", "hola", "info"]):
+        words = message_text.strip().split()
+        if 1 <= len(words) <= 4 and "?" not in message_text and not any(kw in msg_lower for kw in ["precio", "producto", "comprar", "cotiz", "hola", "info"]):
             providing_name = True
-    
+
     if providing_name and is_new:
         new_lead = {
-            "id": str(uuid.uuid4()),
-            "name": req.message.strip().title(),
-            "whatsapp": phone,
-            "city": "", "email": "", "product_interest": "",
-            "source": "WhatsApp",
-            "game_used": None, "prize_obtained": None,
-            "funnel_stage": "nuevo",
-            "status": "activo",
-            "purchase_history": [],
-            "coupon_used": None, "recompra_date": None,
+            "id": str(uuid.uuid4()), "name": message_text.strip().title(), "whatsapp": phone,
+            "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
+            "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
+            "purchase_history": [], "coupon_used": None, "recompra_date": None,
             "notes": "Registrado via WhatsApp",
             "last_interaction": datetime.now(timezone.utc).isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.leads.insert_one(new_lead)
-        return {"reply": f"Mucho gusto {req.message.strip().title()}! Bienvenido a Fakulti Laboratorios. Somos especialistas en suplementos naturales. En que producto puedo ayudarte?", "lead_id": new_lead["id"], "is_new": True}
-    
+        reply = f"Mucho gusto {message_text.strip().title()}! Bienvenido a Fakulti Laboratorios. Somos especialistas en suplementos naturales. En que producto puedo ayudarte?"
+        return reply, new_lead["id"]
+
     if providing_name and existing_lead and not lead_name:
-        await db.leads.update_one({"whatsapp": phone}, {"$set": {"name": req.message.strip().title(), "last_interaction": datetime.now(timezone.utc).isoformat()}})
-        return {"reply": f"Gracias {req.message.strip().title()}! Ya te tengo registrado. En que puedo ayudarte hoy?", "lead_id": existing_lead["id"], "is_new": False}
-    
+        await db.leads.update_one({"whatsapp": phone}, {"$set": {"name": message_text.strip().title(), "last_interaction": datetime.now(timezone.utc).isoformat()}})
+        reply = f"Gracias {message_text.strip().title()}! Ya te tengo registrado. En que puedo ayudarte hoy?"
+        return reply, existing_lead["id"]
+
     if is_new:
         new_lead = {
-            "id": str(uuid.uuid4()),
-            "name": "",
-            "whatsapp": phone,
-            "city": "", "email": "", "product_interest": "",
-            "source": "WhatsApp",
-            "game_used": None, "prize_obtained": None,
-            "funnel_stage": "nuevo",
-            "status": "activo",
-            "purchase_history": [],
-            "coupon_used": None, "recompra_date": None,
+            "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
+            "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
+            "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
+            "purchase_history": [], "coupon_used": None, "recompra_date": None,
             "notes": "Lead sin nombre - pendiente registro",
             "last_interaction": datetime.now(timezone.utc).isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.leads.insert_one(new_lead)
-        return {"reply": "Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. Para brindarte una mejor atencion, me podrias decir tu nombre?", "lead_id": new_lead["id"], "is_new": True}
-    
-    # Returning lead
-    greeting = f"Hola de nuevo{(' ' + lead_name) if lead_name else ''}! Que gusto tenerte de vuelta."
-    
-    # Auto-stage based on keywords
+        reply = "Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. Para brindarte una mejor atencion, me podrias decir tu nombre?"
+        return reply, new_lead["id"]
+
+    # Returning lead - auto-stage based on keywords
     new_stage = None
     if any(kw in msg_lower for kw in ["precio", "cuanto", "costo", "vale"]):
         new_stage = "interesado"
-    elif any(kw in msg_lower for kw in ["cotiz", "envio", "pago", "forma de pago", "transferencia", "stock"]):
+    elif any(kw in msg_lower for kw in ["cotiz", "envio", "pago", "forma de pago", "transferencia"]):
         new_stage = "en_negociacion"
     elif any(kw in msg_lower for kw in ["comprar", "quiero", "confirmo", "listo"]):
         new_stage = "en_negociacion"
     elif any(kw in msg_lower for kw in ["no me interesa", "no gracias", "no quiero"]):
         new_stage = "perdido"
-    
+
     if new_stage and existing_lead.get("funnel_stage") != new_stage:
         current_priority = FUNNEL_STAGES.index(existing_lead.get("funnel_stage", "nuevo")) if existing_lead.get("funnel_stage") in FUNNEL_STAGES else 0
         new_priority = FUNNEL_STAGES.index(new_stage)
-        # Only advance stage forward (except perdido)
         if new_stage == "perdido" or new_priority > current_priority:
             await db.leads.update_one({"whatsapp": phone}, {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
     else:
         await db.leads.update_one({"whatsapp": phone}, {"$set": {"last_interaction": datetime.now(timezone.utc).isoformat()}})
+
+    greeting = f"Hola de nuevo{(' ' + lead_name) if lead_name else ''}! Que gusto tenerte de vuelta. En que puedo ayudarte hoy?"
+    return greeting, existing_lead["id"]
+
+# Meta WhatsApp webhook verification (GET)
+from fastapi import Request
+
+@api_router.get("/webhook/whatsapp")
+async def whatsapp_verify(request: Request):
+    """Verification endpoint for Meta WhatsApp Cloud API webhook setup."""
+    params = request.query_params
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+    config = await get_whatsapp_config()
+    if mode == "subscribe" and token == config.get("verify_token", ""):
+        logger.info("WhatsApp webhook verified successfully")
+        return int(challenge)
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+# Meta WhatsApp incoming message (POST)
+@api_router.post("/webhook/whatsapp")
+async def whatsapp_incoming(request: Request):
+    """Receive incoming WhatsApp messages from Meta Cloud API."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "ok"}
     
-    return {"reply": f"{greeting} En que puedo ayudarte hoy?", "lead_id": existing_lead["id"], "is_new": False, "stage_updated": new_stage}
+    entries = body.get("entry", [])
+    for entry in entries:
+        changes = entry.get("changes", [])
+        for change in changes:
+            value = change.get("value", {})
+            messages = value.get("messages", [])
+            for msg in messages:
+                if msg.get("type") == "text":
+                    phone = msg.get("from", "")
+                    text = msg.get("text", {}).get("body", "")
+                    if phone and text:
+                        logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
+                        reply, lead_id = await process_whatsapp_incoming(phone, text)
+                        await send_whatsapp_message(phone, reply)
+                        # Store in chat history
+                        session_id = f"wa_{phone}"
+                        now = datetime.now(timezone.utc).isoformat()
+                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": text, "timestamp": now})
+                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now})
+                        await db.chat_sessions_meta.update_one(
+                            {"session_id": session_id},
+                            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": "", "source": "whatsapp"}},
+                            upsert=True
+                        )
+    return {"status": "ok"}
+
+# Legacy internal webhook (for Chat IA testing)
+class WhatsAppMessage(BaseModel):
+    from_number: str
+    message: str
+
+@api_router.post("/whatsapp/webhook")
+async def whatsapp_webhook_legacy(req: WhatsAppMessage):
+    reply, lead_id = await process_whatsapp_incoming(req.from_number.strip(), req.message)
+    return {"reply": reply, "lead_id": lead_id}
+
+# ========== AUTOMATION RULES ==========
+
+@api_router.get("/automation/rules")
+async def get_automation_rules(user=Depends(get_current_user)):
+    rules = await db.automation_rules.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return rules
+
+@api_router.post("/automation/rules")
+async def create_automation_rule(req: AutomationRuleCreate, user=Depends(get_current_user)):
+    count = await db.automation_rules.count_documents({})
+    doc = {"id": str(uuid.uuid4()), **req.model_dump(), "order": count + 1, "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.automation_rules.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/automation/rules/{rule_id}")
+async def update_automation_rule(rule_id: str, req: AutomationRuleCreate, user=Depends(get_current_user)):
+    await db.automation_rules.update_one({"id": rule_id}, {"$set": req.model_dump()})
+    rule = await db.automation_rules.find_one({"id": rule_id}, {"_id": 0})
+    return rule
+
+@api_router.patch("/automation/rules/{rule_id}/toggle")
+async def toggle_automation_rule(rule_id: str, user=Depends(get_current_user)):
+    rule = await db.automation_rules.find_one({"id": rule_id}, {"_id": 0})
+    if not rule:
+        raise HTTPException(status_code=404, detail="Regla no encontrada")
+    new_active = not rule.get("active", True)
+    await db.automation_rules.update_one({"id": rule_id}, {"$set": {"active": new_active}})
+    return {"active": new_active}
+
+@api_router.delete("/automation/rules/{rule_id}")
+async def delete_automation_rule(rule_id: str, user=Depends(get_current_user)):
+    await db.automation_rules.delete_one({"id": rule_id})
+    return {"message": "Regla eliminada"}
+
+# ========== WHATSAPP CONFIG ==========
+
+@api_router.get("/config/whatsapp")
+async def get_wa_config(user=Depends(get_current_user)):
+    config = await get_whatsapp_config()
+    safe = {**config}
+    if safe.get("access_token"):
+        safe["access_token"] = safe["access_token"][:10] + "..." + safe["access_token"][-4:] if len(safe["access_token"]) > 14 else "****"
+    return safe
+
+@api_router.put("/config/whatsapp")
+async def update_wa_config(req: WhatsAppConfigUpdate, user=Depends(get_current_user)):
+    data = req.model_dump()
+    # Don't overwrite token if masked value sent
+    if data.get("access_token") and "..." in data["access_token"]:
+        existing = await get_whatsapp_config()
+        data["access_token"] = existing.get("access_token", "")
+    data["id"] = "main"
+    await db.whatsapp_config.update_one({"id": "main"}, {"$set": data}, upsert=True)
+    config = await db.whatsapp_config.find_one({"id": "main"}, {"_id": 0})
+    if config.get("access_token"):
+        config["access_token"] = config["access_token"][:10] + "..." + config["access_token"][-4:] if len(config["access_token"]) > 14 else "****"
+    return config
+
+@api_router.post("/config/whatsapp/test")
+async def test_wa_connection(user=Depends(get_current_user)):
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        return {"success": False, "message": "Credenciales no configuradas"}
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}"
+    headers = {"Authorization": f"Bearer {config['access_token']}"}
+    try:
+        async with httpx.AsyncClient() as c:
+            resp = await c.get(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"success": True, "message": f"Conectado: {data.get('display_phone_number', 'OK')}", "phone": data.get("display_phone_number")}
+            return {"success": False, "message": f"Error {resp.status_code}: {resp.text[:200]}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+# ========== AI CONFIG ==========
+
+@api_router.get("/config/ai")
+async def get_ai_config(user=Depends(get_current_user)):
+    config = await db.ai_config.find_one({"id": "main"}, {"_id": 0})
+    return config or {"id": "main", "intent_analysis": True, "lead_classification": True, "product_recommendation": True, "suggested_responses": True}
+
+@api_router.put("/config/ai")
+async def update_ai_config(req: AIConfigUpdate, user=Depends(get_current_user)):
+    data = req.model_dump()
+    data["id"] = "main"
+    await db.ai_config.update_one({"id": "main"}, {"$set": data}, upsert=True)
+    return await db.ai_config.find_one({"id": "main"}, {"_id": 0})
 
 # ========== HUMAN AGENT DERIVATION ==========
 
@@ -1477,6 +1659,32 @@ async def startup():
     await db.leads.create_index("funnel_stage")
     await db.leads.create_index("source")
     await db.game_plays.create_index("whatsapp")
+    
+    # Seed automation rules
+    rules_count = await db.automation_rules.count_documents({})
+    if rules_count == 0:
+        default_rules = [
+            {"id": str(uuid.uuid4()), "name": "Bienvenida automatica", "trigger_type": "nuevo_lead", "trigger_value": "", "action_type": "respuesta_ia", "action_value": "Saluda al cliente con: Hola! Gracias por contactarnos. Soy el asesor virtual de Fakulti Laboratorios. Somos especialistas en suplementos naturales de alta calidad. Para brindarte una mejor atencion, me podrias decir tu nombre?", "description": "Saluda automaticamente a cada nuevo lead que ingresa al sistema y solicita sus datos.", "active": True, "order": 1},
+            {"id": str(uuid.uuid4()), "name": "Solicitar datos del cliente", "trigger_type": "lead_sin_datos", "trigger_value": "nombre,whatsapp,ciudad", "action_type": "respuesta_ia", "action_value": "Pregunta de forma natural los datos faltantes: nombre completo, numero de WhatsApp, ciudad y producto de interes.", "description": "Cuando un lead no tiene datos completos, el bot los solicita durante la conversacion.", "active": True, "order": 2},
+            {"id": str(uuid.uuid4()), "name": "Clasificar etapa automaticamente", "trigger_type": "analisis_conversacion", "trigger_value": "", "action_type": "cambiar_etapa", "action_value": "Analiza keywords: precio/cuanto=interesado, cotiz/pago/envio=en_negociacion, comprar/confirmo=en_negociacion, no me interesa=perdido", "description": "Clasifica automaticamente la etapa del lead basandose en las palabras clave de la conversacion.", "active": True, "order": 3},
+            {"id": str(uuid.uuid4()), "name": "Primer recordatorio (4 horas)", "trigger_type": "sin_respuesta", "trigger_value": "4", "action_type": "enviar_mensaje", "action_value": "Hola, solo para saber si pudiste revisar la informacion que te envie. Si quieres te ayudo con mas detalles sobre nuestros productos.", "description": "Envia un recordatorio amable despues de 4 horas sin respuesta del lead.", "active": True, "order": 4},
+            {"id": str(uuid.uuid4()), "name": "Segundo recordatorio (24 horas)", "trigger_type": "sin_respuesta", "trigger_value": "24", "action_type": "enviar_mensaje", "action_value": "Hola de nuevo, queria saber si aun tienes interes en los productos de Fakulti. Estoy aqui para ayudarte cuando lo necesites.", "description": "Segundo recordatorio despues de 24 horas sin respuesta.", "active": True, "order": 5},
+            {"id": str(uuid.uuid4()), "name": "Marcar como perdido", "trigger_type": "sin_respuesta", "trigger_value": "48", "action_type": "cambiar_etapa", "action_value": "perdido", "description": "Marca automaticamente al lead como perdido despues de 48 horas sin respuesta.", "active": True, "order": 6},
+            {"id": str(uuid.uuid4()), "name": "Transferir a humano", "trigger_type": "intencion_ia", "trigger_value": "queja,problema,reclamo,hablar con persona,agente", "action_type": "asignar_agente", "action_value": "Transfiere la conversacion a un asesor humano cuando el bot detecta una queja, problema complejo o solicitud explicita de hablar con una persona.", "description": "Detecta intenciones criticas y deriva a un agente humano.", "active": True, "order": 7},
+            {"id": str(uuid.uuid4()), "name": "Recomendacion de producto", "trigger_type": "intencion_ia", "trigger_value": "consulta_producto,interes,salud,dolor,suplemento", "action_type": "respuesta_ia", "action_value": "Recomienda productos del catalogo de Fakulti basandose en las necesidades del cliente. Menciona beneficios sin hacer claims medicos.", "description": "Sugiere productos relevantes basados en el mensaje del cliente.", "active": True, "order": 8},
+            {"id": str(uuid.uuid4()), "name": "Seguimiento post-compra", "trigger_type": "compra_realizada", "trigger_value": "", "action_type": "iniciar_secuencia", "action_value": "Inscribe automaticamente al cliente en la secuencia de fidelizacion del producto comprado.", "description": "Al registrar una compra, inicia la secuencia de mensajes de fidelizacion.", "active": True, "order": 9},
+            {"id": str(uuid.uuid4()), "name": "Recordatorio de recompra (30 dias)", "trigger_type": "dias_post_compra", "trigger_value": "30", "action_type": "enviar_mensaje", "action_value": "Hola! Ya paso un mes desde tu ultima compra en Fakulti. Te gustaria repetir tu pedido? Tenemos nuevas promociones disponibles.", "description": "Envia un recordatorio para recompra 30 dias despues de la ultima compra.", "active": True, "order": 10},
+        ]
+        for r in default_rules:
+            r["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.automation_rules.insert_many(default_rules)
+        logger.info("Automation rules seeded (10 rules)")
+    
+    # Seed default configs
+    if not await db.whatsapp_config.find_one({"id": "main"}):
+        await db.whatsapp_config.insert_one({"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios"})
+    if not await db.ai_config.find_one({"id": "main"}):
+        await db.ai_config.insert_one({"id": "main", "intent_analysis": True, "lead_classification": True, "product_recommendation": True, "suggested_responses": True})
     
     # Migrate old funnel stages
     migrated_caliente = await db.leads.update_many({"funnel_stage": "caliente"}, {"$set": {"funnel_stage": "en_negociacion"}})
