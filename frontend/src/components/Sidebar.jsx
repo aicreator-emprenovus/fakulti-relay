@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, MessageSquare, Upload, Settings, LogOut, Menu, X, Sun, Moon, Zap } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Upload, Settings, LogOut, Menu, X, Sun, Moon, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png";
@@ -11,7 +11,7 @@ const navItems = [
   { path: "/leads", icon: Users, label: "Leads" },
   { path: "/games", icon: Gamepad2, label: "Juegos" },
   { path: "/loyalty", icon: Heart, label: "Fidelizacion" },
-  { path: "/chat", icon: MessageSquare, label: "Chat IA" },
+  { path: "/chat", icon: Phone, label: "WhatsApp Bot" },
   { path: "/bulk", icon: Upload, label: "Carga / Descarga" },
   { path: "/config", icon: Zap, label: "Configuracion" },
   { path: "/settings", icon: Settings, label: "Productos" },

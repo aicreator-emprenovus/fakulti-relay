@@ -9,9 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Send, MessageSquare, Bot, User, Trash2, X,
-  Phone, Wifi, Clock, AlertTriangle, CheckCircle,
-  MessageCircle, Activity, Shield
+  Send, Trash2, X, Phone, Wifi, Clock, AlertTriangle,
+  CheckCircle, MessageCircle, Activity, Shield
 } from "lucide-react";
 
 const STAGE_CONFIG = {
@@ -41,7 +40,7 @@ function StatsBar({ stats, alertCount }) {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Resp. Prom.</p>
-          <p data-testid="stat-response-time" className="text-sm font-bold text-foreground">{stats.avg_response_time_ms ? `${(stats.avg_response_time_ms / 1000).toFixed(1)}s` : "—"}</p>
+          <p data-testid="stat-response-time" className="text-sm font-bold text-foreground">{stats.avg_response_time_ms ? `${(stats.avg_response_time_ms / 1000).toFixed(1)}s` : "--"}</p>
         </div>
       </div>
       <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5">
@@ -67,37 +66,44 @@ function StatsBar({ stats, alertCount }) {
   );
 }
 
+function formatTimeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "ahora";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
 function SessionItem({ s, isActive, onClick }) {
-  const isWA = s.source === "whatsapp";
   const timeAgo = s.timestamp ? formatTimeAgo(s.timestamp) : "";
   return (
     <button
       onClick={onClick}
       data-testid={`session-${s.session_id}`}
       className={`w-full text-left p-2.5 rounded-lg text-xs transition-all relative ${
-        isActive ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground hover:bg-muted"
+        isActive ? "bg-green-500/10 text-green-700 border border-green-500/20" : "text-muted-foreground hover:bg-muted"
       }`}
     >
       <div className="flex items-center gap-2">
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-          isWA ? "bg-green-500/10" : "bg-primary/10"
-        }`}>
-          {isWA ? <Phone size={11} className="text-green-500" /> : <Bot size={11} className="text-primary" />}
+        <div className="w-7 h-7 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+          <Phone size={12} className="text-green-500" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="truncate font-medium text-foreground">{s.lead_name || s.lead_phone || "Sin nombre"}</p>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-medium text-foreground">{s.lead_name || "Sin nombre"}</span>
+            {s.has_alert && <AlertTriangle size={11} className="text-red-500 flex-shrink-0" />}
+          </div>
           <p className="truncate text-muted-foreground mt-0.5">{s.last_message?.slice(0, 35) || "Sin mensajes"}</p>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-1.5 pl-8">
-        <span className="text-muted-foreground">{s.message_count} msgs</span>
+      <div className="flex items-center justify-between mt-1 pl-9">
+        <span className="text-muted-foreground">{s.lead_phone || s.session_id.replace("wa_", "")}</span>
         <span className="text-muted-foreground">{timeAgo}</span>
       </div>
       {s.has_alert && (
         <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-      )}
-      {isWA && (
-        <Badge variant="outline" className="absolute top-1.5 right-5 text-[9px] h-4 border-green-500/30 text-green-600">WA</Badge>
       )}
     </button>
   );
@@ -134,16 +140,6 @@ function AlertPanel({ alerts, onResolve }) {
   );
 }
 
-function formatTimeAgo(ts) {
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "ahora";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
-}
-
 export default function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState([]);
@@ -156,13 +152,14 @@ export default function ChatPage() {
   const [initialized, setInitialized] = useState(false);
   const [stats, setStats] = useState({});
   const [alerts, setAlerts] = useState([]);
-  const [sessionSource, setSessionSource] = useState("chat_ia");
-  const [filter, setFilter] = useState("all"); // all, whatsapp, chat_ia
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
 
   const fetchSessions = useCallback(() => {
-    axios.get(`${API}/chat/sessions`).then(res => setSessions(res.data)).catch(() => {});
+    axios.get(`${API}/chat/sessions`).then(res => {
+      // Only show WhatsApp sessions
+      setSessions(res.data.filter(s => s.source === "whatsapp"));
+    }).catch(() => {});
   }, []);
 
   const fetchStats = useCallback(() => {
@@ -173,21 +170,19 @@ export default function ChatPage() {
     axios.get(`${API}/chat/alerts`).then(res => setAlerts(res.data)).catch(() => {});
   }, []);
 
-  // Initial load
   useEffect(() => {
     fetchSessions();
     fetchStats();
     fetchAlerts();
   }, [fetchSessions, fetchStats, fetchAlerts]);
 
-  // Auto-poll every 10s
+  // Auto-poll every 8s
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchSessions();
       fetchStats();
       fetchAlerts();
-      // Refresh active session messages if it's a WhatsApp session
-      if (activeSession?.startsWith("wa_")) {
+      if (activeSession) {
         axios.get(`${API}/chat/history/${activeSession}`).then(res => {
           setMessages(prev => {
             if (res.data.length !== prev.length) return res.data;
@@ -195,24 +190,23 @@ export default function ChatPage() {
           });
         }).catch(() => {});
       }
-    }, 10000);
+    }, 8000);
     return () => clearInterval(pollRef.current);
   }, [activeSession, fetchSessions, fetchStats, fetchAlerts]);
 
-  // Handle lead_id from URL params
+  // Handle lead_id from URL params (from Kanban board)
   useEffect(() => {
     if (initialized) return;
     const leadId = searchParams.get("lead_id");
     if (leadId) {
+      // Find WhatsApp session for this lead
       axios.get(`${API}/chat/lead-session/${leadId}`).then(res => {
         setActiveSession(res.data.session_id);
         setActiveLeadId(leadId);
         setMessages(res.data.messages || []);
         if (res.data.lead) {
-          setLeadInfo({ id: res.data.lead.id, name: res.data.lead.name, funnel_stage: res.data.lead.funnel_stage });
+          setLeadInfo({ id: res.data.lead.id, name: res.data.lead.name, funnel_stage: res.data.lead.funnel_stage, whatsapp: res.data.lead.whatsapp });
         }
-        const meta = res.data.session_id?.startsWith("wa_") ? "whatsapp" : "chat_ia";
-        setSessionSource(meta);
         setInitialized(true);
         setSearchParams({}, { replace: true });
       }).catch(() => {
@@ -231,12 +225,11 @@ export default function ChatPage() {
   const loadSession = (session) => {
     setActiveSession(session.session_id);
     setActiveLeadId(session.lead_id || null);
-    setSessionSource(session.source || "chat_ia");
     axios.get(`${API}/chat/history/${session.session_id}`).then(res => setMessages(res.data)).catch(() => {});
     if (session.lead_id) {
       axios.get(`${API}/leads`).then(res => {
         const lead = res.data.find(l => l.id === session.lead_id);
-        if (lead) setLeadInfo({ id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage, whatsapp: lead.whatsapp });
+        if (lead) setLeadInfo({ id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage, whatsapp: lead.whatsapp, city: lead.city, email: lead.email, product_interest: lead.product_interest });
         else setLeadInfo({ name: session.lead_name, funnel_stage: null });
       }).catch(() => setLeadInfo({ name: session.lead_name, funnel_stage: null }));
     } else {
@@ -244,71 +237,28 @@ export default function ChatPage() {
     }
   };
 
-  const startNewSession = () => {
-    const sid = `session_${Date.now()}`;
-    setActiveSession(sid);
-    setActiveLeadId(null);
-    setMessages([]);
-    setLeadInfo(null);
-    setSessionSource("chat_ia");
-  };
-
   const sendMessage = async () => {
-    if (!input.trim() || sending) return;
-
-    // WhatsApp reply via CRM
-    if (sessionSource === "whatsapp" && activeLeadId) {
-      setSending(true);
-      const userMsg = { role: "assistant", content: input, timestamp: new Date().toISOString(), sent_by: "crm_agent" };
-      setMessages(prev => [...prev, userMsg]);
-      setInput("");
-      try {
-        await axios.post(`${API}/chat/whatsapp-reply`, { lead_id: activeLeadId, message: input });
-        toast.success("Mensaje enviado por WhatsApp");
-        // Refresh messages
-        const res = await axios.get(`${API}/chat/history/${activeSession}`);
-        setMessages(res.data);
-        fetchSessions();
-      } catch (err) {
-        toast.error(err?.response?.data?.detail || "Error al enviar mensaje");
-        setMessages(prev => prev.slice(0, -1));
-      }
-      setSending(false);
-      return;
-    }
-
-    // Regular Chat IA
-    const sessionId = activeSession || `session_${Date.now()}`;
-    if (!activeSession) setActiveSession(sessionId);
-
-    const userMsg = { role: "user", content: input, timestamp: new Date().toISOString() };
-    setMessages(prev => [...prev, userMsg]);
-    setInput("");
+    if (!input.trim() || sending || !activeLeadId) return;
     setSending(true);
-
+    const optimisticMsg = { role: "assistant", content: input, timestamp: new Date().toISOString(), sent_by: "crm_agent" };
+    setMessages(prev => [...prev, optimisticMsg]);
+    const msg = input;
+    setInput("");
     try {
-      const payload = { session_id: sessionId, message: input };
-      if (activeLeadId) payload.lead_id = activeLeadId;
-      const res = await axios.post(`${API}/chat/message`, payload);
-      const botMsg = { role: "assistant", content: res.data.response, timestamp: new Date().toISOString() };
-      setMessages(prev => [...prev, botMsg]);
-      if (res.data.lead) {
-        setLeadInfo(res.data.lead);
-        if (!activeLeadId) setActiveLeadId(res.data.lead.id);
-      }
+      await axios.post(`${API}/chat/whatsapp-reply`, { lead_id: activeLeadId, message: msg });
+      toast.success("Mensaje enviado por WhatsApp");
+      const res = await axios.get(`${API}/chat/history/${activeSession}`);
+      setMessages(res.data);
       fetchSessions();
-    } catch {
-      toast.error("Error al enviar mensaje");
-      setMessages(prev => [...prev, { role: "assistant", content: "Error al procesar tu mensaje. Intenta de nuevo.", timestamp: new Date().toISOString() }]);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Error al enviar mensaje");
+      setMessages(prev => prev.slice(0, -1));
     }
     setSending(false);
   };
 
   const deleteMessage = async (msgId, index) => {
-    if (!msgId) {
-      setMessages(prev => prev.filter((_, i) => i !== index));
-      return;
-    }
+    if (!msgId) { setMessages(prev => prev.filter((_, i) => i !== index)); return; }
     try {
       await axios.delete(`${API}/chat/messages/${msgId}`);
       setMessages(prev => prev.filter(m => m.id !== msgId));
@@ -317,8 +267,7 @@ export default function ChatPage() {
   };
 
   const deleteConversation = async () => {
-    if (!activeSession) return;
-    if (!window.confirm("Eliminar toda la conversacion?")) return;
+    if (!activeSession || !window.confirm("Eliminar toda la conversacion?")) return;
     try {
       await axios.delete(`${API}/chat/sessions/${activeSession}`);
       setMessages([]);
@@ -339,94 +288,77 @@ export default function ChatPage() {
     } catch { toast.error("Error al resolver alerta"); }
   };
 
-  const filteredSessions = sessions.filter(s => {
-    if (filter === "whatsapp") return s.source === "whatsapp";
-    if (filter === "chat_ia") return s.source !== "whatsapp";
-    return true;
-  });
-
   const pendingAlertCount = alerts.filter(a => a.status === "pending").length;
 
   return (
     <div data-testid="chat-page" className="animate-fade-in-up">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground font-heading">Chat IA</h1>
-          <p className="text-sm text-muted-foreground">Asesor Virtual + Monitor WhatsApp en Tiempo Real</p>
+          <h1 className="text-3xl font-bold text-foreground font-heading">WhatsApp Bot</h1>
+          <p className="text-sm text-muted-foreground">Monitor en tiempo real - GPT-5.2</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-muted rounded-full p-0.5">
-            {[
-              { key: "all", label: "Todos" },
-              { key: "whatsapp", label: "WhatsApp", icon: Phone },
-              { key: "chat_ia", label: "Chat IA", icon: Bot },
-            ].map(f => (
-              <button
-                key={f.key}
-                data-testid={`filter-${f.key}`}
-                onClick={() => setFilter(f.key)}
-                className={`text-xs px-3 py-1.5 rounded-full transition-all font-medium ${
-                  filter === f.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {f.icon && <f.icon size={11} className="inline mr-1" />}{f.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1.5">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-xs font-medium text-green-600">EN VIVO</span>
           </div>
-          <Button data-testid="new-chat-btn" onClick={startNewSession} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 h-9 text-xs">
-            <MessageSquare size={14} className="mr-1" /> Nueva
-          </Button>
         </div>
       </div>
 
       <StatsBar stats={stats} alertCount={pendingAlertCount} />
       <AlertPanel alerts={alerts} onResolve={resolveAlert} />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: "calc(100vh - " + (pendingAlertCount > 0 ? "380px" : "300px") + ")" }}>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "380px" : "300px"})` }}>
+        {/* Sessions Sidebar */}
         <Card className="bg-card border-border rounded-2xl md:col-span-1 hidden md:block overflow-hidden">
           <CardContent className="p-3 h-full flex flex-col">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-semibold">
-              Conversaciones ({filteredSessions.length})
+              Conversaciones ({sessions.length})
             </p>
             <ScrollArea className="flex-1">
               <div className="space-y-1.5">
-                {filteredSessions.map(s => (
+                {sessions.map(s => (
                   <SessionItem key={s.session_id} s={s} isActive={activeSession === s.session_id} onClick={() => loadSession(s)} />
                 ))}
-                {filteredSessions.length === 0 && <p className="text-muted-foreground text-xs text-center py-4">Sin conversaciones</p>}
+                {sessions.length === 0 && (
+                  <div className="text-center py-8">
+                    <Phone size={24} className="text-muted-foreground mx-auto mb-2" />
+                    <p className="text-muted-foreground text-xs">Sin conversaciones</p>
+                    <p className="text-muted-foreground text-[10px] mt-1">Las conversaciones aparecen cuando un cliente escribe al bot</p>
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </CardContent>
         </Card>
 
+        {/* Chat Area */}
         <Card className="bg-card border-border rounded-2xl md:col-span-3 flex flex-col overflow-hidden">
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
-            {/* Chat Header */}
+            {/* Header */}
             <div className="p-3 border-b border-input flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  sessionSource === "whatsapp" ? "bg-green-500/10" : "bg-primary/10"
-                }`}>
-                  {sessionSource === "whatsapp" ? <Phone size={15} className="text-green-500" /> : <Bot size={15} className="text-primary" />}
+                <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <Phone size={15} className="text-green-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-foreground font-medium flex items-center gap-2">
-                    {sessionSource === "whatsapp" ? "WhatsApp" : "Asesor Fakulti"}
-                    {leadInfo?.name && <span className="text-muted-foreground font-normal">— {leadInfo.name}</span>}
-                    {sessionSource === "whatsapp" && (
-                      <Badge data-testid="wa-badge" variant="outline" className="text-[9px] h-4 border-green-500/30 text-green-600">EN VIVO</Badge>
-                    )}
-                  </p>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      {sessionSource === "whatsapp" ? (leadInfo?.whatsapp || "") : "Powered by GPT-5.2"}
-                    </p>
+                    <span className="text-sm text-foreground font-medium">
+                      {leadInfo?.name || "Selecciona una conversacion"}
+                    </span>
                     {leadInfo?.funnel_stage && (
                       <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
                         {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
                       </Badge>
                     )}
                   </div>
+                  {leadInfo && (
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {leadInfo.whatsapp && <span>{leadInfo.whatsapp}</span>}
+                      {leadInfo.city && <span>{leadInfo.city}</span>}
+                      {leadInfo.product_interest && <span>{leadInfo.product_interest}</span>}
+                    </div>
+                  )}
                 </div>
               </div>
               {activeSession && messages.length > 0 && (
@@ -439,15 +371,17 @@ export default function ChatPage() {
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4 pb-4">
-                {messages.length === 0 && (
+                {!activeSession && messages.length === 0 && (
                   <div className="text-center py-12">
                     <Activity size={40} className="text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground text-sm">
-                      {sessionSource === "whatsapp" ? "Conversacion de WhatsApp" : "Inicia una conversacion con el asesor virtual"}
-                    </p>
-                    <p className="text-muted-foreground text-xs mt-1">
-                      {sessionSource === "whatsapp" ? "Los mensajes aparecen en tiempo real" : "El bot solicitara los datos del cliente automaticamente"}
-                    </p>
+                    <p className="text-muted-foreground text-sm">Selecciona una conversacion de WhatsApp</p>
+                    <p className="text-muted-foreground text-xs mt-1">Los mensajes del bot aparecen en tiempo real</p>
+                  </div>
+                )}
+                {activeSession && messages.length === 0 && (
+                  <div className="text-center py-12">
+                    <Phone size={40} className="text-green-500/30 mx-auto mb-3" />
+                    <p className="text-muted-foreground text-sm">Esperando mensajes...</p>
                   </div>
                 )}
                 {messages.map((msg, i) => {
@@ -457,9 +391,9 @@ export default function ChatPage() {
                     <div key={msg.id || i} className={`group flex gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
                       {!isUser && (
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
-                          isCrmAgent ? "bg-blue-500/10" : sessionSource === "whatsapp" ? "bg-green-500/10" : "bg-muted"
+                          isCrmAgent ? "bg-blue-500/10" : "bg-green-500/10"
                         }`}>
-                          {isCrmAgent ? <Shield size={13} className="text-blue-500" /> : sessionSource === "whatsapp" ? <Phone size={13} className="text-green-500" /> : <Bot size={13} className="text-primary" />}
+                          {isCrmAgent ? <Shield size={13} className="text-blue-500" /> : <Phone size={13} className="text-green-500" />}
                         </div>
                       )}
                       <div className="relative max-w-[80%]">
@@ -476,16 +410,13 @@ export default function ChatPage() {
                           data-testid={`delete-msg-${i}`}
                           onClick={() => deleteMessage(msg.id, i)}
                           className="absolute -top-2 -right-2 hidden group-hover:flex w-5 h-5 rounded-full bg-red-500/90 text-white items-center justify-center text-xs hover:bg-red-600 transition-all"
-                          title="Eliminar mensaje"
                         >
                           <X size={10} />
                         </button>
                       </div>
                       {isUser && (
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
-                          sessionSource === "whatsapp" ? "bg-green-500/10" : "bg-primary/10"
-                        }`}>
-                          {sessionSource === "whatsapp" ? <Phone size={13} className="text-green-500" /> : <User size={13} className="text-primary" />}
+                        <div className="w-7 h-7 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-1">
+                          <Phone size={13} className="text-green-500" />
                         </div>
                       )}
                     </div>
@@ -493,33 +424,45 @@ export default function ChatPage() {
                 })}
                 {sending && (
                   <div className="flex gap-2">
-                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center"><Bot size={14} className="text-primary" /></div>
-                    <div className="chat-bubble-bot px-4 py-3"><div className="flex gap-1"><div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" /><div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} /><div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} /></div></div>
+                    <div className="w-7 h-7 rounded-full bg-blue-500/10 flex items-center justify-center">
+                      <Shield size={13} className="text-blue-500" />
+                    </div>
+                    <div className="chat-bubble-bot px-4 py-3">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                      </div>
+                    </div>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
 
-            {/* Input */}
+            {/* Input - CRM Agent Reply */}
             <div className="p-3 border-t border-input">
               <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
                 <Input
                   data-testid="chat-input"
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder={sessionSource === "whatsapp" ? "Responder por WhatsApp como agente..." : "Escribe tu mensaje..."}
+                  placeholder={activeSession ? "Responder como agente por WhatsApp..." : "Selecciona una conversacion..."}
                   className="flex-1 bg-muted/50 border-input text-foreground h-10"
-                  disabled={sending}
+                  disabled={sending || !activeSession}
                 />
-                <Button data-testid="chat-send-btn" type="submit" disabled={sending || !input.trim()}
-                  className={`h-10 px-4 rounded-lg ${sessionSource === "whatsapp" ? "bg-green-600 hover:bg-green-700 text-white" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}>
+                <Button
+                  data-testid="chat-send-btn"
+                  type="submit"
+                  disabled={sending || !input.trim() || !activeSession}
+                  className="bg-green-600 hover:bg-green-700 text-white h-10 px-4 rounded-lg"
+                >
                   <Send size={15} />
                 </Button>
               </form>
-              {sessionSource === "whatsapp" && (
+              {activeSession && (
                 <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
-                  <Phone size={9} /> Los mensajes se envian directamente al WhatsApp del cliente
+                  <Shield size={9} className="text-blue-500" /> Tu respuesta se envia directamente al WhatsApp del cliente como agente humano
                 </p>
               )}
             </div>

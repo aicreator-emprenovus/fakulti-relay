@@ -1,0 +1,65 @@
+{
+  "summary": "Completed testing of WhatsApp Bot GPT-5.2 integration. All 11 backend tests passed. Frontend UI verified: WhatsApp-only view (no Chat IA), 'WhatsApp Bot' title with 'EN VIVO' badge, Stats Bar with 4 KPIs, green send button, sidebar shows 'WhatsApp Bot' with Phone icon. GPT-5.2 responses are live and working correctly - generates natural Spanish responses, asks for name, extracts data via tags (LEAD_NAME, UPDATE_LEAD, STAGE). Tags are properly stripped from stored messages.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: GET /api/chat/sessions returns list with source field (whatsapp/chat_ia)",
+    "Backend: GET /api/chat/whatsapp-stats returns all 4 KPIs (active_conversations_24h, avg_response_time_ms, messages_today, pending_alerts)",
+    "Backend: POST /api/webhook/whatsapp generates GPT-5.2 response (not static greeting)",
+    "Backend: Bot asks for name when new user writes first message",
+    "Backend: Lead created from WhatsApp message with source='WhatsApp'",
+    "Backend: Name extraction via LEAD_NAME tag works and updates lead",
+    "Backend: POST /api/chat/whatsapp-reply returns 404 for invalid lead_id",
+    "Backend: POST /api/chat/whatsapp-reply with valid lead sends message (or graceful fail if WhatsApp not configured)",
+    "Backend: Stored messages don't contain LEAD_NAME, UPDATE_LEAD, STAGE tags (properly stripped)",
+    "Backend: WhatsApp sessions have correct format (session_id starts with 'wa_', has lead_phone, has_alert)",
+    "Backend: Internal chat endpoint exists for backward compatibility",
+    "Frontend: Page title is 'WhatsApp Bot' with 'Monitor en tiempo real - GPT-5.2' subtitle",
+    "Frontend: 'EN VIVO' green badge present in header",
+    "Frontend: Stats Bar shows 4 KPIs (Activas 24h, Resp. Prom., Msgs Hoy, Alertas)",
+    "Frontend: No 'Nueva Conversacion' button (correct for WhatsApp-only mode)",
+    "Frontend: Sidebar shows 'WhatsApp Bot' with Phone icon",
+    "Frontend: Send button is GREEN",
+    "Frontend: Input placeholder is 'Responder como agente por WhatsApp...'",
+    "Frontend: CRM agent indicator text present below input",
+    "Frontend: Conversations list shows only WhatsApp sessions (phone numbers visible)",
+    "Frontend: No filter buttons (Todos/WhatsApp/Chat IA) - WhatsApp-only mode"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_whatsapp_gpt52_bot.py",
+    "/app/test_reports/pytest/pytest_whatsapp_gpt52.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_whatsapp_gpt52_bot.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (All UI components verified)"
+  },
+  "test_credentials": "admin@fakulti.com / admin123",
+  "seed_data_creation": "Test leads created during GPT-5.2 tests with phone numbers starting with 593TEST* (auto-cleaned after tests)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "WhatsApp Bot GPT-5.2 feature fully tested. Key changes from iteration 10: 1) Chat IA completely removed from ChatPage, 2) Only WhatsApp sessions displayed, 3) GPT-5.2 powers all bot responses via process_whatsapp_incoming function, 4) Tag parsing (LEAD_NAME, UPDATE_LEAD:field=value, STAGE:stage) extracts data and updates leads automatically. The bot follows a conversational flow: greet > ask name > introduce Bone Broth > qualify > close. Andrea Paredes lead (593963266566) used for manual verification. WhatsApp API may not be fully configured for actual message delivery, but the endpoint structure and response handling work correctly.",
+  "verified_features": {
+    "whatsapp_only_mode": true,
+    "gpt52_integration": true,
+    "tag_parsing_lead_name": true,
+    "tag_parsing_update_lead": true,
+    "tag_parsing_stage": true,
+    "crm_reply_endpoint": true,
+    "stats_bar_4_kpis": true,
+    "en_vivo_badge": true,
+    "green_send_button": true,
+    "phone_icon_sidebar": true
+  }
+}
