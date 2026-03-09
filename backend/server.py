@@ -139,6 +139,10 @@ class AIConfigUpdate(BaseModel):
     product_recommendation: Optional[bool] = True
     suggested_responses: Optional[bool] = True
 
+class CRMWhatsAppReply(BaseModel):
+    lead_id: str
+    message: str
+
 # ========== AUTH UTILITIES ==========
 
 def create_token(user_id: str, email: str):
@@ -1076,7 +1080,23 @@ async def get_chat_sessions(user=Depends(get_current_user)):
     for s in sessions:
         meta = await db.chat_sessions_meta.find_one({"session_id": s["_id"]}, {"_id": 0})
         lead_name = meta.get("lead_name", "") if meta else ""
-        result.append({"session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name, "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"]})
+        source = meta.get("source", "chat_ia") if meta else "chat_ia"
+        # Get lead info for WhatsApp sessions
+        lead_phone = ""
+        has_alert = False
+        if source == "whatsapp" and s.get("lead_id"):
+            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1})
+            if lead_doc:
+                lead_phone = lead_doc.get("whatsapp", "")
+                if not lead_name:
+                    lead_name = lead_doc.get("name", "")
+            alert = await db.handover_alerts.find_one({"lead_id": s["lead_id"], "status": "pending"}, {"_id": 0})
+            has_alert = alert is not None
+        result.append({
+            "session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name,
+            "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"],
+            "source": source, "lead_phone": lead_phone, "has_alert": has_alert
+        })
     return result
 
 @api_router.get("/chat/lead-session/{lead_id}")
@@ -1092,6 +1112,93 @@ async def get_or_create_lead_session(lead_id: str, user=Depends(get_current_user
     new_sid = f"lead_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
     await db.chat_sessions_meta.insert_one({"session_id": new_sid, "lead_id": lead_id, "lead_name": lead.get("name", "")})
     return {"session_id": new_sid, "lead": lead, "messages": [], "is_new": True}
+
+# ========== WHATSAPP MONITORING ==========
+
+@api_router.get("/chat/whatsapp-stats")
+async def get_whatsapp_stats(user=Depends(get_current_user)):
+    """Get WhatsApp monitoring stats."""
+    # Active conversations (had activity in last 24h)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    active_sessions = await db.chat_sessions_meta.count_documents({"source": "whatsapp", "last_activity": {"$gte": cutoff}})
+    total_wa_sessions = await db.chat_sessions_meta.count_documents({"source": "whatsapp"})
+    
+    # Average response time from recent WhatsApp messages
+    pipeline = [
+        {"$match": {"source": "whatsapp", "role": "assistant", "response_time_ms": {"$exists": True}}},
+        {"$sort": {"timestamp": -1}},
+        {"$limit": 50},
+        {"$group": {"_id": None, "avg_response_ms": {"$avg": "$response_time_ms"}, "min_response_ms": {"$min": "$response_time_ms"}, "max_response_ms": {"$max": "$response_time_ms"}}}
+    ]
+    stats = await db.chat_messages.aggregate(pipeline).to_list(1)
+    avg_ms = int(stats[0]["avg_response_ms"]) if stats else 0
+    
+    # Pending alerts
+    pending_alerts = await db.handover_alerts.count_documents({"status": "pending"})
+    
+    # Messages today
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0).isoformat()
+    messages_today = await db.chat_messages.count_documents({"source": "whatsapp", "timestamp": {"$gte": today_start}})
+    
+    # Delivery stats
+    delivered = await db.chat_messages.count_documents({"source": "whatsapp", "role": "assistant", "delivered": True})
+    failed = await db.chat_messages.count_documents({"source": "whatsapp", "role": "assistant", "delivered": False})
+    
+    return {
+        "active_conversations_24h": active_sessions,
+        "total_conversations": total_wa_sessions,
+        "avg_response_time_ms": avg_ms,
+        "pending_alerts": pending_alerts,
+        "messages_today": messages_today,
+        "delivered": delivered,
+        "failed": failed
+    }
+
+@api_router.get("/chat/alerts")
+async def get_handover_alerts(user=Depends(get_current_user)):
+    """Get human handover alerts."""
+    alerts = await db.handover_alerts.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return alerts
+
+@api_router.put("/chat/alerts/{alert_id}/resolve")
+async def resolve_alert(alert_id: str, user=Depends(get_current_user)):
+    """Mark a handover alert as resolved."""
+    result = await db.handover_alerts.update_one(
+        {"id": alert_id},
+        {"$set": {"status": "resolved", "resolved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    return {"message": "Alerta resuelta"}
+
+@api_router.post("/chat/whatsapp-reply")
+async def crm_whatsapp_reply(req: CRMWhatsAppReply, user=Depends(get_current_user)):
+    """Send a message to a lead via WhatsApp from the CRM."""
+    lead = await db.leads.find_one({"id": req.lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    phone = lead.get("whatsapp", "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Lead no tiene numero de WhatsApp")
+    
+    sent = await send_whatsapp_message(phone, req.message)
+    if not sent:
+        raise HTTPException(status_code=500, detail="Error al enviar mensaje")
+    
+    # Store in chat history
+    session_id = f"wa_{phone}"
+    now = datetime.now(timezone.utc).isoformat()
+    await db.chat_messages.insert_one({
+        "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": req.lead_id,
+        "role": "assistant", "content": req.message, "timestamp": now,
+        "source": "whatsapp", "sent_by": "crm_agent", "delivered": sent
+    })
+    await db.chat_sessions_meta.update_one(
+        {"session_id": session_id},
+        {"$set": {"last_activity": now}},
+        upsert=True
+    )
+    return {"message": "Mensaje enviado", "delivered": sent}
 
 # ========== BULK ROUTES ==========
 
@@ -1234,6 +1341,8 @@ async def bulk_download(
 
 WHATSAPP_API_URL = "https://graph.facebook.com/v22.0"
 
+HANDOVER_KEYWORDS = ["agente", "humano", "persona real", "hablar con alguien", "asesor real", "no quiero bot", "operador", "representante", "persona de verdad"]
+
 async def get_whatsapp_config():
     config = await db.whatsapp_config.find_one({"id": "main"}, {"_id": 0})
     return config or {"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios"}
@@ -1366,18 +1475,36 @@ async def whatsapp_incoming(request: Request):
                     text = msg.get("text", {}).get("body", "")
                     if phone and text:
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
+                        start_time = datetime.now(timezone.utc)
                         reply, lead_id = await process_whatsapp_incoming(phone, text)
-                        await send_whatsapp_message(phone, reply)
+                        response_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                        sent = await send_whatsapp_message(phone, reply)
                         # Store in chat history
                         session_id = f"wa_{phone}"
                         now = datetime.now(timezone.utc).isoformat()
-                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": text, "timestamp": now})
-                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now})
+                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": text, "timestamp": now, "source": "whatsapp"})
+                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent})
                         await db.chat_sessions_meta.update_one(
                             {"session_id": session_id},
-                            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": "", "source": "whatsapp"}},
+                            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": "", "source": "whatsapp", "last_activity": now}},
                             upsert=True
                         )
+                        # Detect human handover request
+                        msg_lower = text.strip().lower()
+                        if any(kw in msg_lower for kw in HANDOVER_KEYWORDS):
+                            existing_alert = await db.handover_alerts.find_one({"lead_id": lead_id, "status": "pending"}, {"_id": 0})
+                            if not existing_alert:
+                                lead_doc = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "whatsapp": 1})
+                                await db.handover_alerts.insert_one({
+                                    "id": str(uuid.uuid4()),
+                                    "lead_id": lead_id,
+                                    "lead_name": lead_doc.get("name", "") if lead_doc else "",
+                                    "lead_phone": phone,
+                                    "message": text,
+                                    "status": "pending",
+                                    "created_at": now
+                                })
+                                logger.info(f"Human handover alert created for {phone}")
     return {"status": "ok"}
 
 # Legacy internal webhook (for Chat IA testing)
