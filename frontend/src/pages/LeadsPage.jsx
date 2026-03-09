@@ -163,8 +163,8 @@ export default function LeadsPage() {
       {loading ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground">Cargando leads...</div>
       ) : (
-        <div className="flex-1 overflow-x-auto pb-4">
-          <div className="flex gap-3 min-w-max h-full">
+        <div className="overflow-x-scroll kanban-board" style={{ height: "calc(100vh - 280px)" }}>
+          <div className="flex gap-3 min-w-max h-full pb-2">
             {STAGE_KEYS.map(stageKey => {
               const cfg = STAGE_CONFIG[stageKey];
               const stageLeads = leadsByStage[stageKey];
@@ -172,7 +172,7 @@ export default function LeadsPage() {
               return (
                 <div
                   key={stageKey}
-                  className={`flex flex-col w-[240px] flex-shrink-0 rounded-xl transition-all ${isOver ? "ring-2 ring-primary/50" : ""}`}
+                  className={`flex flex-col w-[260px] flex-shrink-0 rounded-xl transition-all ${isOver ? "ring-2 ring-primary/50" : ""}`}
                   onDragOver={e => onDragOver(e, stageKey)}
                   onDragLeave={onDragLeave}
                   onDrop={e => onDrop(e, stageKey)}
@@ -183,7 +183,7 @@ export default function LeadsPage() {
                     <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/70 text-foreground">{stageLeads.length}</span>
                   </div>
 
-                  <div className="flex-1 space-y-2 overflow-y-auto max-h-[calc(100vh-310px)] pr-1 pb-1 kanban-scroll">
+                  <div className="flex-1 space-y-2 overflow-y-auto pr-1 pb-1 kanban-scroll" style={{ maxHeight: "calc(100vh - 350px)" }}>
                     {stageLeads.length === 0 && (
                       <div className="text-center py-8 text-xs text-muted-foreground">Sin leads</div>
                     )}

@@ -134,3 +134,39 @@ code {
 .kanban-scroll::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
 }
+
+.kanban-board {
+  overflow-x: scroll !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #a1a1aa #e4e4e7;
+}
+.kanban-board::-webkit-scrollbar {
+  height: 14px;
+  display: block !important;
+}
+.kanban-board::-webkit-scrollbar-track {
+  background: #e4e4e7;
+  border-radius: 8px;
+}
+.kanban-board::-webkit-scrollbar-thumb {
+  background: #a1a1aa;
+  border-radius: 8px;
+  border: 3px solid #e4e4e7;
+}
+.kanban-board::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+.dark .kanban-board {
+  scrollbar-color: #52525b #27272a;
+}
+.dark .kanban-board::-webkit-scrollbar-track {
+  background: #27272a;
+}
+.dark .kanban-board::-webkit-scrollbar-thumb {
+  background: #52525b;
+  border-color: #27272a;
+}
+.dark .kanban-board::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
