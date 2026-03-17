@@ -1,84 +1,107 @@
-# Fakulti CRM - Product Requirements Document
+# Fakulti CRM + WhatsApp Bot - Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive CRM and sales funnel automation platform for "Fakulti" brand (supplements company in Ecuador). The system manages leads, automates sales funnel stages, integrates gamification, handles quotations, and manages post-sale loyalty sequences.
+Build a comprehensive CRM and sales funnel automation platform for the brand "Fakulti" (Ecuador-based). The system manages leads, conversations, campaigns, promotions, and human advisors, with specialized bots per product, intelligent handover to human agents, channel segmentation, automations, AI analysis, and campaign reminders.
 
-## Core Requirements
-- **AI Agent**: Virtual assistant using GPT-5.2 via WhatsApp for lead qualification, product education, and sales
-- **Intelligent Funnel**: Automated lead categorization (Nuevo > Interesado > En Negociacion > Cliente Nuevo > Cliente Activo > Perdido)
-- **CRM Panel**: Full admin dashboard with metrics, lead management, bulk operations
-- **Gamification**: Premium Roulette, Slot Machine, and Golden Ticket (scratch card) games
-- **Loyalty System**: Configurable post-sale messaging sequences (up to 24 messages)
-- **WhatsApp Integration**: Real WhatsApp Cloud API via Meta with GPT-5.2 powered bot
-- **Automation Panel**: Rules engine for bot behavior management
-
-## Tech Stack
-- **Frontend**: React, Tailwind CSS, Shadcn/UI, Recharts, react-beautiful-dnd
-- **Backend**: FastAPI, Motor (async MongoDB), Pydantic, httpx
+## Core Architecture
+- **Backend**: FastAPI + MongoDB (motor) + Pydantic + JWT auth
+- **Frontend**: React + Tailwind CSS + Shadcn/UI + Axios
 - **AI**: OpenAI GPT-5.2 via Emergent LLM Key
-- **Database**: MongoDB
-- **External**: WhatsApp Cloud API (Meta), Railway relay service
+- **External**: WhatsApp Cloud API (via Railway.app relay)
+- **DB**: MongoDB with collections: leads, products, games_config, game_plays, quotations, loyalty_sequences, loyalty_enrollments, automation_rules, chat_messages, chat_sessions_meta, admin_users, whatsapp_config, ai_config, handover_alerts
 
-## User Credentials
-- Admin: admin@fakulti.com / admin123
+## Key Technical Decisions
+- Phone numbers stored in Ecuador local format (0XXXXXXXXX), converted to international (593XXXXXXXXX) for WhatsApp API calls
+- Funnel stages use internal keys but display renamed labels
+- Games module in standby mode (only slot_machine active)
+- Season and channel fields added to lead schema
 
-## What's Been Implemented
+## Completed Phases
 
-### Completed Features
-1. **Dashboard** - KPI cards, funnel visualization, charts (products, traffic sources), recent leads
-2. **Lead Management** - Kanban board with 6 stage columns, drag-and-drop, lead cards with action icons
-3. **Gamification (Premium UI)** - Three games with product images:
-    - **Ruleta**: Dark premium design, LED lights ring, neon segment colors, product images in segments, FAKULTI center, glowing CTA button
-    - **Tragamonedas**: Casino-style with red marquee sign, gold rivets, real product images in reels (Bombro, Gomitas, etc.), red payline, decorative lights
-    - **Golden Ticket**: Willy Wonka style scratch card, golden gradient with shimmer animation, perforated border, coin cursor for scratching, star decorations
-4. **Light/Dark Mode** - System-wide theme toggle
-5. **WhatsApp Bot (GPT-5.2)** - FULLY WORKING with detailed Faculty brand voice prompt:
-    - Natural, human-like conversation flow
-    - Auto-extracts: nombre, apellido, ciudad, email, producto de interes
-    - Auto-classifies funnel stage
-    - Explains Bone Broth in simple terms
-    - Never makes medical claims
-    - Permanent token configured
-6. **WhatsApp Monitor** - Real-time CRM view with stats, alerts, CRM agent reply
-7. **Loyalty System** - Sequence CRUD, enrollment, auto-enrollment, metrics dashboard
-8. **Configuracion Panel** - Automation rules, WhatsApp credentials, AI settings
-9. **Custom Branding** - Fakulti title, Emprenovus footer
+### Block 1: Configuration & Normalization (Completed 2026-03-17)
+- [x] Phone number normalization for Ecuador (no +593 in internal UI)
+- [x] Stage labels renamed: Contacto inicial, Chat, En Negociación, Leads ganados, Cartera activa, Perdido
+- [x] Season/temporada filter on leads
+- [x] Channel field added to leads
+- [x] Games standby (only Tragamonedas/slot_machine active)
+- [x] Bulk Excel upload tested and working (with phone normalization, season, channel)
+- [x] Migration: existing phone numbers normalized, games deactivated
+- [x] WhatsApp number migration prepared (config-based)
 
-### Funnel Stages
-- `nuevo`, `interesado`, `en_negociacion`, `cliente_nuevo`, `cliente_activo`, `perdido`
+### Previously Completed
+- [x] Live WhatsApp Integration & Bot Intelligence (GPT-5.2)
+- [x] WhatsApp Chat Monitor with real-time stats
+- [x] Gamification UI (Roulette, Slot Machine, Scratch Card)
+- [x] Comprehensive Excel Reporting (7-sheet download)
+- [x] Spanish orthography corrections system-wide
+- [x] Full responsiveness (mobile, tablet, desktop)
+- [x] CRM Dashboard, Lead Management, Loyalty System, Automation Rules
 
-## Architecture
-```
-/app/backend/server.py     - All API routes, models, AI bot logic
-/app/frontend/src/
-  pages/
-    DashboardPage.jsx      - Dashboard
-    LeadsPage.jsx          - Kanban board
-    ChatPage.jsx           - WhatsApp Bot monitor (WhatsApp only)
-    LoyaltyPage.jsx        - Loyalty system
-    BulkPage.jsx           - Excel upload/download (UI pending)
-    GamesConfigPage.jsx    - Game configuration
-    GamePublicPage.jsx     - Premium game UIs (roulette, slot, scratch)
-    ConfigPage.jsx         - Settings
-    LoginPage.jsx          - Auth
-```
+## Upcoming Tasks (Prioritized)
 
-## WhatsApp Architecture
-- **Railway Relay**: `https://relay-production-8a3a.up.railway.app`
-- **WABA ID**: 1445540157191817 (subscribed to Fakulti Bot app)
-- **Phone Number ID**: 994356967089829
-- **Token**: Permanent system user token
-- **Flow**: WhatsApp -> Meta -> Railway -> Backend -> GPT-5.2 -> WhatsApp API
+### Block 2: Lead Sources, QR & Channels (P1)
+- [ ] Configure lead ingress by channel
+- [ ] Create QR/channel-based lead identification
+- [ ] TV QR campaign: message "Hola, vi esto en TV" → auto-register source TV/QR
+- [ ] Channel origin visible in CRM, cards, conversations
+- [ ] Support 4-5 configurable initial intents for lead classification
 
-## Pending / Future Tasks
-- **P1: Excel Bulk Upload/Download** - BulkPage.jsx
-- **P2: Fibeca QR Code Flow** - Physical store QR journey
-- **P2: Human Agent Handover** - Full pause/resume automation
-- **P3: Scheduled Loyalty Processing** - Background job
+### Block 3: Specialized Bots per Product (P1)
+- [ ] 5 product-specific bots (logically independent)
+- [ ] Product detection based on intent, channel, initial message
+- [ ] No cross-contamination of product info between bots
 
-## LIVE Integrations
-- WhatsApp Cloud API via Meta (LIVE, permanent token)
-- OpenAI GPT-5.2 via Emergent LLM Key (LIVE)
+### Block 4: Human Agent Handover (P1)
+- [ ] Handover logic: bot failure, user request, operational rules
+- [ ] 1-minute timeout alert for unresolved bot conversations
+- [ ] Respect product, assigned advisor, lead history
 
-## MOCKED Integrations
-- Loyalty message delivery (logged in DB, not actually sent via WhatsApp)
+### Block 5: Advisor Registration & Management (P1)
+- [ ] Advisor module in admin panel (name, WhatsApp, status, availability)
+- [ ] Lead/conversation assignment to advisors
+- [ ] Role-based permissions (advisor sees only their data)
+- [ ] Notification when assigned lead writes again
+
+### Block 6: Internal Alerts (P2)
+- [ ] Visual alerts with blinking/strong indicators
+- [ ] Sound on/off toggle
+- [ ] Alert routing to assigned advisor
+
+### Block 7: Lead Panel Changes (P2)
+- [ ] Filter by advisor in lead search
+- [ ] Lead cards show: channel, city, product interest, email
+
+### Block 8: WhatsApp Bot with Client Context (P2)
+- [ ] Client card visible at top of conversation (name, email, city, channel, product)
+- [ ] Advisor profile sees only assigned conversations
+
+### Block 9: Loyalty & Automations (P2)
+- [ ] Auto-follow-up 200h after loyalty message: "¿Cómo te fue con el producto?"
+- [ ] Per-advisor automation in conversations panel
+- [ ] Automations consider: advisor, stage, product, history, channel
+
+### Block 10: Promotions & Campaigns (P3)
+- [ ] "Promociones" admin tab
+- [ ] Campaign creation with targeting, images, text
+- [ ] AI-generated promotional images
+- [ ] Send to filtered lead segments
+- [ ] Quick message templates
+
+### Block 11: Bulk Upload & Batch Reminders (P3)
+- [ ] Import historical leads
+- [ ] Controlled batch sending with pause/continue
+- [ ] WhatsApp Business best practices (rate limits, quality monitoring)
+- [ ] Configurable operational limits
+
+### Block 12: Admin Dashboard by Advisor (P3)
+- [ ] Sales by advisor charts/comparisons
+- [ ] Performance summaries
+
+### Block 13: AI Conversation Analysis (P3)
+- [ ] AI reads conversations, classifies lead progress
+- [ ] Suggests next best response for human advisor
+- [ ] Low/medium/advanced classification
+
+## Credentials
+- CRM Login: admin@fakulti.com / admin123
+- WhatsApp: Managed via Configuración page in CRM
