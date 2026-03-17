@@ -118,11 +118,11 @@ export default function BulkPage() {
                 <Select value={downloadStage} onValueChange={setDownloadStage}>
                   <SelectTrigger className="bg-muted border-input text-foreground"><SelectValue placeholder="Selecciona etapa" /></SelectTrigger>
                   <SelectContent className="bg-muted border-input">
-                    <SelectItem value="nuevo">Nuevo</SelectItem>
-                    <SelectItem value="interesado">Interesado</SelectItem>
+                    <SelectItem value="nuevo">Contacto inicial</SelectItem>
+                    <SelectItem value="interesado">Chat</SelectItem>
                     <SelectItem value="en_negociacion">En Negociación</SelectItem>
-                    <SelectItem value="cliente_nuevo">Cliente Nuevo</SelectItem>
-                    <SelectItem value="cliente_activo">Cliente Activo</SelectItem>
+                    <SelectItem value="cliente_nuevo">Leads ganados</SelectItem>
+                    <SelectItem value="cliente_activo">Cartera activa</SelectItem>
                     <SelectItem value="perdido">Perdido</SelectItem>
                   </SelectContent>
                 </Select>

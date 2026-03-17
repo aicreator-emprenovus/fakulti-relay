@@ -6,12 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Users, DollarSign, ShoppingCart, Gamepad2, TrendingUp, UserCheck } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
+function formatPhoneEC(phone) {
+  if (!phone) return "";
+  let cleaned = phone.replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("+593")) cleaned = "0" + cleaned.slice(4);
+  else if (cleaned.startsWith("593") && cleaned.length > 9) cleaned = "0" + cleaned.slice(3);
+  return cleaned;
+}
+
 const STAGE_CONFIG = {
-  nuevo: { label: "Nuevo", color: "#3B82F6" },
-  interesado: { label: "Interesado", color: "#8B5CF6" },
+  nuevo: { label: "Contacto inicial", color: "#3B82F6" },
+  interesado: { label: "Chat", color: "#8B5CF6" },
   en_negociacion: { label: "En Negociación", color: "#F59E0B" },
-  cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
-  cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
+  cliente_nuevo: { label: "Leads ganados", color: "#10B981" },
+  cliente_activo: { label: "Cartera activa", color: "#A3E635" },
   perdido: { label: "Perdido", color: "#64748B" },
 };
 
@@ -153,7 +161,7 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-sm text-foreground font-medium">{lead.name}</p>
-                      <p className="text-xs text-muted-foreground">{lead.whatsapp}</p>
+                      <p className="text-xs text-muted-foreground">{formatPhoneEC(lead.whatsapp)}</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="text-xs" style={{ borderColor: STAGE_CONFIG[lead.funnel_stage]?.color, color: STAGE_CONFIG[lead.funnel_stage]?.color }}>

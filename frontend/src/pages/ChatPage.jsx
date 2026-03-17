@@ -14,11 +14,11 @@ import {
 } from "lucide-react";
 
 const STAGE_CONFIG = {
-  nuevo: { label: "Prospecto", color: "#3B82F6" },
-  interesado: { label: "Interesado", color: "#8B5CF6" },
+  nuevo: { label: "Contacto inicial", color: "#3B82F6" },
+  interesado: { label: "Chat", color: "#8B5CF6" },
   en_negociacion: { label: "En Negociación", color: "#F59E0B" },
-  cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981" },
-  cliente_activo: { label: "Cliente Activo", color: "#A3E635" },
+  cliente_nuevo: { label: "Leads ganados", color: "#10B981" },
+  cliente_activo: { label: "Cartera activa", color: "#A3E635" },
   perdido: { label: "Perdido", color: "#64748B" },
 };
 

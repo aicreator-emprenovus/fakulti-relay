@@ -14,15 +14,23 @@ import { toast } from "sonner";
 import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical } from "lucide-react";
 
 const STAGE_CONFIG = {
-  nuevo: { label: "Prospecto", color: "#3B82F6", bg: "#DBEAFE" },
-  interesado: { label: "Interesado", color: "#8B5CF6", bg: "#EDE9FE" },
+  nuevo: { label: "Contacto inicial", color: "#3B82F6", bg: "#DBEAFE" },
+  interesado: { label: "Chat", color: "#8B5CF6", bg: "#EDE9FE" },
   en_negociacion: { label: "En Negociación", color: "#F59E0B", bg: "#FEF3C7" },
-  cliente_nuevo: { label: "Cliente Nuevo", color: "#10B981", bg: "#D1FAE5" },
-  cliente_activo: { label: "Cliente Activo", color: "#059669", bg: "#A7F3D0" },
+  cliente_nuevo: { label: "Leads ganados", color: "#10B981", bg: "#D1FAE5" },
+  cliente_activo: { label: "Cartera activa", color: "#059669", bg: "#A7F3D0" },
   perdido: { label: "Perdido", color: "#EF4444", bg: "#FEE2E2" },
 };
 const STAGE_KEYS = Object.keys(STAGE_CONFIG);
 const SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro", "WhatsApp", "Chat IA", "Carga masiva"];
+
+function formatPhoneEC(phone) {
+  if (!phone) return "";
+  let cleaned = phone.replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("+593")) cleaned = "0" + cleaned.slice(4);
+  else if (cleaned.startsWith("593") && cleaned.length > 9) cleaned = "0" + cleaned.slice(3);
+  return cleaned;
+}
 
 export default function LeadsPage() {
   const navigate = useNavigate();
@@ -30,6 +38,7 @@ export default function LeadsPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [seasonFilter, setSeasonFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
@@ -44,12 +53,13 @@ export default function LeadsPage() {
       const params = { limit: 500 };
       if (search) params.search = search;
       if (sourceFilter) params.source = sourceFilter;
+      if (seasonFilter) params.season = seasonFilter;
       const res = await axios.get(`${API}/leads`, { params });
       setLeads(res.data.leads);
       setTotal(res.data.total);
     } catch { toast.error("Error al cargar leads"); }
     setLoading(false);
-  }, [search, sourceFilter]);
+  }, [search, sourceFilter, seasonFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -158,6 +168,15 @@ export default function LeadsPage() {
             {SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={seasonFilter || "all"} onValueChange={v => setSeasonFilter(v === "all" ? "" : v)}>
+          <SelectTrigger data-testid="season-filter" className="w-36 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Temporada" /></SelectTrigger>
+          <SelectContent className="bg-card border-input">
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="verano">Verano</SelectItem>
+            <SelectItem value="invierno">Invierno</SelectItem>
+            <SelectItem value="todo_el_año">Todo el año</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
@@ -216,7 +235,7 @@ export default function LeadsPage() {
           <DialogHeader><DialogTitle>{editLead ? "Editar Lead" : "Nuevo Lead"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-muted-foreground text-xs">Nombre *</Label><Input data-testid="lead-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bg-muted border-input text-foreground" /></div>
-            <div><Label className="text-muted-foreground text-xs">WhatsApp *</Label><Input data-testid="lead-whatsapp" value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} className="bg-muted border-input text-foreground" placeholder="+593..." /></div>
+            <div><Label className="text-muted-foreground text-xs">WhatsApp *</Label><Input data-testid="lead-whatsapp" value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} className="bg-muted border-input text-foreground" placeholder="0991234567" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-muted-foreground text-xs">Ciudad</Label><Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className="bg-muted border-input text-foreground" /></div>
               <div><Label className="text-muted-foreground text-xs">Email</Label><Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="bg-muted border-input text-foreground" /></div>
@@ -251,11 +270,13 @@ export default function LeadsPage() {
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-muted-foreground">WhatsApp:</span><p className="text-foreground">{showDetail.whatsapp}</p></div>
+                  <div><span className="text-muted-foreground">WhatsApp:</span><p className="text-foreground">{formatPhoneEC(showDetail.whatsapp)}</p></div>
                   <div><span className="text-muted-foreground">Ciudad:</span><p className="text-foreground">{showDetail.city || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Email:</span><p className="text-foreground">{showDetail.email || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Fuente:</span><p className="text-foreground">{showDetail.source}</p></div>
+                  <div><span className="text-muted-foreground">Canal:</span><p className="text-foreground">{showDetail.channel || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Producto Interes:</span><p className="text-foreground">{showDetail.product_interest || "N/A"}</p></div>
+                  <div><span className="text-muted-foreground">Temporada:</span><p className="text-foreground">{showDetail.season || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Juego Usado:</span><p className="text-foreground">{showDetail.game_used || "Ninguno"}</p></div>
                   <div><span className="text-muted-foreground">Premio:</span><p className="text-foreground">{showDetail.prize_obtained || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Cupon:</span><p className="text-foreground">{showDetail.coupon_used || "N/A"}</p></div>
@@ -305,7 +326,7 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
         </Badge>
       </div>
 
-      <p className="text-xs text-muted-foreground mb-1">{lead.whatsapp || "Sin teléfono"}</p>
+      <p className="text-xs text-muted-foreground mb-1">{formatPhoneEC(lead.whatsapp) || "Sin teléfono"}</p>
 
       {(lead.source || lead.city || lead.product_interest) && (
         <div className="text-[11px] text-muted-foreground/70 mb-1.5 space-y-0">

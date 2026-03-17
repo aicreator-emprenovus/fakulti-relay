@@ -37,7 +37,36 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 FUNNEL_STAGES = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "cliente_activo", "perdido"]
+STAGE_LABELS = {
+    "nuevo": "Contacto inicial",
+    "interesado": "Chat",
+    "en_negociacion": "En Negociación",
+    "cliente_nuevo": "Leads ganados",
+    "cliente_activo": "Cartera activa",
+    "perdido": "Perdido",
+}
 SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro"]
+SEASONS = ["verano", "invierno", "todo_el_año"]
+
+def normalize_phone_ec(phone: str) -> str:
+    """Normalize Ecuador phone to local format without +593."""
+    phone = re.sub(r'[\s\-\(\)]', '', phone.strip())
+    if phone.startswith('+593'):
+        phone = '0' + phone[4:]
+    elif phone.startswith('593') and len(phone) > 9:
+        phone = '0' + phone[3:]
+    return phone
+
+def phone_to_international(phone: str) -> str:
+    """Convert local Ecuador phone to international format for WhatsApp API (593XXXXXXXXX)."""
+    phone = re.sub(r'[\s\-\(\)]', '', phone.strip())
+    if phone.startswith('+'):
+        return phone[1:]
+    if phone.startswith('0'):
+        return '593' + phone[1:]
+    if phone.startswith('593'):
+        return phone
+    return '593' + phone
 
 # ========== PYDANTIC MODELS ==========
 
@@ -59,6 +88,8 @@ class LeadCreate(BaseModel):
     source: Optional[str] = "web"
     notes: Optional[str] = ""
     funnel_stage: Optional[str] = "nuevo"
+    season: Optional[str] = ""
+    channel: Optional[str] = ""
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -71,6 +102,8 @@ class LeadUpdate(BaseModel):
     funnel_stage: Optional[str] = None
     status: Optional[str] = None
     recompra_date: Optional[str] = None
+    season: Optional[str] = None
+    channel: Optional[str] = None
 
 class ProductCreate(BaseModel):
     name: str
@@ -251,6 +284,8 @@ async def get_leads(
     search: Optional[str] = None,
     source: Optional[str] = None,
     status: Optional[str] = None,
+    season: Optional[str] = None,
+    channel: Optional[str] = None,
     page: int = 1,
     limit: int = 50,
     user=Depends(get_current_user)
@@ -262,6 +297,10 @@ async def get_leads(
         query["source"] = source
     if status:
         query["status"] = status
+    if season:
+        query["season"] = season
+    if channel:
+        query["channel"] = channel
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
@@ -284,9 +323,11 @@ async def get_lead(lead_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/leads")
 async def create_lead(req: LeadCreate, user=Depends(get_current_user)):
+    lead_data = req.model_dump()
+    lead_data["whatsapp"] = normalize_phone_ec(lead_data["whatsapp"])
     lead_doc = {
         "id": str(uuid.uuid4()),
-        **req.model_dump(),
+        **lead_data,
         "status": "activo",
         "game_used": None,
         "prize_obtained": None,
@@ -1228,6 +1269,10 @@ async def bulk_upload(file: UploadFile = File(...), user=Depends(get_current_use
             header_map["email"] = i
         elif "fuente" in h_lower or "source" in h_lower:
             header_map["source"] = i
+        elif "temporada" in h_lower or "season" in h_lower:
+            header_map["season"] = i
+        elif "canal" in h_lower or "channel" in h_lower:
+            header_map["channel"] = i
     
     created = 0
     updated = 0
@@ -1236,14 +1281,17 @@ async def bulk_upload(file: UploadFile = File(...), user=Depends(get_current_use
     for row in ws.iter_rows(min_row=2, values_only=True):
         try:
             name = str(row[header_map.get("name", 0)] or "").strip()
-            whatsapp = str(row[header_map.get("whatsapp", 1)] or "").strip()
-            if not name or not whatsapp:
+            whatsapp_raw = str(row[header_map.get("whatsapp", 1)] or "").strip()
+            if not name or not whatsapp_raw:
                 continue
+            whatsapp = normalize_phone_ec(whatsapp_raw)
             
             city = str(row[header_map.get("city", 2)] or "").strip() if "city" in header_map else ""
             product = str(row[header_map.get("product_interest", 3)] or "").strip() if "product_interest" in header_map else ""
             email = str(row[header_map.get("email", -1)] or "").strip() if "email" in header_map else ""
             source_val = str(row[header_map.get("source", -1)] or "").strip() if "source" in header_map else "Carga masiva"
+            season_val = str(row[header_map.get("season", -1)] or "").strip() if "season" in header_map else ""
+            channel_val = str(row[header_map.get("channel", -1)] or "").strip() if "channel" in header_map else ""
             
             has_purchase = "purchase_date" in header_map and row[header_map["purchase_date"]]
             stage = "cliente_nuevo" if has_purchase else "nuevo"
@@ -1265,6 +1313,8 @@ async def bulk_upload(file: UploadFile = File(...), user=Depends(get_current_use
                     "email": email,
                     "product_interest": product,
                     "source": source_val,
+                    "season": season_val,
+                    "channel": channel_val,
                     "game_used": None,
                     "prize_obtained": None,
                     "funnel_stage": stage,
@@ -1352,7 +1402,7 @@ async def bulk_download(
     ws1 = wb.active
     ws1.title = "Base de Datos"
     
-    stage_labels = {"nuevo": "Prospecto", "interesado": "Interesado", "en_negociacion": "En Negociación", "cliente_nuevo": "Cliente Nuevo", "cliente_activo": "Cliente Activo", "perdido": "Perdido"}
+    stage_labels = {"nuevo": "Contacto inicial", "interesado": "Chat", "en_negociacion": "En Negociación", "cliente_nuevo": "Leads ganados", "cliente_activo": "Cartera activa", "perdido": "Perdido"}
     
     headers = ["#", "Nombre", "WhatsApp", "Email", "Ciudad", "Producto de Interés", "Fuente", "Etapa del Embudo", "Estado", "Juego Usado", "Premio Obtenido", "Cupón", "Última Interacción", "Fecha de Registro"]
     ws1.append(headers)
@@ -1538,9 +1588,10 @@ async def send_whatsapp_message(to_phone: str, text: str):
     if not config.get("phone_number_id") or not config.get("access_token"):
         logger.warning("WhatsApp not configured - message not sent")
         return False
+    international_phone = phone_to_international(to_phone)
     url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
     headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
-    payload = {"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}}
+    payload = {"messaging_product": "whatsapp", "to": international_phone, "type": "text", "text": {"body": text}}
     try:
         async with httpx.AsyncClient() as client_http:
             resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
@@ -1568,6 +1619,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         new_lead = {
             "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
             "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
+            "season": "", "channel": "WhatsApp",
             "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
             "purchase_history": [], "coupon_used": None, "recompra_date": None,
             "notes": "Registrado vía WhatsApp",
@@ -1790,7 +1842,7 @@ async def whatsapp_incoming(request: Request):
             messages = value.get("messages", [])
             for msg in messages:
                 if msg.get("type") == "text":
-                    phone = msg.get("from", "")
+                    phone = normalize_phone_ec(msg.get("from", ""))
                     text = msg.get("text", {}).get("body", "")
                     if phone and text:
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
@@ -2089,12 +2141,12 @@ async def startup():
     leads_count = await db.leads.count_documents({})
     if leads_count == 0:
         sample_leads = [
-            {"id": str(uuid.uuid4()), "name": "Maria Garcia", "whatsapp": "+593991234567", "city": "Quito", "email": "maria@email.com", "product_interest": "Bombro", "source": "TV", "funnel_stage": "cliente_activo", "status": "activo", "game_used": "roulette", "prize_obtained": "10% Descuento", "purchase_history": [{"id": str(uuid.uuid4()), "product_name": "Bombro - Bone Broth Hidrolizado", "quantity": 2, "price": 111.90, "date": "2025-12-15"}], "coupon_used": "RULETA10", "recompra_date": "2026-01-15", "notes": "Cliente frecuente"},
-            {"id": str(uuid.uuid4()), "name": "Carlos Lopez", "whatsapp": "+593987654321", "city": "Guayaquil", "email": "carlos@email.com", "product_interest": "Colageno CBD", "source": "QR", "funnel_stage": "interesado", "status": "activo", "game_used": "mystery_box", "prize_obtained": "Envio Gratis", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Interesado en CBD"},
-            {"id": str(uuid.uuid4()), "name": "Ana Martinez", "whatsapp": "+593976543210", "city": "Cuenca", "email": "ana@email.com", "product_interest": "Gomitas Melatonina", "source": "Fibeca", "funnel_stage": "cliente_nuevo", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [{"id": str(uuid.uuid4()), "product_name": "Gomitas Melatonina", "quantity": 1, "price": 13.25, "date": "2026-01-20"}], "coupon_used": None, "recompra_date": "2026-02-20", "notes": "Compro en Fibeca"},
-            {"id": str(uuid.uuid4()), "name": "Pedro Sanchez", "whatsapp": "+593965432109", "city": "Quito", "email": "", "product_interest": "Pitch Up", "source": "pauta_digital", "funnel_stage": "en_negociacion", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Pidio cotizacion"},
-            {"id": str(uuid.uuid4()), "name": "Laura Fernandez", "whatsapp": "+593954321098", "city": "Guayaquil", "email": "laura@email.com", "product_interest": "Bombro", "source": "TV", "funnel_stage": "nuevo", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": ""},
-            {"id": str(uuid.uuid4()), "name": "Roberto Diaz", "whatsapp": "+593943210987", "city": "Ambato", "email": "", "product_interest": "", "source": "web", "funnel_stage": "perdido", "status": "inactivo", "game_used": "slot_machine", "prize_obtained": "5% Descuento", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Sin respuesta despues de 3 recordatorios"},
+            {"id": str(uuid.uuid4()), "name": "Maria Garcia", "whatsapp": "0991234567", "city": "Quito", "email": "maria@email.com", "product_interest": "Bombro", "source": "TV", "season": "", "channel": "TV", "funnel_stage": "cliente_activo", "status": "activo", "game_used": "roulette", "prize_obtained": "10% Descuento", "purchase_history": [{"id": str(uuid.uuid4()), "product_name": "Bombro - Bone Broth Hidrolizado", "quantity": 2, "price": 111.90, "date": "2025-12-15"}], "coupon_used": "RULETA10", "recompra_date": "2026-01-15", "notes": "Cliente frecuente"},
+            {"id": str(uuid.uuid4()), "name": "Carlos Lopez", "whatsapp": "0987654321", "city": "Guayaquil", "email": "carlos@email.com", "product_interest": "Colageno CBD", "source": "QR", "season": "", "channel": "QR", "funnel_stage": "interesado", "status": "activo", "game_used": "mystery_box", "prize_obtained": "Envio Gratis", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Interesado en CBD"},
+            {"id": str(uuid.uuid4()), "name": "Ana Martinez", "whatsapp": "0976543210", "city": "Cuenca", "email": "ana@email.com", "product_interest": "Gomitas Melatonina", "source": "Fibeca", "season": "", "channel": "Fibeca", "funnel_stage": "cliente_nuevo", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [{"id": str(uuid.uuid4()), "product_name": "Gomitas Melatonina", "quantity": 1, "price": 13.25, "date": "2026-01-20"}], "coupon_used": None, "recompra_date": "2026-02-20", "notes": "Compro en Fibeca"},
+            {"id": str(uuid.uuid4()), "name": "Pedro Sanchez", "whatsapp": "0965432109", "city": "Quito", "email": "", "product_interest": "Pitch Up", "source": "pauta_digital", "season": "", "channel": "pauta_digital", "funnel_stage": "en_negociacion", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Pidio cotizacion"},
+            {"id": str(uuid.uuid4()), "name": "Laura Fernandez", "whatsapp": "0954321098", "city": "Guayaquil", "email": "laura@email.com", "product_interest": "Bombro", "source": "TV", "season": "", "channel": "TV", "funnel_stage": "nuevo", "status": "activo", "game_used": None, "prize_obtained": None, "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": ""},
+            {"id": str(uuid.uuid4()), "name": "Roberto Diaz", "whatsapp": "0943210987", "city": "Ambato", "email": "", "product_interest": "", "source": "web", "season": "", "channel": "web", "funnel_stage": "perdido", "status": "inactivo", "game_used": "slot_machine", "prize_obtained": "5% Descuento", "purchase_history": [], "coupon_used": None, "recompra_date": None, "notes": "Sin respuesta despues de 3 recordatorios"},
         ]
         for lead in sample_leads:
             lead["last_interaction"] = datetime.now(timezone.utc).isoformat()
@@ -2138,6 +2190,22 @@ async def startup():
     migrated_frio = await db.leads.update_many({"funnel_stage": "frio"}, {"$set": {"funnel_stage": "perdido"}})
     if migrated_caliente.modified_count or migrated_frio.modified_count:
         logger.info(f"Migrated stages: caliente->en_negociacion ({migrated_caliente.modified_count}), frio->perdido ({migrated_frio.modified_count})")
+    
+    # Normalize existing phone numbers (remove +593 prefix)
+    leads_with_plus = await db.leads.find({"whatsapp": {"$regex": "^\\+593"}}, {"_id": 0, "id": 1, "whatsapp": 1}).to_list(10000)
+    if leads_with_plus:
+        for lead in leads_with_plus:
+            normalized = normalize_phone_ec(lead["whatsapp"])
+            await db.leads.update_one({"id": lead["id"]}, {"$set": {"whatsapp": normalized}})
+        logger.info(f"Normalized {len(leads_with_plus)} phone numbers (removed +593)")
+    
+    # Ensure season and channel fields exist on all leads
+    await db.leads.update_many({"season": {"$exists": False}}, {"$set": {"season": ""}})
+    await db.leads.update_many({"channel": {"$exists": False}}, {"$set": {"channel": ""}})
+    
+    # Deactivate games except slot machine (standby mode)
+    await db.games_config.update_many({"game_type": {"$in": ["roulette", "scratch_card"]}}, {"$set": {"active": False}})
+    logger.info("Games standby: only slot_machine active")
     
     logger.info("Faculty CRM Backend ready")
 

@@ -5,7 +5,7 @@ import json
 import time
 
 class FacultyCRMAPITester:
-    def __init__(self, base_url="https://lead-automation-15.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://bulk-upload-test-1.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
         self.tests_run = 0
