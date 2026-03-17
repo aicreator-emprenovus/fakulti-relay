@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical } from "lucide-react";
+import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical, UserCheck } from "lucide-react";
+import { useAuth } from "@/App";
 
 const STAGE_CONFIG = {
   nuevo: { label: "Contacto inicial", color: "#3B82F6", bg: "#DBEAFE" },
@@ -33,12 +34,16 @@ function formatPhoneEC(phone) {
 }
 
 export default function LeadsPage() {
+  const { user } = useAuth();
+  const userRole = user?.role || "admin";
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [seasonFilter, setSeasonFilter] = useState("");
+  const [advisorFilter, setAdvisorFilter] = useState("");
+  const [advisors, setAdvisors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
@@ -54,14 +59,19 @@ export default function LeadsPage() {
       if (search) params.search = search;
       if (sourceFilter) params.source = sourceFilter;
       if (seasonFilter) params.season = seasonFilter;
+      if (advisorFilter) params.advisor = advisorFilter;
       const res = await axios.get(`${API}/leads`, { params });
       setLeads(res.data.leads);
       setTotal(res.data.total);
     } catch { toast.error("Error al cargar leads"); }
     setLoading(false);
-  }, [search, sourceFilter, seasonFilter]);
+  }, [search, sourceFilter, seasonFilter, advisorFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
+
+  useEffect(() => {
+    axios.get(`${API}/advisors`).then(res => setAdvisors(res.data)).catch(() => {});
+  }, []);
 
   const handleSave = async () => {
     try {
@@ -177,6 +187,15 @@ export default function LeadsPage() {
             <SelectItem value="todo_el_año">Todo el año</SelectItem>
           </SelectContent>
         </Select>
+        {userRole === "admin" && advisors.length > 0 && (
+          <Select value={advisorFilter || "all"} onValueChange={v => setAdvisorFilter(v === "all" ? "" : v)}>
+            <SelectTrigger data-testid="advisor-filter" className="w-40 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Asesor" /></SelectTrigger>
+            <SelectContent className="bg-card border-input">
+              <SelectItem value="all">Todos</SelectItem>
+              {advisors.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {loading ? (
@@ -206,21 +225,25 @@ export default function LeadsPage() {
                     {stageLeads.length === 0 && (
                       <div className="text-center py-8 text-xs text-muted-foreground">Sin leads</div>
                     )}
-                    {stageLeads.map(lead => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        onView={() => setShowDetail(lead)}
-                        onEdit={() => openEdit(lead)}
-                        onDelete={() => handleDelete(lead.id)}
-                        onWhatsApp={() => openChat(lead.id)}
-                        onStageChange={(s) => handleStageChange(lead.id, s)}
-                        onDragStart={(e) => onDragStart(e, lead)}
-                        onDragEnd={onDragEnd}
-                        isDragging={draggedLead?.id === lead.id}
-                        formatDate={formatDate}
-                      />
-                    ))}
+                    {stageLeads.map(lead => {
+                      const advisorObj = advisors.find(a => a.id === lead.assigned_advisor);
+                      return (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          onView={() => setShowDetail(lead)}
+                          onEdit={() => openEdit(lead)}
+                          onDelete={() => handleDelete(lead.id)}
+                          onWhatsApp={() => openChat(lead.id)}
+                          onStageChange={(s) => handleStageChange(lead.id, s)}
+                          onDragStart={(e) => onDragStart(e, lead)}
+                          onDragEnd={onDragEnd}
+                          isDragging={draggedLead?.id === lead.id}
+                          formatDate={formatDate}
+                          advisorName={advisorObj?.name}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -289,6 +312,32 @@ export default function LeadsPage() {
                   <div><span className="text-muted-foreground">Premio:</span><p className="text-foreground">{showDetail.prize_obtained || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Cupon:</span><p className="text-foreground">{showDetail.coupon_used || "N/A"}</p></div>
                 </div>
+                {/* Advisor Assignment */}
+                {userRole === "admin" && (
+                  <div className="border-t border-border pt-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <UserCheck size={14} className="text-amber-500" />
+                      <span className="text-sm font-semibold text-foreground">Asesor Asignado</span>
+                    </div>
+                    <Select
+                      value={showDetail.assigned_advisor || "none"}
+                      onValueChange={async (v) => {
+                        try {
+                          await axios.put(`${API}/leads/${showDetail.id}/assign`, { advisor_id: v === "none" ? "" : v });
+                          toast.success("Asesor asignado");
+                          setShowDetail(prev => ({ ...prev, assigned_advisor: v === "none" ? "" : v }));
+                          fetchLeads();
+                        } catch { toast.error("Error al asignar"); }
+                      }}
+                    >
+                      <SelectTrigger data-testid="assign-advisor" className="bg-muted border-input"><SelectValue placeholder="Sin asesor" /></SelectTrigger>
+                      <SelectContent className="bg-card border-input">
+                        <SelectItem value="none">Sin asesor</SelectItem>
+                        {advisors.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.specialization || "General"})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {showDetail.purchase_history?.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-muted-foreground mb-2">Historial de Compras</h4>
@@ -310,7 +359,7 @@ export default function LeadsPage() {
   );
 }
 
-function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, onDragStart, onDragEnd, isDragging, formatDate }) {
+function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, onDragStart, onDragEnd, isDragging, formatDate, advisorName }) {
   const cfg = STAGE_CONFIG[lead.funnel_stage] || STAGE_CONFIG.nuevo;
 
   return (
@@ -336,12 +385,13 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
 
       <p className="text-xs text-muted-foreground mb-1">{formatPhoneEC(lead.whatsapp) || "Sin teléfono"}</p>
 
-      {(lead.channel || lead.source || lead.city || lead.product_interest || lead.email) && (
+      {(lead.channel || lead.source || lead.city || lead.product_interest || advisorName) && (
         <div className="flex flex-wrap gap-1 mb-1.5">
           {lead.channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/15 text-emerald-500">{lead.channel}</span>}
           {lead.source && lead.source !== lead.channel && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-500">{lead.source}</span>}
           {lead.city && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/15 text-violet-400">{lead.city}</span>}
           {lead.product_interest && <span className="text-[10px] px-1.5 py-0 rounded bg-amber-500/15 text-amber-500">{lead.product_interest}</span>}
+          {advisorName && <span data-testid={`advisor-badge-${lead.id}`} className="text-[10px] px-1.5 py-0 rounded bg-orange-500/15 text-orange-500">{advisorName}</span>}
         </div>
       )}
 

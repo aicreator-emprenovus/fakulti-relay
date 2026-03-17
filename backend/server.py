@@ -104,6 +104,15 @@ class LeadUpdate(BaseModel):
     recompra_date: Optional[str] = None
     season: Optional[str] = None
     channel: Optional[str] = None
+    assigned_advisor: Optional[str] = None
+
+class AdvisorCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    whatsapp: Optional[str] = ""
+    status: Optional[str] = "disponible"
+    specialization: Optional[str] = ""
 
 class ProductCreate(BaseModel):
     name: str
@@ -224,7 +233,7 @@ async def login(req: LoginRequest):
     if not user or not pwd_context.verify(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     token = create_token(user["id"], user["email"])
-    return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}}
+    return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin")}}
 
 @api_router.post("/auth/register")
 async def register(req: RegisterRequest):
@@ -241,11 +250,11 @@ async def register(req: RegisterRequest):
     }
     await db.admin_users.insert_one(user_doc)
     token = create_token(user_doc["id"], user_doc["email"])
-    return {"token": token, "user": {"id": user_doc["id"], "email": user_doc["email"], "name": user_doc["name"]}}
+    return {"token": token, "user": {"id": user_doc["id"], "email": user_doc["email"], "name": user_doc["name"], "role": "admin"}}
 
 @api_router.get("/auth/me")
 async def get_me(user=Depends(get_current_user)):
-    return {"id": user["id"], "email": user["email"], "name": user["name"]}
+    return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin")}
 
 # ========== DASHBOARD ROUTES ==========
 
@@ -305,11 +314,18 @@ async def get_leads(
     status: Optional[str] = None,
     season: Optional[str] = None,
     channel: Optional[str] = None,
+    advisor: Optional[str] = None,
     page: int = 1,
     limit: int = 50,
     user=Depends(get_current_user)
 ):
     query = {}
+    # Role-based filtering: advisors only see their assigned leads
+    user_role = user.get("role", "admin")
+    if user_role == "advisor":
+        query["assigned_advisor"] = user["id"]
+    elif advisor:
+        query["assigned_advisor"] = advisor
     if stage:
         query["funnel_stage"] = stage
     if source:
@@ -338,6 +354,9 @@ async def get_lead(lead_id: str, user=Depends(get_current_user)):
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead no encontrado")
+    if lead.get("assigned_advisor"):
+        advisor = await db.admin_users.find_one({"id": lead["assigned_advisor"], "role": "advisor"}, {"_id": 0, "name": 1})
+        lead["_advisor_name"] = advisor["name"] if advisor else ""
     return lead
 
 @api_router.post("/leads")
@@ -437,6 +456,121 @@ async def update_lead_stage(lead_id: str, stage: str = Query(...)):
         raise HTTPException(status_code=400, detail="Etapa invalida")
     await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Etapa actualizada"}
+
+# ========== ADVISOR ROUTES ==========
+
+@api_router.get("/advisors")
+async def get_advisors(user=Depends(get_current_user)):
+    """Get all advisors. Admin only."""
+    advisors = await db.admin_users.find({"role": "advisor"}, {"_id": 0, "password_hash": 0}).to_list(100)
+    # Add assigned leads count
+    for a in advisors:
+        a["leads_count"] = await db.leads.count_documents({"assigned_advisor": a["id"]})
+        a["active_chats"] = await db.leads.count_documents({"assigned_advisor": a["id"], "bot_paused": True})
+    return advisors
+
+@api_router.post("/advisors")
+async def create_advisor(req: AdvisorCreate, user=Depends(get_current_user)):
+    """Create a new advisor. Admin only."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores pueden crear asesores")
+    existing = await db.admin_users.find_one({"email": req.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email ya registrado")
+    advisor_doc = {
+        "id": str(uuid.uuid4()),
+        "email": req.email,
+        "password_hash": pwd_context.hash(req.password),
+        "name": req.name,
+        "whatsapp": normalize_phone_ec(req.whatsapp) if req.whatsapp else "",
+        "role": "advisor",
+        "status": req.status or "disponible",
+        "specialization": req.specialization or "",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.admin_users.insert_one(advisor_doc)
+    advisor_doc.pop("_id", None)
+    advisor_doc.pop("password_hash", None)
+    return advisor_doc
+
+@api_router.put("/advisors/{advisor_id}")
+async def update_advisor(advisor_id: str, user=Depends(get_current_user)):
+    """Update advisor. Admin only."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    # Read JSON body manually for flexibility
+    from starlette.requests import Request
+    return {"message": "Use the specific update endpoint"}
+
+@api_router.put("/advisors/{advisor_id}/status")
+async def update_advisor_status(advisor_id: str, body: dict, user=Depends(get_current_user)):
+    """Update advisor status/info. Admin only."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    update = {}
+    if "status" in body:
+        update["status"] = body["status"]
+    if "name" in body:
+        update["name"] = body["name"]
+    if "whatsapp" in body:
+        update["whatsapp"] = normalize_phone_ec(body["whatsapp"]) if body["whatsapp"] else ""
+    if "specialization" in body:
+        update["specialization"] = body["specialization"]
+    if "password" in body and body["password"]:
+        update["password_hash"] = pwd_context.hash(body["password"])
+    if not update:
+        raise HTTPException(status_code=400, detail="Sin campos para actualizar")
+    await db.admin_users.update_one({"id": advisor_id, "role": "advisor"}, {"$set": update})
+    advisor = await db.admin_users.find_one({"id": advisor_id}, {"_id": 0, "password_hash": 0})
+    return advisor
+
+@api_router.delete("/advisors/{advisor_id}")
+async def delete_advisor(advisor_id: str, user=Depends(get_current_user)):
+    """Delete advisor. Admin only."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    # Unassign all leads from this advisor
+    await db.leads.update_many({"assigned_advisor": advisor_id}, {"$set": {"assigned_advisor": ""}})
+    await db.admin_users.delete_one({"id": advisor_id, "role": "advisor"})
+    return {"message": "Asesor eliminado y leads desasignados"}
+
+@api_router.put("/leads/{lead_id}/assign")
+async def assign_lead_to_advisor(lead_id: str, body: dict, user=Depends(get_current_user)):
+    """Assign a lead to an advisor."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores pueden asignar leads")
+    advisor_id = body.get("advisor_id", "")
+    if advisor_id:
+        advisor = await db.admin_users.find_one({"id": advisor_id, "role": "advisor"}, {"_id": 0, "name": 1})
+        if not advisor:
+            raise HTTPException(status_code=404, detail="Asesor no encontrado")
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"assigned_advisor": advisor_id, "last_interaction": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": f"Lead asignado a {advisor_id or 'sin asesor'}"}
+
+@api_router.get("/advisors/notifications")
+async def get_advisor_notifications(user=Depends(get_current_user)):
+    """Get unread notifications for the current advisor (or all for admin)."""
+    query = {"read": False}
+    if user.get("role") == "advisor":
+        query["advisor_id"] = user["id"]
+    notifications = await db.advisor_notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return notifications
+
+@api_router.put("/advisors/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: str, user=Depends(get_current_user)):
+    await db.advisor_notifications.update_one({"id": notif_id}, {"$set": {"read": True}})
+    return {"message": "Notificación leída"}
+
+@api_router.put("/advisors/notifications/read-all")
+async def mark_all_notifications_read(user=Depends(get_current_user)):
+    query = {}
+    if user.get("role") == "advisor":
+        query["advisor_id"] = user["id"]
+    await db.advisor_notifications.update_many(query, {"$set": {"read": True}})
+    return {"message": "Todas las notificaciones leídas"}
 
 # ========== PRODUCT ROUTES ==========
 
@@ -1165,30 +1299,37 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         {"$limit": 50}
     ]
     sessions = await db.chat_messages.aggregate(pipeline).to_list(50)
+    user_role = user.get("role", "admin")
+    user_id = user["id"]
     result = []
     for s in sessions:
         meta = await db.chat_sessions_meta.find_one({"session_id": s["_id"]}, {"_id": 0})
         lead_name = meta.get("lead_name", "") if meta else ""
         source = meta.get("source", "chat_ia") if meta else "chat_ia"
-        # Get lead info for WhatsApp sessions
         lead_phone = ""
         lead_channel = ""
         bot_paused = False
         has_alert = False
+        assigned_advisor = ""
         if source == "whatsapp" and s.get("lead_id"):
-            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1, "bot_paused": 1})
+            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1, "bot_paused": 1, "assigned_advisor": 1})
             if lead_doc:
                 lead_phone = lead_doc.get("whatsapp", "")
                 lead_channel = lead_doc.get("channel", "")
                 bot_paused = lead_doc.get("bot_paused", False)
+                assigned_advisor = lead_doc.get("assigned_advisor", "")
                 if not lead_name:
                     lead_name = lead_doc.get("name", "")
             alert = await db.handover_alerts.find_one({"lead_id": s["lead_id"], "status": "pending"}, {"_id": 0})
             has_alert = alert is not None
+        # Role-based filtering: advisors only see their assigned conversations
+        if user_role == "advisor" and assigned_advisor != user_id:
+            continue
         result.append({
             "session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name,
             "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"],
-            "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "bot_paused": bot_paused, "has_alert": has_alert
+            "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "bot_paused": bot_paused, "has_alert": has_alert,
+            "assigned_advisor": assigned_advisor
         })
     return result
 
@@ -1198,6 +1339,9 @@ async def get_or_create_lead_session(lead_id: str, user=Depends(get_current_user
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead no encontrado")
+    if lead.get("assigned_advisor"):
+        advisor = await db.admin_users.find_one({"id": lead["assigned_advisor"], "role": "advisor"}, {"_id": 0, "name": 1})
+        lead["_advisor_name"] = advisor["name"] if advisor else ""
     meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
     if meta:
         msgs = await db.chat_messages.find({"session_id": meta["session_id"]}, {"_id": 0}).sort("timestamp", 1).to_list(100)
@@ -2099,6 +2243,27 @@ async def whatsapp_incoming(request: Request):
                                     "created_at": datetime.now(timezone.utc).isoformat()
                                 })
                                 logger.info(f"Handover alert created for {phone} - reason: {handover_reason}")
+                        
+                        # Notify assigned advisor when their lead writes
+                        if lead_id:
+                            lead_check_advisor = await db.leads.find_one({"id": lead_id}, {"_id": 0, "assigned_advisor": 1, "name": 1})
+                            if lead_check_advisor and lead_check_advisor.get("assigned_advisor"):
+                                existing_notif = await db.advisor_notifications.find_one(
+                                    {"lead_id": lead_id, "advisor_id": lead_check_advisor["assigned_advisor"], "read": False}, {"_id": 0}
+                                )
+                                if not existing_notif:
+                                    await db.advisor_notifications.insert_one({
+                                        "id": str(uuid.uuid4()),
+                                        "advisor_id": lead_check_advisor["assigned_advisor"],
+                                        "lead_id": lead_id,
+                                        "lead_name": lead_check_advisor.get("name", ""),
+                                        "lead_phone": phone,
+                                        "message": text[:100],
+                                        "type": "new_message",
+                                        "read": False,
+                                        "created_at": datetime.now(timezone.utc).isoformat()
+                                    })
+                                    logger.info(f"Notification created for advisor {lead_check_advisor['assigned_advisor']} - lead {lead_id} wrote")
     return {"status": "ok"}
 
 # Legacy internal webhook (for Chat IA testing)
@@ -2674,6 +2839,9 @@ async def startup():
     
     # Ensure bot_paused field on leads
     await db.leads.update_many({"bot_paused": {"$exists": False}}, {"$set": {"bot_paused": False}})
+    
+    # Ensure assigned_advisor field on leads
+    await db.leads.update_many({"assigned_advisor": {"$exists": False}}, {"$set": {"assigned_advisor": ""}})
     
     # Ensure bot_config on products
     products_without_bot = await db.products.find({"bot_config": {"$exists": False}}, {"_id": 0, "id": 1, "name": 1, "description": 1}).to_list(100)

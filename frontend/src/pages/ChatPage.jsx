@@ -215,8 +215,15 @@ export default function ChatPage() {
         setActiveLeadId(leadId);
         setMessages(res.data.messages || []);
         if (res.data.lead) {
-          setLeadInfo({ id: res.data.lead.id, name: res.data.lead.name, funnel_stage: res.data.lead.funnel_stage, whatsapp: res.data.lead.whatsapp, city: res.data.lead.city, email: res.data.lead.email, product_interest: res.data.lead.product_interest });
-          setBotPaused(res.data.lead.bot_paused || false);
+          const l = res.data.lead;
+          setLeadInfo({
+            id: l.id, name: l.name, funnel_stage: l.funnel_stage,
+            whatsapp: l.whatsapp, city: l.city, email: l.email,
+            product_interest: l.product_interest, source: l.source,
+            channel: l.channel, season: l.season,
+            assigned_advisor_name: l._advisor_name || ""
+          });
+          setBotPaused(l.bot_paused || false);
         }
         setInitialized(true);
         setSearchParams({}, { replace: true });
@@ -239,14 +246,16 @@ export default function ChatPage() {
     setBotPaused(session.bot_paused || false);
     axios.get(`${API}/chat/history/${session.session_id}`).then(res => setMessages(res.data)).catch(() => {});
     if (session.lead_id) {
-      axios.get(`${API}/leads`).then(res => {
-        const lead = res.data.leads ? res.data.leads.find(l => l.id === session.lead_id) : res.data.find(l => l.id === session.lead_id);
-        if (lead) {
-          setLeadInfo({ id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage, whatsapp: lead.whatsapp, city: lead.city, email: lead.email, product_interest: lead.product_interest });
-          setBotPaused(lead.bot_paused || false);
-        } else {
-          setLeadInfo({ name: session.lead_name, funnel_stage: null });
-        }
+      axios.get(`${API}/leads/${session.lead_id}`).then(res => {
+        const lead = res.data;
+        setLeadInfo({
+          id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage,
+          whatsapp: lead.whatsapp, city: lead.city, email: lead.email,
+          product_interest: lead.product_interest, source: lead.source,
+          channel: lead.channel, season: lead.season,
+          assigned_advisor_name: lead._advisor_name || ""
+        });
+        setBotPaused(lead.bot_paused || false);
       }).catch(() => setLeadInfo({ name: session.lead_name, funnel_stage: null }));
     } else {
       setLeadInfo(null);
@@ -383,7 +392,7 @@ export default function ChatPage() {
         {/* Chat Area */}
         <Card className="bg-card border-border rounded-2xl md:col-span-3 flex flex-col overflow-hidden">
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
-            {/* Header */}
+            {/* Header with Customer Context Card */}
             <div className="p-3 border-b border-input">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -404,13 +413,6 @@ export default function ChatPage() {
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-medium animate-pulse">BOT PAUSADO</span>
                       )}
                     </div>
-                    {leadInfo && (
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        {leadInfo.whatsapp && <span>{leadInfo.whatsapp}</span>}
-                        {leadInfo.city && <span>{leadInfo.city}</span>}
-                        {leadInfo.product_interest && <span className="text-blue-400">{leadInfo.product_interest}</span>}
-                      </div>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -434,6 +436,37 @@ export default function ChatPage() {
                   )}
                 </div>
               </div>
+              {/* Customer Context Card - Block 8 */}
+              {leadInfo && activeSession && (
+                <div data-testid="customer-context-card" className="mt-2 p-2.5 rounded-lg bg-muted/40 border border-border/50">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px]">
+                    {leadInfo.whatsapp && (
+                      <div><span className="text-muted-foreground">Tel:</span> <span className="text-foreground font-medium">{leadInfo.whatsapp}</span></div>
+                    )}
+                    {leadInfo.email && (
+                      <div><span className="text-muted-foreground">Email:</span> <span className="text-foreground font-medium">{leadInfo.email}</span></div>
+                    )}
+                    {leadInfo.city && (
+                      <div><span className="text-muted-foreground">Ciudad:</span> <span className="text-foreground font-medium">{leadInfo.city}</span></div>
+                    )}
+                    {leadInfo.source && (
+                      <div><span className="text-muted-foreground">Fuente:</span> <span className="text-foreground font-medium">{leadInfo.source}</span></div>
+                    )}
+                    {leadInfo.channel && (
+                      <div><span className="text-muted-foreground">Canal:</span> <span className="text-emerald-500 font-medium">{leadInfo.channel}</span></div>
+                    )}
+                    {leadInfo.product_interest && (
+                      <div><span className="text-muted-foreground">Producto:</span> <span className="text-blue-400 font-medium">{leadInfo.product_interest}</span></div>
+                    )}
+                    {leadInfo.season && (
+                      <div><span className="text-muted-foreground">Temporada:</span> <span className="text-foreground font-medium">{leadInfo.season}</span></div>
+                    )}
+                    {leadInfo.assigned_advisor_name && (
+                      <div><span className="text-muted-foreground">Asesor:</span> <span className="text-orange-500 font-medium">{leadInfo.assigned_advisor_name}</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Bot status indicator */}
               {activeSession && (
                 <div className={`mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md ${botPaused ? "bg-amber-500/10 text-amber-500" : "bg-green-500/10 text-green-500"}`}>

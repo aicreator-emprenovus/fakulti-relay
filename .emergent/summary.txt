@@ -1,79 +1,82 @@
 <analysis>**original_problem_statement:**
-The user wants to build a comprehensive CRM and sales funnel automation platform for a brand called Fakulti.
+The user wants to build a comprehensive CRM and sales funnel automation platform for a brand called Fakulti. The user has provided a detailed, 13-phase plan to upgrade the existing system.
 
-PRODUCT REQUIREMENTS:
-- **AI Agent Identity:** An AI virtual assistant for Fakulti Labs to handle incoming leads, qualify them, generate quotes and PDF orders, close sales, and manage customer loyalty. The tone should be human-like, and it must avoid making medical claims.
-- **Intelligent Funnel:** An automated system that categorizes leads into different stages (e.g., New, Interested, Hot, Client, Cold) based on their behavior.
-- **CRM Panel:** A full-featured admin dashboard to manage the system, including a dashboard, user panel, and bulk operations (Excel upload/download).
-- **Gamification:** Integration of games (Roulette, Slot Machine, Scratch Card) into the CRM, with interactions updating lead data. The UI should be visually appealing and use product imagery.
-- **Loyalty System:** A configurable post-sale messaging sequence to engage customers.
-- **Automation Panel:** A panel to manage all automation rules.
-- **Real WhatsApp Connection:** Integration with the official WhatsApp Cloud API via Meta for Developers, allowing the bot to have real conversations with any user.
-- **Human Agent Handover:** A mechanism to pause automation and notify a human agent.
-- **Chat UI:** The main chat interface should serve as a real-time monitor for all incoming WhatsApp conversations, allowing agents to observe and intervene.
+PRODUCT REQUIREMENTS (New Multi-Phase Plan):
+- **Phase 1: General Config & Normalization:** Standardize phone numbers for Ecuador, adjust lead stages, add season filters, and place most games on standby.
+- **Phase 2: Lead Sources & QR Codes:** Implement QR code campaigns to track lead origins (e.g., TV, events), and classify leads based on initial message intent.
+- **Phase 3: Specialized Product Bots:** Create distinct AI bot personalities and knowledge bases for each of Fakulti's 5 products, preventing information cross-contamination.
+- **Phase 4: Human Agent Handover:** Implement intelligent handover to a human agent based on bot failure (1-min timeout), user request, or specific rules.
+- **Phase 5: Advisor Management:** Create a system for registering human advisors, assigning leads to them, and implementing role-based access so advisors only see their assigned data.
+- **Phase 6: Internal Alerts:** Implement a noticeable, in-app visual and audible alert system.
+- **Phase 7: Leads Panel UI Changes:** Rename lead status labels and add an advisor filter.
+- **Phase 8: WhatsApp Bot UI with Context:** Display a persistent customer information card at the top of each conversation.
+- **Phase 9: Loyalty & Automation:** Enhance the post-sale follow-up sequence.
+- **Phase 10: Promotions & Campaigns:** Build a module to create, manage, and send promotional campaigns with auto-generated images.
+- **Phase 11: Bulk Operations & Reminders:** Enhance bulk upload for historical data and create a system for controlled, batched reminder campaigns.
+- **Phase 12: Admin Dashboard:** Revamp the dashboard to show sales and performance metrics per advisor.
+- **Phase 13: AI Conversation Analysis:** Implement an AI assistant for human agents that summarizes conversations and suggests replies.
 
 **User's preferred language**: Spanish
 
 **what currently exists?**
-The project is a feature-rich, full-stack CRM application with a FastAPI/MongoDB backend and a React frontend.
-- **Backend:** Manages authentication, leads, products, loyalty, and automation rules. It features a sophisticated, live WhatsApp integration powered by GPT-5.2 with a detailed conversational prompt. It also includes endpoints for generating comprehensive, multi-sheet Excel reports. All critical configurations (like API keys) are stored in the database.
-- **Frontend:** A complete admin dashboard.
-    - **WhatsApp Bot Page ():** A real-time monitor for all WhatsApp conversations. It displays live stats, allows agents to reply directly via WhatsApp, and has been refined based on user feedback (spacing, timestamps, content).
-    - **Games Page ():** A completely redesigned, visually stunning interface for the Roulette, Slot Machine, and Golden Ticket (Scratch Card) games, featuring product images, premium animations, and a polished look.
-    - **Bulk Operations ():** A page to download a detailed, multi-sheet Excel report and upload new leads from an  file.
-- **System Quality:** The entire application has undergone extensive orthographic correction for Spanish accents and has been made fully responsive for mobile, tablet, and desktop views.
-- **Infrastructure:** A Railway.app service continues to act as a critical webhook relay between Meta's WhatsApp API and the application's backend.
+The application is a full-stack CRM with a FastAPI/MongoDB backend and a React frontend. The system has a stable, live WhatsApp integration using GPT-5.2, a real-time chat monitoring page, gamification elements, and extensive Excel reporting.
+
+Recent work has added several new features based on the user's multi-phase plan:
+- **Phase 1 (Done):** Phone numbers are normalized to Ecuador's format, lead stages have been renamed, a Season filter has been added, and games are on standby.
+- **Phase 2 (Done):** A QR y Canales page allows admins to create QR code campaigns that automatically tag new leads with their source channel (e.g., TV, Evento).
+- **Phase 3 (Done):** Each of the 5 products now has a dedicated, configurable AI bot personality. The system automatically routes conversations to the correct product bot.
+- **Phase 4 (Done):** A robust human handover system is in place. It can be triggered by keywords, a 1-minute bot-response timeout, or manually by an agent. The UI allows agents to Take Control (pausing the bot) and Reactivate Bot.
+- **Phase 5 (In Progress):** A full backend for managing Advisors (human agents) has been built, including role-based access control ( vs. ). An Asesores page exists for CRUD operations. The system is ready for lead assignment and permissioned viewing, but the UI for this is not fully implemented.
 
 **Last working item**:
-- **Last item agent was working:** The agent was starting to work on the user's request to implement the bulk lead upload functionality using an Excel file. After reviewing the existing code in  and the  endpoint in , the agent concluded that the foundational code was already in place and was about to proceed with end-to-end testing.
+- **Last item agent was working:** Implementing the frontend UI for assigning leads to advisors. The agent had successfully built the backend, the Advisors management page, and added role-based logic to the frontend. It was in the process of adding the assignment controls (e.g., a dropdown menu) to the lead detail dialog on the .
 - **Status**: IN PROGRESS
 - **Agent Testing Done**: N
 - **Which testing method agent to use?**: both
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1 (P0): Test and complete the bulk lead upload feature.**
-  - **Attempted fixes:** None yet, work has just begun. The agent has only reviewed the existing code.
+- **Issue 1 (P0): Complete Advisor Management UI and Logic (Block 5)**
+  - **Description:** The backend and basic frontend for advisor management are complete, but the core functionality of assigning a lead to an advisor from the UI is missing. Advisors also cannot see their assigned conversations yet.
+  - **Attempted fixes:** The agent was in the middle of editing  to add the assignment UI when the session ended.
   - **Next debug checklist:**
-    1.  Create a sample  file with columns like , , , , .
-    2.  Use the UI on the Carga Masiva page () to upload this file.
-    3.  Verify that the  request to  is successful.
-    4.  Check the database or the Leads page to confirm that the new leads from the Excel file have been created correctly.
-    5.  Test edge cases, such as uploading a file with missing columns or malformed data, and ensure the backend handles it gracefully.
-  - **Why fix this issue and what will be achieved with the fix?** This will complete a core requirement from the original problem statement, allowing the user to efficiently add large numbers of leads to the system.
+    1.  In , within the , add a dropdown menu populated with the list of available advisors.
+    2.  Implement the  function to call the  endpoint.
+    3.  Add a visual indicator to the  component to display the assigned advisor's name.
+    4.  In , ensure the logic correctly filters conversations based on the logged-in advisor's ID.
+    5.  Perform an end-to-end test: Log in as admin, create an advisor, assign a lead. Log out, log in as the advisor, and verify they can only see the assigned lead and its corresponding conversation.
+  - **Why fix this issue and what will be achieved with the fix?** Completing this is critical for enabling the multi-user functionality requested by the user, where different agents have different levels of access and responsibility.
   - **Status:** IN PROGRESS
   - **Is recurring issue?** N
   - **Should Test frontend/backend/both after fix?** both
-  - **Blocked on other issue:** None.
+  - **Blocked on other issue:** None
 
 **In progress Task List**:
-- **Task 1: Implement and Test Bulk Lead Upload from Excel**
-  - **Where to resume:** The agent needs to create a test Excel file and perform an end-to-end test of the upload functionality via the  page.
-  - **What will be achieved with this?** A fully functional bulk lead import system.
+- **Task 1: Implement Advisor Assignment UI**
+  - **Where to resume:** . The agent was looking for the  to add the assignment dropdown and related state management.
+  - **What will be achieved with this?** Admins will have a functional UI to assign leads to specific advisors.
   - **Status:** IN PROGRESS
   - **Should Test frontend/backend/both after fix?** both
   - **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks:**
-  - **P1: Fibeca QR Code Flow:** Design and build the specific user journey for customers scanning a QR code in a physical store.
-  - **P1: Human Agent Handover UI:** The backend detects handover requests and creates alerts. The next step is to build the UI for viewing and managing these alerts, allowing a human agent to easily take over a conversation.
+  - **P0: Block 6: Internal Alerts:** Implement a prominent visual and audible alert system within the app (e.g., flashing icon, sound notification) for events like new handover requests or messages from an assigned lead.
+  - **P1: Block 8: WhatsApp Bot with Customer Context:** On the , display a persistent header/card with key lead information (name, email, city, channel, product interest) when a conversation is selected.
+  - **P2: Block 7: Leads Panel UI Changes:** The lead stage renaming is complete, but the task also requires adding a filter for asesor in the leads search bar (this was partially done, needs final verification) and ensuring channel/product info is visible on each card.
+- **Future Tasks:**
+  - **Block 9:** Fidelización y Automatizaciones (Loyalty and Automations).
+  - **Block 10:** Promociones y Campañas (Promotions and Campaigns).
+  - **Block 11:** Carga Masiva y Recordatorios (Bulk Upload and Reminders).
+  - **Block 12:** Dashboard del Administrador (Admin Dashboard by Advisor).
+  - **Block 13:** IA para Análisis de Conversaciones (AI for Conversation Analysis).
 
 **Completed work in this session**
-- **Live WhatsApp Integration & Bot Intelligence:**
-    - Successfully debugged all WhatsApp connection issues, including token expiration, incorrect relay URLs, and webhook subscriptions, establishing a stable live connection with a permanent token.
-    - Integrated GPT-5.2 with a highly detailed, user-provided conversational prompt, enabling the bot to conduct natural, multi-turn conversations, extract user data (name, city, email), and update lead records automatically.
-- **WhatsApp Chat Monitor (formerly Chat IA):**
-    - Transformed the  into a dedicated real-time monitor for WhatsApp conversations.
-    - Added live statistics, auto-refresh, and functionality for human agents to reply directly to users' WhatsApp from the CRM.
-    - Refined the chat bubble UI to add spacing, timestamps, and show only the contact's name and phone in the list.
-- **Gamification UI Overhaul:**
-    - Executed a complete, premium redesign of the three games (Roulette, Slot Machine, Scratch Card) with custom animations, lighting effects, and integration of real product images into the game mechanics.
-- **Comprehensive Excel Reporting:**
-    - Built a robust Excel download feature that generates a 7-sheet report with detailed analytics on leads, sales funnel, traffic sources, products, and more, complete with formatting and styling. Fixed the authentication token issue for downloads.
-- **System-Wide Quality Assurance:**
-    - Performed a thorough review and correction of all Spanish orthography and accent marks () across the entire frontend, backend seed data, and existing database entries.
-    - Ensured the entire application, including the new game UIs and CRM pages, is fully responsive on mobile, tablet, and desktop devices. Fixed a critical footer overlap issue.
+- **Block 1: General Configuration & Normalization:** Fully implemented and tested. Standardized phone numbers, renamed lead stages, added season filters, and put games on standby.
+- **Block 2: Lead Origin, QR & Channels:** Fully implemented and tested. Created a QR y Canales page for managing QR code campaigns and lead source tracking.
+- **Block 3: Specialized Bots per Product & Scan Count:** Fully implemented and tested. Created product-specific bot prompts, a UI to manage them, and added a scan counter to QR campaigns.
+- **Block 4: Human Agent Handover:** Fully implemented and tested. Enhanced the handover system with bot timeout detection, a manual pause bot feature per lead, and UI controls on the chat page.
+- **Block 5 (Backend & Scaffolding):** Implemented the full backend for advisor management (models, CRUD, role-based access) and created the frontend page for managing advisors.
 
 **Earlier issues found/mentioned but not fixed**
 - None.
@@ -85,83 +88,81 @@ The project is a feature-rich, full-stack CRM application with a FastAPI/MongoDB
 
 
 **Key Technical Concepts**
-- **Backend**: FastAPI, MongoDB (with ), Pydantic, JWT,  &  for Excel,  for Meta API calls.
-- **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, Axios, .
-- **AI Integration**: OpenAI GPT-5.2 (via Emergent LLM Key).
-- **External Integration**: WhatsApp Cloud API.
-- **Architecture**: Decoupled full-stack app. A **Railway.app relay service** is a critical part of the architecture, forwarding WhatsApp webhooks.
+- **Backend**: FastAPI, MongoDB (with ), Pydantic, JWT, , .
+- **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, Axios.
+- **Architecture**: Full-stack app with a monolithic backend and a component-based frontend. **Role-Based Access Control (RBAC)** is now a core concept, differentiating between  and  roles.
+- **External Integration**: WhatsApp Cloud API, OpenAI GPT-5.2.
 
 **key DB schema**
-- **users**: , 
-- **leads**: , , , , , ,  (now includes  and ), 
-- **products**: , , , 
-- **loyalty_sequences**: , , 
-- **loyalty_enrollments**: , , 
-- **automation_rules**: , ,  (seeded data now has correct accents)
-- **system_config**: ,  (stores WhatsApp credentials, AI toggles)
-- **human_handover_alerts**: (Implicitly created) , , , 
+- **users**: , ,  (newly important: 'admin' or 'advisor'),  (links user to an advisor profile).
+- **advisors**: , , , , .
+- **leads**: ,  (normalized), , , , , , , , ,  (boolean),  (ObjectId referencing ).
+- **products**: , , , ,  (object with personality details).
+- **qr_campaigns**: , , ,  (integer).
+- **human_handover_alerts**: , , , , , , .
 
 **changes in tech stack**
-- Backend now heavily relies on  and  for Excel report generation.
+-  library was added to the backend for generating QR codes.
 
 **All files of reference**
-- ****: Heavily modified to implement the advanced GPT-5.2 WhatsApp prompt, new API endpoints for stats and replies, the comprehensive Excel download logic, and fixes to seeded data.
-- ****: Completely rewritten to function as a real-time WhatsApp monitor with agent reply functionality and UI refinements.
-- ****: Completely rewritten to implement the new premium, animated designs for all three games.
-- ****: Modified to handle authenticated Excel downloads using .
-- ****: Label updated from Chat IA to WhatsApp Bot.
-- ****: New CSS animations for the games page were added.
-- **All  files**: Most component and page files were modified to correct Spanish orthography.
+- ****: Heavily modified to add logic for phone normalization, QR campaigns, product-specific bots, human handover timeouts, and the entire advisor management system (models, CRUD, RBAC).
+- ****: Modified for new stage labels, filters (season, advisor), and is pending further edits for the assignment UI.
+- ****: Updated with UI controls to pause/resume the bot and display handover alerts with more context.
+- ****: New file. A CRUD interface for managing advisors.
+- ****: New file. A page to manage QR code campaigns and view initial intents.
+- ****: Updated to allow editing of bot configurations for each product.
+- ****: Routes added for  and .
+- ****: Rewritten to be role-aware, showing different navigation links for admins and advisors.
+- ****: Updated to fetch and store the user's role.
+
+**Areas that need refactoring**:
+- The  file has become a large monolith containing all models, API routes, and business logic. It should be broken down into a more modular structure (e.g., separate files for routes, models, and services) to improve maintainability.
 
 **key api endpoints**
-- : The public webhook to receive messages from Meta (via the Railway relay).
-- : GET WhatsApp stats for the monitor dashboard.
-- : POST to send a reply from the CRM via WhatsApp.
-- : POST to upload a  file of new leads.
-- : GET to download the comprehensive, multi-sheet Excel report.
-- : GET all leads, POST a new lead.
-- : GET all products (publicly accessible).
+- : (GET, POST, PUT, DELETE) CRUD for advisors.
+- : (PUT) Assigns a lead to an advisor.
+- : (POST) Pauses the bot for a lead.
+- : (POST) Resumes the bot for a lead.
+- : (GET, POST, PUT, DELETE) CRUD for QR campaigns.
+- : (GET) Generates a PNG QR code.
+- : (GET, PUT) Manage bot configuration for a product.
+- : (GET) Endpoint for advisors to poll for new alerts.
 
 **Critical Info for New Agent**
-- **WhatsApp Permanent Token:** The system uses a permanent token. If it expires or causes issues, the user must generate a new one in the Meta Business Manager and ensure the associated System User has Control Total over both the App (Fakulti Bot) and the WhatsApp Business Account.
-- **Excel Upload Headers:** The backend expects specific headers in the uploaded Excel file: , , , , . The functionality is coded but needs testing.
-- **User's Focus on Quality:** The user is very attentive to UI/UX details, responsiveness, and correct Spanish orthography (including ). All new text and UI elements must be thoroughly checked.
+- **Continue with the Phased Plan:** The user's work is structured in Blocks (Phases). The next task is to complete Block 5, and then move sequentially to Block 6, 7, and so on.
+- **Role-Based Testing is Crucial:** With the introduction of the  role, all new features related to leads and chats must be tested from both an  and an  perspective to ensure permissions are working correctly.
+- **Monolithic Backend:** Be aware that  is very large. When adding new features, try to keep the logic self-contained to make future refactoring easier.
 
 **documents and test reports created in this job**
-- Multiple test reports were generated by the testing agent, with the latest ones showing 100% pass rates after major feature implementations.
-- The  file was updated to reflect completed work.
+- : Has been updated after each completed block.
+- Multiple test reports in  were generated by the testing agent, with 100% pass rates after Blocks 1, 2, 3, and 4 were completed.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** haz que cada burbuja de conversación tenga la hora en que se hizo (Add timestamp to chat bubbles). **Status: COMPLETED**.
-2.  **User:** Requested a major UI/UX overhaul for the games page. **Status: COMPLETED**.
-3.  **User:** Reported that the footer was overlapping the content on the games page and the slot machine was too small. **Status: COMPLETED**.
-4.  **User:** Requested responsiveness testing for all resolutions and a full system check for spelling/accent errors. **Status: COMPLETED**.
-5.  **User:** Reported an error with the Excel download feature. **Status: COMPLETED**.
-6.  **User:** Requested another full review for spelling and accent errors in section titles. **Status: COMPLETED**.
-7.  **User:** hola. **Status: ADDRESSED**.
-8.  **User:** Continue. **Status: ADDRESSED**.
-9.  **User:** Continue. **Status: ADDRESSED**.
-10. **User:** Continue. **Status: IN PROGRESS** (Agent began work on Excel bulk upload).
+1.  **User:**  (implement block 3, implement scan control). **Status: COMPLETED**.
+2.  **User:**  (implement block 4 only). **Status: COMPLETED**.
+3.  **User:**  (implement block 5). **Status: IN PROGRESS**.
+4.  **User:** . **Status: ADDRESSED** (Agent was continuing implementation of Block 5).
+5.  **User:**  (I'm continuing with the implementation of Block 5. I'm going to add the advisor assignment in the lead detail and cards:). **Status: ADDRESSED** (This was the agent's plan, which the user is seeing).
 
 **Project Health Check:**
-- **Broken:** None. The application is stable and all major features, including the live WhatsApp bot, are functional.
+- **Broken:** None.
 - **Mocked:** None.
 
 **3rd Party Integrations**
 - **OpenAI GPT-5.2:** Used for the AI WhatsApp Bot via Emergent LLM Key.
-- **WhatsApp Cloud API:** Live integration managed through Meta for Developers. Relies on a **Railway.app** service () as a webhook forwarder.
+- **WhatsApp Cloud API:** Live integration managed through Meta for Developers.
 
 **Testing status**
-- **Testing agent used after significant changes:** YES. Used multiple times, with the latest runs showing 100% pass rates.
+- **Testing agent used after significant changes:** YES. It was used after the completion of Blocks 1, 2, 3, and 4, achieving 100% pass rates each time.
 - **Troubleshoot agent used after agent stuck in loop:** NO
 - **Test files created:** None.
 - **Known regressions:** None.
 
 **Credentials to test flow:**
-- **CRM Login:**
+- **Admin Login:**
     - **Email:** 
     - **Password:** 
-- **WhatsApp Credentials:** Stored in the database and managed via the Automatización page in the CRM.
+- **Advisor Login:** Can be created via the Asesores page by the admin. The advisor will then be able to log in with the email/password combination set for their associated user account.
 
 **What agent forgot to execute**
-- The agent was in the process of starting the Bulk Lead Upload task. It has reviewed the code but has not yet performed the end-to-end test. The next logical step is to create a test file and execute the upload.</analysis>
+- The agent was mid-task. It needs to complete the UI implementation for assigning advisors to leads within . The backend and foundational frontend pieces are ready, but the final interactive element is missing.</analysis>

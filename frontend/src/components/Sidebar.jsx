@@ -1,21 +1,22 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Upload, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Upload, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png";
 
-const navItems = [
-  { path: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { path: "/leads", icon: Users, label: "Leads" },
-  { path: "/qr-campaigns", icon: QrCode, label: "QR y Canales" },
-  { path: "/games", icon: Gamepad2, label: "Juegos" },
-  { path: "/loyalty", icon: Heart, label: "Fidelización" },
-  { path: "/chat", icon: Phone, label: "WhatsApp Bot" },
-  { path: "/bulk", icon: Upload, label: "Carga / Descarga" },
-  { path: "/config", icon: Zap, label: "Configuración" },
-  { path: "/settings", icon: Settings, label: "Productos y Bots" },
+const allNavItems = [
+  { path: "/", icon: LayoutDashboard, label: "Dashboard", roles: ["admin", "advisor"] },
+  { path: "/leads", icon: Users, label: "Leads", roles: ["admin", "advisor"] },
+  { path: "/advisors", icon: UserCheck, label: "Asesores", roles: ["admin"] },
+  { path: "/qr-campaigns", icon: QrCode, label: "QR y Canales", roles: ["admin"] },
+  { path: "/games", icon: Gamepad2, label: "Juegos", roles: ["admin"] },
+  { path: "/loyalty", icon: Heart, label: "Fidelización", roles: ["admin"] },
+  { path: "/chat", icon: Phone, label: "WhatsApp Bot", roles: ["admin", "advisor"] },
+  { path: "/bulk", icon: Upload, label: "Carga / Descarga", roles: ["admin"] },
+  { path: "/config", icon: Zap, label: "Configuración", roles: ["admin"] },
+  { path: "/settings", icon: Settings, label: "Productos y Bots", roles: ["admin"] },
 ];
 
 export default function Sidebar({ currentPath }) {
@@ -23,6 +24,9 @@ export default function Sidebar({ currentPath }) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const userRole = user?.role || "admin";
+
+  const navItems = allNavItems.filter(item => item.roles.includes(userRole));
 
   const handleNav = (path) => {
     navigate(path);
@@ -34,7 +38,9 @@ export default function Sidebar({ currentPath }) {
       <div className="p-4 flex items-center gap-3 border-b border-border">
         <img src={LOGO_URL} alt="Faculty" className="h-10 w-auto" />
         <div className="hidden md:block">
-          <p className="text-xs text-muted-foreground tracking-wider uppercase">CRM Panel</p>
+          <p className="text-xs text-muted-foreground tracking-wider uppercase">
+            {userRole === "advisor" ? "Panel Asesor" : "CRM Panel"}
+          </p>
         </div>
       </div>
 
@@ -69,12 +75,16 @@ export default function Sidebar({ currentPath }) {
           <span>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</span>
         </button>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+            userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+          }`}>
             {user?.name?.[0] || "A"}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">{user?.name || "Admin"}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email || ""}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {userRole === "advisor" ? "Asesor" : "Administrador"} - {user?.email || ""}
+            </p>
           </div>
         </div>
         <Button

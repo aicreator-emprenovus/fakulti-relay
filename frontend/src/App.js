@@ -14,7 +14,9 @@ import SettingsPage from "@/pages/SettingsPage";
 import BulkPage from "@/pages/BulkPage";
 import ConfigPage from "@/pages/ConfigPage";
 import QRCampaignsPage from "@/pages/QRCampaignsPage";
+import AdvisorsPage from "@/pages/AdvisorsPage";
 import Sidebar from "@/components/Sidebar";
+import NotificationBell from "@/components/NotificationBell";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -124,6 +126,9 @@ function AdminLayout({ children }) {
     <div className="flex min-h-screen bg-background">
       <Sidebar currentPath={location.pathname} />
       <main className="flex-1 ml-0 md:ml-64 min-h-screen flex flex-col">
+        <div className="flex items-center justify-end p-2 md:p-3 border-b border-border bg-card/50">
+          <NotificationBell />
+        </div>
         <div className="p-4 md:p-8 flex-1">
           {children}
         </div>
@@ -148,6 +153,7 @@ function AppContent() {
         <Route path="/chat" element={<ProtectedRoute><AdminLayout><ChatPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/bulk" element={<ProtectedRoute><AdminLayout><BulkPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/qr-campaigns" element={<ProtectedRoute><AdminLayout><QRCampaignsPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/advisors" element={<ProtectedRoute><AdminLayout><AdvisorsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/config" element={<ProtectedRoute><AdminLayout><ConfigPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><AdminLayout><SettingsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
