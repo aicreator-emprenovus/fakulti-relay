@@ -8,13 +8,14 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - **Frontend**: React + Tailwind CSS + Shadcn/UI + Axios
 - **AI**: OpenAI GPT-5.2 via Emergent LLM Key
 - **External**: WhatsApp Cloud API (via Railway.app relay)
-- **DB**: MongoDB with collections: leads, products, games_config, game_plays, quotations, loyalty_sequences, loyalty_enrollments, automation_rules, chat_messages, chat_sessions_meta, admin_users, whatsapp_config, ai_config, handover_alerts
+- **DB Collections**: leads, products, games_config, game_plays, quotations, loyalty_sequences, loyalty_enrollments, automation_rules, chat_messages, chat_sessions_meta, admin_users, whatsapp_config, ai_config, handover_alerts, qr_campaigns, initial_intents
 
 ## Key Technical Decisions
 - Phone numbers stored in Ecuador local format (0XXXXXXXXX), converted to international (593XXXXXXXXX) for WhatsApp API calls
 - Funnel stages use internal keys but display renamed labels
 - Games module in standby mode (only slot_machine active)
 - Season and channel fields added to lead schema
+- QR campaigns auto-detect channel from first WhatsApp message
 
 ## Completed Phases
 
@@ -25,8 +26,17 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - [x] Channel field added to leads
 - [x] Games standby (only Tragamonedas/slot_machine active)
 - [x] Bulk Excel upload tested and working (with phone normalization, season, channel)
-- [x] Migration: existing phone numbers normalized, games deactivated
-- [x] WhatsApp number migration prepared (config-based)
+
+### Block 2: Lead Sources, QR & Channels (Completed 2026-03-17)
+- [x] QR Campaign CRUD (create, read, update, delete)
+- [x] QR Code generation (PNG download) with WhatsApp pre-filled message
+- [x] WhatsApp link generation for each QR campaign
+- [x] Initial Intents CRUD with keyword-based matching
+- [x] Auto-detection of channel from incoming WhatsApp messages (QR campaigns + intents)
+- [x] Channel of origin visible on Lead cards (emerald badge) and Chat sessions
+- [x] Lead create/edit form with Channel and Season dropdowns
+- [x] New admin page: "QR y Canales" with sidebar navigation
+- [x] Default seed: 3 QR campaigns (TV, Fibeca, Evento) + 5 intents (Consulta, Compra, Reclamo, Referido, Recompra)
 
 ### Previously Completed
 - [x] Live WhatsApp Integration & Bot Intelligence (GPT-5.2)
@@ -38,13 +48,6 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - [x] CRM Dashboard, Lead Management, Loyalty System, Automation Rules
 
 ## Upcoming Tasks (Prioritized)
-
-### Block 2: Lead Sources, QR & Channels (P1)
-- [ ] Configure lead ingress by channel
-- [ ] Create QR/channel-based lead identification
-- [ ] TV QR campaign: message "Hola, vi esto en TV" → auto-register source TV/QR
-- [ ] Channel origin visible in CRM, cards, conversations
-- [ ] Support 4-5 configurable initial intents for lead classification
 
 ### Block 3: Specialized Bots per Product (P1)
 - [ ] 5 product-specific bots (logically independent)
@@ -72,35 +75,30 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - [ ] Lead cards show: channel, city, product interest, email
 
 ### Block 8: WhatsApp Bot with Client Context (P2)
-- [ ] Client card visible at top of conversation (name, email, city, channel, product)
+- [ ] Client card visible at top of conversation
 - [ ] Advisor profile sees only assigned conversations
 
 ### Block 9: Loyalty & Automations (P2)
-- [ ] Auto-follow-up 200h after loyalty message: "¿Cómo te fue con el producto?"
+- [ ] Auto-follow-up 200h after loyalty message
 - [ ] Per-advisor automation in conversations panel
-- [ ] Automations consider: advisor, stage, product, history, channel
 
 ### Block 10: Promotions & Campaigns (P3)
 - [ ] "Promociones" admin tab
 - [ ] Campaign creation with targeting, images, text
 - [ ] AI-generated promotional images
-- [ ] Send to filtered lead segments
 - [ ] Quick message templates
 
 ### Block 11: Bulk Upload & Batch Reminders (P3)
 - [ ] Import historical leads
 - [ ] Controlled batch sending with pause/continue
-- [ ] WhatsApp Business best practices (rate limits, quality monitoring)
-- [ ] Configurable operational limits
+- [ ] WhatsApp Business best practices
 
 ### Block 12: Admin Dashboard by Advisor (P3)
 - [ ] Sales by advisor charts/comparisons
-- [ ] Performance summaries
 
 ### Block 13: AI Conversation Analysis (P3)
 - [ ] AI reads conversations, classifies lead progress
 - [ ] Suggests next best response for human advisor
-- [ ] Low/medium/advanced classification
 
 ## Credentials
 - CRM Login: admin@fakulti.com / admin123

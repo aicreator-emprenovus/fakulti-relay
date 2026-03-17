@@ -252,11 +252,11 @@ export default function QRCampaignsPage() {
 
       {/* Intents Section */}
       <Card className="bg-card border-border">
-        <CardHeader className="cursor-pointer" onClick={() => setShowIntentsSection(!showIntentsSection)}>
+        <div className="cursor-pointer px-6 py-4" onClick={() => setShowIntentsSection(!showIntentsSection)}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Zap className="h-5 w-5 text-amber-500" />
-              <CardTitle className="text-lg">Intenciones Iniciales</CardTitle>
+              <h3 className="text-lg font-semibold text-foreground">Intenciones Iniciales</h3>
               <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{intents.length}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -267,7 +267,7 @@ export default function QRCampaignsPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1">Define palabras clave para clasificar automáticamente a los leads según su primer mensaje</p>
-        </CardHeader>
+        </div>
         {showIntentsSection && (
           <CardContent>
             <div className="space-y-3">
@@ -305,8 +305,6 @@ export default function QRCampaignsPage() {
           </CardContent>
         )}
       </Card>
-
-      {/* Campaign Dialog */}
       <Dialog open={showCampaignDialog} onOpenChange={setShowCampaignDialog}>
         <DialogContent className="bg-card border-border max-w-lg">
           <DialogHeader>
