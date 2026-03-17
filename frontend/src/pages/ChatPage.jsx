@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
-import { API } from "@/App";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Card, CardContent } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Badge } from "../components/ui/badge";
+import { ScrollArea } from "../components/ui/scroll-area";
 import {
-  Send, Trash2, X, Phone, Wifi, Clock, AlertTriangle,
-  CheckCircle, MessageCircle, Activity, Shield
+  Send, Trash2, X, Phone, Clock, AlertTriangle,
+  Activity, Shield, MessageCircle, CheckCircle, Users, Zap,
+  Pause, Play, UserCheck, Bot
 } from "lucide-react";
+
+const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 const STAGE_CONFIG = {
   nuevo: { label: "Contacto inicial", color: "#3B82F6" },
@@ -22,78 +24,63 @@ const STAGE_CONFIG = {
   perdido: { label: "Perdido", color: "#64748B" },
 };
 
+const REASON_LABELS = {
+  solicitud_usuario: { label: "Solicitud del cliente", color: "bg-amber-500/20 text-amber-400" },
+  timeout_bot: { label: "Timeout del bot", color: "bg-red-500/20 text-red-400" },
+  regla_operativa: { label: "Regla operativa", color: "bg-blue-500/20 text-blue-400" },
+};
+
 function StatsBar({ stats, alertCount }) {
   return (
-    <div data-testid="whatsapp-stats-bar" className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-      <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5">
-        <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-          <Wifi size={15} className="text-green-500" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Activas 24h</p>
-          <p data-testid="stat-active" className="text-sm font-bold text-foreground">{stats.active_conversations_24h ?? 0}</p>
-        </div>
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+      <div className="bg-card border border-border rounded-xl p-3 text-center">
+        <Users size={16} className="mx-auto mb-1 text-green-500" />
+        <p className="text-lg font-bold text-foreground">{stats.total_leads || 0}</p>
+        <p className="text-[10px] text-muted-foreground">Leads WhatsApp</p>
       </div>
-      <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5">
-        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-          <Clock size={15} className="text-blue-500" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Resp. Prom.</p>
-          <p data-testid="stat-response-time" className="text-sm font-bold text-foreground">{stats.avg_response_time_ms ? `${(stats.avg_response_time_ms / 1000).toFixed(1)}s` : "--"}</p>
-        </div>
+      <div className="bg-card border border-border rounded-xl p-3 text-center">
+        <MessageCircle size={16} className="mx-auto mb-1 text-blue-500" />
+        <p className="text-lg font-bold text-foreground">{stats.total_messages || 0}</p>
+        <p className="text-[10px] text-muted-foreground">Mensajes</p>
       </div>
-      <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5">
-        <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-          <MessageCircle size={15} className="text-purple-500" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Msgs Hoy</p>
-          <p data-testid="stat-msgs-today" className="text-sm font-bold text-foreground">{stats.messages_today ?? 0}</p>
-        </div>
+      <div className="bg-card border border-border rounded-xl p-3 text-center">
+        <Zap size={16} className="mx-auto mb-1 text-amber-500" />
+        <p className="text-lg font-bold text-foreground">{stats.avg_response_time || "N/A"}</p>
+        <p className="text-[10px] text-muted-foreground">Resp. Prom.</p>
       </div>
-      <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5 relative">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${alertCount > 0 ? "bg-red-500/10" : "bg-muted"}`}>
-          <AlertTriangle size={15} className={alertCount > 0 ? "text-red-500" : "text-muted-foreground"} />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Alertas</p>
-          <p data-testid="stat-alerts" className={`text-sm font-bold ${alertCount > 0 ? "text-red-500" : "text-foreground"}`}>{alertCount}</p>
-        </div>
-        {alertCount > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
+      <div className="bg-card border border-border rounded-xl p-3 text-center">
+        <Activity size={16} className="mx-auto mb-1 text-violet-500" />
+        <p className="text-lg font-bold text-foreground">{stats.active_today || 0}</p>
+        <p className="text-[10px] text-muted-foreground">Activos Hoy</p>
+      </div>
+      <div className={`bg-card border rounded-xl p-3 text-center ${alertCount > 0 ? "border-red-500/50 bg-red-500/5" : "border-border"}`}>
+        <AlertTriangle size={16} className={`mx-auto mb-1 ${alertCount > 0 ? "text-red-500" : "text-muted-foreground"}`} />
+        <p className={`text-lg font-bold ${alertCount > 0 ? "text-red-500" : "text-foreground"}`}>{alertCount}</p>
+        <p className="text-[10px] text-muted-foreground">Alertas</p>
       </div>
     </div>
   );
 }
 
-function formatTimeAgo(ts) {
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "ahora";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
-}
-
 function SessionItem({ s, isActive, onClick }) {
-  const timeAgo = s.timestamp ? formatTimeAgo(s.timestamp) : "";
+  const timeAgo = s.timestamp ? (() => { const d = (Date.now() - new Date(s.timestamp).getTime()) / 60000; return d < 1 ? "ahora" : d < 60 ? `${Math.floor(d)}m` : d < 1440 ? `${Math.floor(d / 60)}h` : `${Math.floor(d / 1440)}d`; })() : "";
   return (
     <button
-      onClick={onClick}
       data-testid={`session-${s.session_id}`}
+      onClick={onClick}
       className={`w-full text-left p-2.5 rounded-lg text-xs transition-all relative ${
         isActive ? "bg-green-500/10 text-green-700 border border-green-500/20" : "text-muted-foreground hover:bg-muted"
       }`}
     >
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
-          <Phone size={12} className="text-green-500" />
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${s.bot_paused ? "bg-amber-500/10" : "bg-green-500/10"}`}>
+          {s.bot_paused ? <UserCheck size={12} className="text-amber-500" /> : <Phone size={12} className="text-green-500" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="truncate font-medium text-foreground">{s.lead_name || "Sin nombre"}</span>
             {s.has_alert && <AlertTriangle size={11} className="text-red-500 flex-shrink-0" />}
+            {s.bot_paused && <span className="text-[9px] px-1 py-0 rounded bg-amber-500/20 text-amber-500 flex-shrink-0">HUMANO</span>}
           </div>
           <p className="truncate text-muted-foreground mt-0.5">{s.lead_phone || s.session_id.replace("wa_", "")}</p>
           {s.lead_channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/20 text-emerald-400 inline-block mt-0.5">{s.lead_channel}</span>}
@@ -109,32 +96,58 @@ function SessionItem({ s, isActive, onClick }) {
   );
 }
 
-function AlertPanel({ alerts, onResolve }) {
+function AlertPanel({ alerts, onResolve, onTakeOver }) {
   const pending = alerts.filter(a => a.status === "pending");
   if (pending.length === 0) return null;
   return (
     <div data-testid="alert-panel" className="mb-4 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
       <div className="flex items-center gap-2 mb-2">
         <AlertTriangle size={14} className="text-red-500" />
-        <p className="text-xs font-semibold text-red-500 uppercase tracking-wider">Solicitudes de Agente Humano</p>
+        <p className="text-xs font-semibold text-red-500 uppercase tracking-wider">Solicitudes de Atención Humana ({pending.length})</p>
       </div>
       <div className="space-y-2">
-        {pending.map(a => (
-          <div key={a.id} className="flex items-center justify-between bg-card rounded-lg p-2 border border-border">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">{a.lead_name || a.lead_phone}</p>
-              <p className="text-xs text-muted-foreground truncate">"{a.message}"</p>
+        {pending.map(a => {
+          const reason = REASON_LABELS[a.reason] || { label: a.reason || "Desconocido", color: "bg-muted text-muted-foreground" };
+          return (
+            <div key={a.id} className="bg-card rounded-lg p-3 border border-border">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs font-medium text-foreground">{a.lead_name || a.lead_phone}</p>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${reason.color}`}>{reason.label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate mb-1">"{a.message}"</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {a.product && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-400">{a.product}</span>}
+                    {a.channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/15 text-emerald-400">{a.channel}</span>}
+                    {a.lead_city && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/15 text-violet-400">{a.lead_city}</span>}
+                    {a.created_at && <span className="text-[10px] text-muted-foreground">{new Date(a.created_at).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  {!a.bot_paused && (
+                    <Button
+                      data-testid={`takeover-${a.id}`}
+                      size="sm" variant="outline"
+                      className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 h-7 px-2 text-[10px]"
+                      onClick={() => onTakeOver(a.lead_id, a.id)}
+                    >
+                      <UserCheck size={12} className="mr-1" /> Tomar control
+                    </Button>
+                  )}
+                  <Button
+                    data-testid={`resolve-alert-${a.id}`}
+                    size="sm" variant="ghost"
+                    className="text-green-500 hover:text-green-600 hover:bg-green-500/10 h-7 px-2"
+                    onClick={() => onResolve(a.id)}
+                  >
+                    <CheckCircle size={14} />
+                  </Button>
+                </div>
+              </div>
             </div>
-            <Button
-              data-testid={`resolve-alert-${a.id}`}
-              size="sm" variant="ghost"
-              className="text-green-500 hover:text-green-600 hover:bg-green-500/10 h-7 px-2"
-              onClick={() => onResolve(a.id)}
-            >
-              <CheckCircle size={14} />
-            </Button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -152,12 +165,12 @@ export default function ChatPage() {
   const [initialized, setInitialized] = useState(false);
   const [stats, setStats] = useState({});
   const [alerts, setAlerts] = useState([]);
+  const [botPaused, setBotPaused] = useState(false);
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
 
   const fetchSessions = useCallback(() => {
     axios.get(`${API}/chat/sessions`).then(res => {
-      // Only show WhatsApp sessions
       setSessions(res.data.filter(s => s.source === "whatsapp"));
     }).catch(() => {});
   }, []);
@@ -176,7 +189,6 @@ export default function ChatPage() {
     fetchAlerts();
   }, [fetchSessions, fetchStats, fetchAlerts]);
 
-  // Auto-poll every 8s
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchSessions();
@@ -194,18 +206,17 @@ export default function ChatPage() {
     return () => clearInterval(pollRef.current);
   }, [activeSession, fetchSessions, fetchStats, fetchAlerts]);
 
-  // Handle lead_id from URL params (from Kanban board)
   useEffect(() => {
     if (initialized) return;
     const leadId = searchParams.get("lead_id");
     if (leadId) {
-      // Find WhatsApp session for this lead
       axios.get(`${API}/chat/lead-session/${leadId}`).then(res => {
         setActiveSession(res.data.session_id);
         setActiveLeadId(leadId);
         setMessages(res.data.messages || []);
         if (res.data.lead) {
-          setLeadInfo({ id: res.data.lead.id, name: res.data.lead.name, funnel_stage: res.data.lead.funnel_stage, whatsapp: res.data.lead.whatsapp });
+          setLeadInfo({ id: res.data.lead.id, name: res.data.lead.name, funnel_stage: res.data.lead.funnel_stage, whatsapp: res.data.lead.whatsapp, city: res.data.lead.city, email: res.data.lead.email, product_interest: res.data.lead.product_interest });
+          setBotPaused(res.data.lead.bot_paused || false);
         }
         setInitialized(true);
         setSearchParams({}, { replace: true });
@@ -225,12 +236,17 @@ export default function ChatPage() {
   const loadSession = (session) => {
     setActiveSession(session.session_id);
     setActiveLeadId(session.lead_id || null);
+    setBotPaused(session.bot_paused || false);
     axios.get(`${API}/chat/history/${session.session_id}`).then(res => setMessages(res.data)).catch(() => {});
     if (session.lead_id) {
       axios.get(`${API}/leads`).then(res => {
-        const lead = res.data.find(l => l.id === session.lead_id);
-        if (lead) setLeadInfo({ id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage, whatsapp: lead.whatsapp, city: lead.city, email: lead.email, product_interest: lead.product_interest });
-        else setLeadInfo({ name: session.lead_name, funnel_stage: null });
+        const lead = res.data.leads ? res.data.leads.find(l => l.id === session.lead_id) : res.data.find(l => l.id === session.lead_id);
+        if (lead) {
+          setLeadInfo({ id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage, whatsapp: lead.whatsapp, city: lead.city, email: lead.email, product_interest: lead.product_interest });
+          setBotPaused(lead.bot_paused || false);
+        } else {
+          setLeadInfo({ name: session.lead_name, funnel_stage: null });
+        }
       }).catch(() => setLeadInfo({ name: session.lead_name, funnel_stage: null }));
     } else {
       setLeadInfo(null);
@@ -274,6 +290,7 @@ export default function ChatPage() {
       setActiveSession(null);
       setActiveLeadId(null);
       setLeadInfo(null);
+      setBotPaused(false);
       fetchSessions();
       toast.success("Conversación eliminada");
     } catch { toast.error("Error al eliminar conversación"); }
@@ -286,6 +303,37 @@ export default function ChatPage() {
       fetchSessions();
       toast.success("Alerta resuelta");
     } catch { toast.error("Error al resolver alerta"); }
+  };
+
+  const takeOverConversation = async (leadId, alertId) => {
+    try {
+      await axios.put(`${API}/leads/${leadId}/pause-bot`);
+      if (alertId) await axios.put(`${API}/chat/alerts/${alertId}/resolve`);
+      setBotPaused(true);
+      fetchAlerts();
+      fetchSessions();
+      toast.success("Has tomado el control. El bot está pausado para este lead.");
+    } catch { toast.error("Error al tomar control"); }
+  };
+
+  const resumeBot = async () => {
+    if (!activeLeadId) return;
+    try {
+      await axios.put(`${API}/leads/${activeLeadId}/resume-bot`);
+      setBotPaused(false);
+      fetchSessions();
+      toast.success("Bot reactivado para este lead.");
+    } catch { toast.error("Error al reactivar bot"); }
+  };
+
+  const pauseBot = async () => {
+    if (!activeLeadId) return;
+    try {
+      await axios.put(`${API}/leads/${activeLeadId}/pause-bot`);
+      setBotPaused(true);
+      fetchSessions();
+      toast.success("Bot pausado. Tienes el control de la conversación.");
+    } catch { toast.error("Error al pausar bot"); }
   };
 
   const pendingAlertCount = alerts.filter(a => a.status === "pending").length;
@@ -306,7 +354,7 @@ export default function ChatPage() {
       </div>
 
       <StatsBar stats={stats} alertCount={pendingAlertCount} />
-      <AlertPanel alerts={alerts} onResolve={resolveAlert} />
+      <AlertPanel alerts={alerts} onResolve={resolveAlert} onTakeOver={takeOverConversation} />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "380px" : "300px"})` }}>
         {/* Sessions Sidebar */}
@@ -336,35 +384,71 @@ export default function ChatPage() {
         <Card className="bg-card border-border rounded-2xl md:col-span-3 flex flex-col overflow-hidden">
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
             {/* Header */}
-            <div className="p-3 border-b border-input flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <Phone size={15} className="text-green-500" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground font-medium">
-                      {leadInfo?.name || "Selecciona una conversación"}
-                    </span>
-                    {leadInfo?.funnel_stage && (
-                      <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
-                        {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
-                      </Badge>
+            <div className="p-3 border-b border-input">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${botPaused ? "bg-amber-500/10" : "bg-green-500/10"}`}>
+                    {botPaused ? <UserCheck size={15} className="text-amber-500" /> : <Phone size={15} className="text-green-500" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-foreground font-medium">
+                        {leadInfo?.name || "Selecciona una conversación"}
+                      </span>
+                      {leadInfo?.funnel_stage && (
+                        <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
+                          {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
+                        </Badge>
+                      )}
+                      {botPaused && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-medium animate-pulse">BOT PAUSADO</span>
+                      )}
+                    </div>
+                    {leadInfo && (
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {leadInfo.whatsapp && <span>{leadInfo.whatsapp}</span>}
+                        {leadInfo.city && <span>{leadInfo.city}</span>}
+                        {leadInfo.product_interest && <span className="text-blue-400">{leadInfo.product_interest}</span>}
+                      </div>
                     )}
                   </div>
-                  {leadInfo && (
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      {leadInfo.whatsapp && <span>{leadInfo.whatsapp}</span>}
-                      {leadInfo.city && <span>{leadInfo.city}</span>}
-                      {leadInfo.product_interest && <span>{leadInfo.product_interest}</span>}
-                    </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {activeLeadId && (
+                    <>
+                      {botPaused ? (
+                        <Button data-testid="resume-bot-btn" variant="outline" size="sm" className="text-green-500 hover:text-green-600 hover:bg-green-500/10 h-8 text-xs" onClick={resumeBot}>
+                          <Play size={12} className="mr-1" /> Reactivar Bot
+                        </Button>
+                      ) : (
+                        <Button data-testid="pause-bot-btn" variant="outline" size="sm" className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 h-8 text-xs" onClick={pauseBot}>
+                          <Pause size={12} className="mr-1" /> Tomar Control
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {activeSession && messages.length > 0 && (
+                    <Button data-testid="delete-conversation-btn" variant="ghost" size="sm" className="text-muted-foreground hover:text-red-400 h-8" onClick={deleteConversation}>
+                      <Trash2 size={14} />
+                    </Button>
                   )}
                 </div>
               </div>
-              {activeSession && messages.length > 0 && (
-                <Button data-testid="delete-conversation-btn" variant="ghost" size="sm" className="text-muted-foreground hover:text-red-400" onClick={deleteConversation}>
-                  <Trash2 size={14} className="mr-1" /> Eliminar
-                </Button>
+              {/* Bot status indicator */}
+              {activeSession && (
+                <div className={`mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md ${botPaused ? "bg-amber-500/10 text-amber-500" : "bg-green-500/10 text-green-500"}`}>
+                  {botPaused ? (
+                    <>
+                      <UserCheck size={10} />
+                      <span>Modo humano activo — el bot NO responde automáticamente. Tus mensajes se envían directamente por WhatsApp.</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bot size={10} />
+                      <span>Bot activo — respondiendo automáticamente{leadInfo?.product_interest ? ` (especializado en ${leadInfo.product_interest})` : ""}. Puedes tomar el control en cualquier momento.</span>
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
@@ -452,7 +536,7 @@ export default function ChatPage() {
                   data-testid="chat-input"
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder={activeSession ? "Responder como agente por WhatsApp..." : "Selecciona una conversación..."}
+                  placeholder={activeSession ? (botPaused ? "Escribe como agente humano..." : "Responder como agente por WhatsApp...") : "Selecciona una conversación..."}
                   className="flex-1 bg-muted/50 border-input text-foreground h-10"
                   disabled={sending || !activeSession}
                 />
@@ -460,14 +544,18 @@ export default function ChatPage() {
                   data-testid="chat-send-btn"
                   type="submit"
                   disabled={sending || !input.trim() || !activeSession}
-                  className="bg-green-600 hover:bg-green-700 text-white h-10 px-4 rounded-lg"
+                  className={`${botPaused ? "bg-amber-600 hover:bg-amber-700" : "bg-green-600 hover:bg-green-700"} text-white h-10 px-4 rounded-lg`}
                 >
                   <Send size={15} />
                 </Button>
               </form>
               {activeSession && (
                 <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
-                  <Shield size={9} className="text-blue-500" /> Tu respuesta se envia directamente al WhatsApp del cliente como agente humano
+                  {botPaused ? (
+                    <><UserCheck size={9} className="text-amber-500" /> Modo humano — tu mensaje se envía directamente al WhatsApp del cliente</>
+                  ) : (
+                    <><Shield size={9} className="text-blue-500" /> Tu respuesta se envía directamente al WhatsApp del cliente como agente humano</>
+                  )}
                 </p>
               )}
             </div>

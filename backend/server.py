@@ -1173,12 +1173,14 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         # Get lead info for WhatsApp sessions
         lead_phone = ""
         lead_channel = ""
+        bot_paused = False
         has_alert = False
         if source == "whatsapp" and s.get("lead_id"):
-            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1})
+            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1, "bot_paused": 1})
             if lead_doc:
                 lead_phone = lead_doc.get("whatsapp", "")
                 lead_channel = lead_doc.get("channel", "")
+                bot_paused = lead_doc.get("bot_paused", False)
                 if not lead_name:
                     lead_name = lead_doc.get("name", "")
             alert = await db.handover_alerts.find_one({"lead_id": s["lead_id"], "status": "pending"}, {"_id": 0})
@@ -1186,7 +1188,7 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         result.append({
             "session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name,
             "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"],
-            "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "has_alert": has_alert
+            "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "bot_paused": bot_paused, "has_alert": has_alert
         })
     return result
 
@@ -1247,8 +1249,19 @@ async def get_whatsapp_stats(user=Depends(get_current_user)):
 
 @api_router.get("/chat/alerts")
 async def get_handover_alerts(user=Depends(get_current_user)):
-    """Get human handover alerts."""
+    """Get human handover alerts with lead context."""
     alerts = await db.handover_alerts.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    # Enrich alerts with lead data
+    for a in alerts:
+        if a.get("lead_id"):
+            lead = await db.leads.find_one({"id": a["lead_id"]}, {"_id": 0, "name": 1, "whatsapp": 1, "product_interest": 1, "channel": 1, "city": 1, "funnel_stage": 1, "bot_paused": 1})
+            if lead:
+                a["lead_name"] = lead.get("name", a.get("lead_name", ""))
+                a["lead_product"] = lead.get("product_interest", "")
+                a["lead_channel"] = lead.get("channel", "")
+                a["lead_city"] = lead.get("city", "")
+                a["lead_stage"] = lead.get("funnel_stage", "")
+                a["bot_paused"] = lead.get("bot_paused", False)
     return alerts
 
 @api_router.put("/chat/alerts/{alert_id}/resolve")
@@ -1256,11 +1269,35 @@ async def resolve_alert(alert_id: str, user=Depends(get_current_user)):
     """Mark a handover alert as resolved."""
     result = await db.handover_alerts.update_one(
         {"id": alert_id},
-        {"$set": {"status": "resolved", "resolved_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"status": "resolved", "resolved_at": datetime.now(timezone.utc).isoformat(), "resolved_by": "admin"}}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Alerta no encontrada")
     return {"message": "Alerta resuelta"}
+
+@api_router.put("/leads/{lead_id}/pause-bot")
+async def pause_bot_for_lead(lead_id: str, user=Depends(get_current_user)):
+    """Pause bot automation for a specific lead (human takes over)."""
+    result = await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"bot_paused": True, "bot_paused_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    logger.info(f"Bot paused for lead {lead_id} - human agent taking over")
+    return {"message": "Bot pausado. El agente humano tiene el control."}
+
+@api_router.put("/leads/{lead_id}/resume-bot")
+async def resume_bot_for_lead(lead_id: str, user=Depends(get_current_user)):
+    """Resume bot automation for a specific lead."""
+    result = await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"bot_paused": False}, "$unset": {"bot_paused_at": ""}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    logger.info(f"Bot resumed for lead {lead_id}")
+    return {"message": "Bot reactivado para este lead."}
 
 @api_router.post("/chat/whatsapp-reply")
 async def crm_whatsapp_reply(req: CRMWhatsAppReply, user=Depends(get_current_user)):
@@ -1626,7 +1663,10 @@ async def bulk_download(
 
 WHATSAPP_API_URL = "https://graph.facebook.com/v22.0"
 
-HANDOVER_KEYWORDS = ["agente", "humano", "persona real", "hablar con alguien", "asesor real", "no quiero bot", "operador", "representante", "persona de verdad"]
+HANDOVER_KEYWORDS = ["agente", "humano", "persona real", "hablar con alguien", "asesor real", "no quiero bot", "operador", "representante", "persona de verdad", "quiero hablar con una persona", "atencion humana"]
+
+# Timeout for bot to resolve (seconds) - if bot interaction exceeds this without progress, trigger alert
+BOT_TIMEOUT_SECONDS = 60
 
 async def get_whatsapp_config():
     config = await db.whatsapp_config.find_one({"id": "main"}, {"_id": 0})
@@ -1759,6 +1799,21 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     is_new = existing_lead is None
     lead_id = existing_lead["id"] if existing_lead else None
     lead_name = existing_lead.get("name", "") if existing_lead else ""
+    
+    # CHECK: If bot is paused for this lead, don't auto-respond (human agent has control)
+    if existing_lead and existing_lead.get("bot_paused"):
+        # Still store the message in chat history for the agent to see
+        session_id = f"wa_{phone}"
+        now = datetime.now(timezone.utc).isoformat()
+        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": message_text, "timestamp": now, "source": "whatsapp"})
+        await db.chat_sessions_meta.update_one(
+            {"session_id": session_id},
+            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": lead_name, "source": "whatsapp", "last_activity": now}},
+            upsert=True
+        )
+        await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": now}})
+        logger.info(f"Bot paused for lead {lead_id} ({phone}) - message stored, no auto-reply")
+        return "[BOT_PAUSED] Mensaje recibido. Un asesor humano tiene el control.", lead_id
     
     # Create lead if new
     if is_new:
@@ -2001,20 +2056,49 @@ async def whatsapp_incoming(request: Request):
                         )
                         # Detect human handover request
                         msg_lower = text.strip().lower()
+                        handover_reason = None
                         if any(kw in msg_lower for kw in HANDOVER_KEYWORDS):
+                            handover_reason = "solicitud_usuario"
+                        
+                        # Check for bot timeout: if lead has been interacting for over 1 min without stage progress
+                        if not handover_reason and lead_id:
+                            session_id_check = f"wa_{phone}"
+                            recent_msgs = await db.chat_messages.find(
+                                {"session_id": session_id_check, "role": "user"},
+                                {"_id": 0, "timestamp": 1}
+                            ).sort("timestamp", -1).to_list(5)
+                            if len(recent_msgs) >= 3:
+                                # Check if first user message was more than 1 minute ago
+                                first_msg_time = recent_msgs[-1].get("timestamp", "")
+                                if first_msg_time:
+                                    try:
+                                        first_dt = datetime.fromisoformat(first_msg_time.replace("Z", "+00:00"))
+                                        now_dt = datetime.now(timezone.utc)
+                                        elapsed = (now_dt - first_dt).total_seconds()
+                                        if elapsed > BOT_TIMEOUT_SECONDS:
+                                            lead_check = await db.leads.find_one({"id": lead_id}, {"_id": 0, "funnel_stage": 1})
+                                            if lead_check and lead_check.get("funnel_stage") == "nuevo":
+                                                handover_reason = "timeout_bot"
+                                    except Exception:
+                                        pass
+                        
+                        if handover_reason:
                             existing_alert = await db.handover_alerts.find_one({"lead_id": lead_id, "status": "pending"}, {"_id": 0})
                             if not existing_alert:
-                                lead_doc = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "whatsapp": 1})
+                                lead_doc = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "whatsapp": 1, "product_interest": 1, "channel": 1, "city": 1, "funnel_stage": 1})
                                 await db.handover_alerts.insert_one({
                                     "id": str(uuid.uuid4()),
                                     "lead_id": lead_id,
                                     "lead_name": lead_doc.get("name", "") if lead_doc else "",
                                     "lead_phone": phone,
                                     "message": text,
+                                    "reason": handover_reason,
+                                    "product": lead_doc.get("product_interest", "") if lead_doc else "",
+                                    "channel": lead_doc.get("channel", "") if lead_doc else "",
                                     "status": "pending",
-                                    "created_at": now
+                                    "created_at": datetime.now(timezone.utc).isoformat()
                                 })
-                                logger.info(f"Human handover alert created for {phone}")
+                                logger.info(f"Handover alert created for {phone} - reason: {handover_reason}")
     return {"status": "ok"}
 
 # Legacy internal webhook (for Chat IA testing)
@@ -2587,6 +2671,9 @@ async def startup():
     
     # Ensure scan_count on QR campaigns
     await db.qr_campaigns.update_many({"scan_count": {"$exists": False}}, {"$set": {"scan_count": 0}})
+    
+    # Ensure bot_paused field on leads
+    await db.leads.update_many({"bot_paused": {"$exists": False}}, {"$set": {"bot_paused": False}})
     
     # Ensure bot_config on products
     products_without_bot = await db.products.find({"bot_config": {"$exists": False}}, {"_id": 0, "id": 1, "name": 1, "description": 1}).to_list(100)
