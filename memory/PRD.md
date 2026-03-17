@@ -11,32 +11,40 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - **DB Collections**: leads, products, games_config, game_plays, quotations, loyalty_sequences, loyalty_enrollments, automation_rules, chat_messages, chat_sessions_meta, admin_users, whatsapp_config, ai_config, handover_alerts, qr_campaigns, initial_intents
 
 ## Key Technical Decisions
-- Phone numbers stored in Ecuador local format (0XXXXXXXXX), converted to international (593XXXXXXXXX) for WhatsApp API calls
-- Funnel stages use internal keys but display renamed labels
-- Games module in standby mode (only slot_machine active)
-- Season and channel fields added to lead schema
+- Phone numbers: Ecuador local format (0XXXXXXXXX), converted to international (593XXXXXXXXX) for WhatsApp API
+- Funnel stages: internal keys, display renamed labels
+- Games: standby mode (only slot_machine active)
+- Season/channel fields on leads
 - QR campaigns auto-detect channel from first WhatsApp message
+- 5 products, each with independent bot personality and knowledge base
+- Product-specific prompts prevent cross-contamination between bots
 
 ## Completed Phases
 
-### Block 1: Configuration & Normalization (Completed 2026-03-17)
-- [x] Phone number normalization for Ecuador (no +593 in internal UI)
-- [x] Stage labels renamed: Contacto inicial, Chat, En Negociación, Leads ganados, Cartera activa, Perdido
-- [x] Season/temporada filter on leads
-- [x] Channel field added to leads
-- [x] Games standby (only Tragamonedas/slot_machine active)
-- [x] Bulk Excel upload tested and working (with phone normalization, season, channel)
+### Block 1: Configuration & Normalization (2026-03-17)
+- [x] Phone normalization Ecuador (no +593 in internal UI)
+- [x] Stage labels: Contacto inicial, Chat, En Negociación, Leads ganados, Cartera activa, Perdido
+- [x] Season/temporada filter + channel field on leads
+- [x] Games standby (only Tragamonedas active)
+- [x] Bulk Excel upload with phone normalization, season, channel
 
-### Block 2: Lead Sources, QR & Channels (Completed 2026-03-17)
-- [x] QR Campaign CRUD (create, read, update, delete)
-- [x] QR Code generation (PNG download) with WhatsApp pre-filled message
-- [x] WhatsApp link generation for each QR campaign
-- [x] Initial Intents CRUD with keyword-based matching
-- [x] Auto-detection of channel from incoming WhatsApp messages (QR campaigns + intents)
-- [x] Channel of origin visible on Lead cards (emerald badge) and Chat sessions
-- [x] Lead create/edit form with Channel and Season dropdowns
-- [x] New admin page: "QR y Canales" with sidebar navigation
-- [x] Default seed: 3 QR campaigns (TV, Fibeca, Evento) + 5 intents (Consulta, Compra, Reclamo, Referido, Recompra)
+### Block 2: Lead Sources, QR & Channels (2026-03-17)
+- [x] QR Campaign CRUD + QR code generation (PNG download)
+- [x] WhatsApp pre-filled link generation
+- [x] Initial Intents CRUD with keyword matching
+- [x] Auto-detection of channel from WhatsApp messages
+- [x] Channel visible on Lead cards and Chat sessions
+- [x] 3 default QR campaigns + 5 default intents
+
+### Block 3: Specialized Bots per Product (2026-03-17)
+- [x] 5 products: Bombro, Gomitas Melatonina, CBD Colageno, Pitch Up, Magnesio Citrato
+- [x] Each product has bot_config: personality, key_benefits, usage_info, restrictions, faqs
+- [x] build_product_bot_prompt() generates product-specific system prompts
+- [x] General "router" bot identifies product interest when not yet known
+- [x] Once product identified, switches to specialized bot (no cross-contamination)
+- [x] Bot config editable per product from admin panel (inline editor)
+- [x] QR scan counter: tracks scans per campaign, displayed in cards
+- [x] Settings page renamed to "Productos y Bots"
 
 ### Previously Completed
 - [x] Live WhatsApp Integration & Bot Intelligence (GPT-5.2)
@@ -47,12 +55,7 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - [x] Full responsiveness (mobile, tablet, desktop)
 - [x] CRM Dashboard, Lead Management, Loyalty System, Automation Rules
 
-## Upcoming Tasks (Prioritized)
-
-### Block 3: Specialized Bots per Product (P1)
-- [ ] 5 product-specific bots (logically independent)
-- [ ] Product detection based on intent, channel, initial message
-- [ ] No cross-contamination of product info between bots
+## Upcoming Tasks
 
 ### Block 4: Human Agent Handover (P1)
 - [ ] Handover logic: bot failure, user request, operational rules
@@ -66,8 +69,7 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - [ ] Notification when assigned lead writes again
 
 ### Block 6: Internal Alerts (P2)
-- [ ] Visual alerts with blinking/strong indicators
-- [ ] Sound on/off toggle
+- [ ] Visual alerts with blinking/strong indicators + sound on/off toggle
 - [ ] Alert routing to assigned advisor
 
 ### Block 7: Lead Panel Changes (P2)
@@ -83,15 +85,13 @@ Build a comprehensive CRM and sales funnel automation platform for the brand "Fa
 - [ ] Per-advisor automation in conversations panel
 
 ### Block 10: Promotions & Campaigns (P3)
-- [ ] "Promociones" admin tab
-- [ ] Campaign creation with targeting, images, text
+- [ ] "Promociones" admin tab with campaign creation
 - [ ] AI-generated promotional images
 - [ ] Quick message templates
 
 ### Block 11: Bulk Upload & Batch Reminders (P3)
 - [ ] Import historical leads
 - [ ] Controlled batch sending with pause/continue
-- [ ] WhatsApp Business best practices
 
 ### Block 12: Admin Dashboard by Advisor (P3)
 - [ ] Sales by advisor charts/comparisons
