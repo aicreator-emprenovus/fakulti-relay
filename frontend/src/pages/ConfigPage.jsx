@@ -17,7 +17,7 @@ const TRIGGER_TYPES = {
   nuevo_lead: "Nuevo lead",
   lead_sin_datos: "Lead sin datos",
   sin_respuesta: "Sin respuesta (horas)",
-  intencion_ia: "Intencion IA",
+  intencion_ia: "Intención IA",
   analisis_conversacion: "Análisis conversación",
   compra_realizada: "Compra realizada",
   dias_post_compra: "Dias post-compra",
@@ -84,7 +84,7 @@ export default function ConfigPage() {
   };
 
   const deleteRule = async (id) => {
-    if (!window.confirm("Eliminar esta regla?")) return;
+    if (!window.confirm("¿Eliminar esta regla?")) return;
     try {
       await axios.delete(`${API}/automation/rules/${id}`);
       toast.success("Regla eliminada");
@@ -112,7 +112,7 @@ export default function ConfigPage() {
     try {
       const res = await axios.post(`${API}/config/whatsapp/test`);
       setTestResult(res.data);
-    } catch { setTestResult({ success: false, message: "Error de conexion" }); }
+    } catch { setTestResult({ success: false, message: "Error de conexión" }); }
     setTesting(false);
   };
 
@@ -252,7 +252,7 @@ export default function ConfigPage() {
                 <div className="flex gap-2">
                   <Button data-testid="save-wa-config" onClick={saveWaConfig} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Guardar Configuración</Button>
                   <Button data-testid="test-wa-btn" variant="outline" onClick={testWaConnection} disabled={testing} className="border-input text-foreground rounded-full">
-                    <Wifi size={14} className="mr-1" /> {testing ? "Probando..." : "Probar Conexion"}
+                    <Wifi size={14} className="mr-1" /> {testing ? "Probando..." : "Probar Conexión"}
                   </Button>
                 </div>
                 {testResult && (
@@ -311,7 +311,7 @@ export default function ConfigPage() {
                   <SelectContent className="bg-card border-input">{Object.entries(TRIGGER_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs text-muted-foreground">Accion</Label>
+              <div><Label className="text-xs text-muted-foreground"> Acción</Label>
                 <Select value={form.action_type} onValueChange={v => setForm(f => ({ ...f, action_type: v }))}>
                   <SelectTrigger className="bg-muted border-input text-foreground"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-input">{Object.entries(ACTION_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
@@ -320,7 +320,7 @@ export default function ConfigPage() {
             </div>
             <div><Label className="text-xs text-muted-foreground">Valor del disparador</Label><Input value={form.trigger_value} onChange={e => setForm(f => ({ ...f, trigger_value: e.target.value }))} placeholder="Ej: 4 (horas), keywords separados por coma" className="bg-muted border-input text-foreground" /></div>
             <div><Label className="text-xs text-muted-foreground">Contenido / Valor de la acción</Label><Textarea value={form.action_value} onChange={e => setForm(f => ({ ...f, action_value: e.target.value }))} className="bg-muted border-input text-foreground" rows={3} /></div>
-            <div><Label className="text-xs text-muted-foreground">Descripcion</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
+            <div><Label className="text-xs text-muted-foreground"> Descripción</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
             <div className="flex items-center gap-2"><Label className="text-xs text-muted-foreground">Activa</Label><Switch checked={form.active} onCheckedChange={v => setForm(f => ({ ...f, active: v }))} /></div>
             <Button data-testid="save-rule-btn" onClick={saveRule} className="w-full bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">{editRule ? "Actualizar" : "Crear Regla"}</Button>
           </div>

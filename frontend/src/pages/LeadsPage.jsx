@@ -70,7 +70,7 @@ export default function LeadsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Eliminar este lead?")) return;
+    if (!window.confirm("¿Eliminar este lead?")) return;
     try {
       await axios.delete(`${API}/leads/${id}`);
       toast.success("Lead eliminado");
@@ -138,7 +138,7 @@ export default function LeadsPage() {
     <div data-testid="leads-page" className="space-y-4 animate-fade-in-up">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-foreground font-heading">Gestion de Leads</h1>
+          <h1 className="text-3xl font-bold text-foreground font-heading">Gestión de Leads</h1>
           <p className="text-sm text-muted-foreground">Funnel de ventas con IA &middot; {total} leads</p>
         </div>
         <Button data-testid="add-lead-btn" onClick={() => { setEditLead(null); setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" }); setShowAdd(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 shadow-sm">

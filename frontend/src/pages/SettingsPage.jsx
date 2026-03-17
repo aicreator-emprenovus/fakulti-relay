@@ -41,7 +41,7 @@ export default function SettingsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Eliminar este producto?")) return;
+    if (!window.confirm("¿Eliminar este producto?")) return;
     try {
       await axios.delete(`${API}/products/${id}`);
       toast.success("Producto eliminado");

@@ -92,7 +92,7 @@ function MetricsDashboard({ metrics }) {
                       <span className="text-sm text-foreground font-semibold">{d.value}</span>
                     </div>
                   ))}
-                  <p className="text-xs text-muted-foreground mt-2">Tasa de retencion: <span className="text-primary font-bold">{summary.retention_rate}%</span></p>
+                  <p className="text-xs text-muted-foreground mt-2">Tasa de retención: <span className="text-primary font-bold">{summary.retention_rate}%</span></p>
                 </div>
               </div>
             ) : <p className="text-sm text-muted-foreground text-center py-8">Sin datos de clientes</p>}
@@ -276,7 +276,7 @@ export default function LoyaltyPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Eliminar esta secuencia?")) return;
+    if (!window.confirm("¿Eliminar esta secuencia?")) return;
     try {
       await axios.delete(`${API}/loyalty/sequences/${id}`);
       toast.success("Secuencia eliminada");
@@ -299,7 +299,7 @@ export default function LoyaltyPage() {
     if (!window.confirm("¿Eliminar esta inscripción?")) return;
     try {
       await axios.delete(`${API}/loyalty/enrollments/${id}`);
-      toast.success("Inscripcion eliminada");
+      toast.success("Inscripción eliminada");
       fetchData();
     } catch { toast.error("Error al eliminar"); }
   };
@@ -323,7 +323,7 @@ export default function LoyaltyPage() {
     <div data-testid="loyalty-page" className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground font-heading">Fidelizacion</h1>
+          <h1 className="text-3xl font-bold text-foreground font-heading">Fidelización</h1>
           <p className="text-sm text-muted-foreground">Secuencias automáticas postventa (hasta 24 mensajes)</p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -402,7 +402,7 @@ export default function LoyaltyPage() {
               </CardContent>
             </Card>
           ))}
-          {sequences.length === 0 && <div className="text-center py-12 text-muted-foreground">No hay secuencias de fidelizacion configuradas</div>}
+          {sequences.length === 0 && <div className="text-center py-12 text-muted-foreground">No hay secuencias de fidelización configuradas</div>}
         </div>
       )}
 
@@ -460,7 +460,7 @@ export default function LoyaltyPage() {
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="bg-card border-input text-foreground max-w-lg max-h-[80vh] overflow-y-auto" data-testid="loyalty-form-dialog">
-          <DialogHeader><DialogTitle>Nueva Secuencia de Fidelizacion</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Nueva Secuencia de Fidelización</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label className="text-muted-foreground text-sm">Producto</Label>
