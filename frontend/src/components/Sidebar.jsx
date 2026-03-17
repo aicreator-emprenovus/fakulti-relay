@@ -15,7 +15,7 @@ const navItems = [
   { path: "/chat", icon: Phone, label: "WhatsApp Bot" },
   { path: "/bulk", icon: Upload, label: "Carga / Descarga" },
   { path: "/config", icon: Zap, label: "Configuración" },
-  { path: "/settings", icon: Settings, label: "Productos" },
+  { path: "/settings", icon: Settings, label: "Productos y Bots" },
 ];
 
 export default function Sidebar({ currentPath }) {

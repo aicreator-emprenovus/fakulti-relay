@@ -463,6 +463,24 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
     await db.products.delete_one({"id": product_id})
     return {"message": "Producto eliminado"}
 
+@api_router.get("/products/{product_id}/bot-config")
+async def get_product_bot_config(product_id: str, user=Depends(get_current_user)):
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    # Merge stored config with defaults to ensure all fields are present
+    defaults = {"personality": "", "key_benefits": "", "usage_info": "", "restrictions": "", "faqs": ""}
+    stored_config = product.get("bot_config", {})
+    return {**defaults, **stored_config}
+
+@api_router.put("/products/{product_id}/bot-config")
+async def update_product_bot_config(product_id: str, config: dict, user=Depends(get_current_user)):
+    allowed = {"personality", "key_benefits", "usage_info", "restrictions", "faqs"}
+    clean = {k: v for k, v in config.items() if k in allowed}
+    await db.products.update_one({"id": product_id}, {"$set": {"bot_config": clean}})
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    return product.get("bot_config", {})
+
 # ========== GAME ROUTES ==========
 
 @api_router.get("/games/config")
@@ -940,10 +958,19 @@ async def send_chat_message(req: ChatMessageRequest, user=Depends(get_current_us
         if quote:
             pending_quote = f"\nEste cliente tiene una cotización pendiente por ${quote['total']:.2f}. Pregunta si desea continuar con ella."
     
-    # Build context-aware system prompt
-    name_instruction = ""
-    if not has_name:
-        name_instruction = """
+    # Use product-specific bot if product interest is identified
+    product_interest = lead.get("product_interest", "") if lead else ""
+    product_specific_prompt = None
+    if product_interest:
+        product_specific_prompt = await build_product_bot_prompt(product_interest, products, lead or {})
+    
+    if product_specific_prompt:
+        system_msg = product_specific_prompt + (f"\n{pending_quote}" if pending_quote else "")
+    else:
+        # Build general context-aware system prompt
+        name_instruction = ""
+        if not has_name:
+            name_instruction = """
 IMPORTANTE - REGISTRO DE LEAD:
 - Este es un lead NUEVO. Saluda cordialmente y pregunta su nombre completo.
 - Una vez que proporcione su nombre, confirma diciendo su nombre y pregunta su numero de WhatsApp.
@@ -951,22 +978,21 @@ IMPORTANTE - REGISTRO DE LEAD:
 - Cuando el usuario diga su nombre, incluye al FINAL de tu respuesta (en una linea separada): [LEAD_NAME:Nombre Apellido]
 - Solo incluye [LEAD_NAME:] cuando el usuario efectivamente diga su nombre.
 - Recopila los datos uno por uno de forma natural, no todos de golpe."""
-    else:
-        # Check what data is missing on existing lead
-        missing_fields = []
-        if lead and not lead.get("whatsapp"):
-            missing_fields.append("numero de WhatsApp")
-        if lead and not lead.get("city"):
-            missing_fields.append("ciudad")
-        if lead and not lead.get("product_interest"):
-            missing_fields.append("que producto le interesa")
-        missing_instruction = ""
-        if missing_fields:
-            missing_instruction = f"\nDATOS FALTANTES DEL CLIENTE: Necesitas preguntarle su {', '.join(missing_fields)}. Hazlo de forma natural durante la conversacion."
-            missing_instruction += "\nCuando el cliente proporcione datos, incluye al final: [UPDATE_LEAD:campo=valor] donde campo puede ser: whatsapp, city, product_interest"
-        name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversacion.{missing_instruction}"
+        else:
+            missing_fields = []
+            if lead and not lead.get("whatsapp"):
+                missing_fields.append("numero de WhatsApp")
+            if lead and not lead.get("city"):
+                missing_fields.append("ciudad")
+            if lead and not lead.get("product_interest"):
+                missing_fields.append("que producto le interesa")
+            missing_instruction = ""
+            if missing_fields:
+                missing_instruction = f"\nDATOS FALTANTES DEL CLIENTE: Necesitas preguntarle su {', '.join(missing_fields)}. Hazlo de forma natural durante la conversacion."
+                missing_instruction += "\nCuando el cliente proporcione datos, incluye al final: [UPDATE_LEAD:campo=valor] donde campo puede ser: whatsapp, city, product_interest"
+            name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversacion.{missing_instruction}"
 
-    system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Faculty).
+        system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Faculty).
 Tu funcion: Atender leads, calificar, cotizar y cerrar venta.
 {name_instruction}
 {pending_quote}
@@ -985,8 +1011,11 @@ REGLAS:
 - Si el usuario pide precio, proporciona la información.
 - Si pide comprar, indica los pasos.
 
+DETECCION DE PRODUCTO:
+Cuando identifiques que producto le interesa al cliente, incluye: [UPDATE_LEAD:product_interest=NombreProducto]
+
 CLASIFICACION AUTOMATICA:
-Al final de CADA respuesta, incluye en una linea separada la etapa del lead basada en la conversacion:
+Al final de CADA respuesta, incluye en una linea separada la etapa del lead:
 [STAGE:nuevo] - Primer contacto, aun no muestra interes especifico
 [STAGE:interesado] - Pregunta por productos, precios o beneficios
 [STAGE:en_negociacion] - Solicita cotización, forma de pago, envio o stock
@@ -1626,6 +1655,102 @@ async def send_whatsapp_message(to_phone: str, text: str):
         logger.error(f"WhatsApp send exception: {e}")
         return False
 
+async def build_product_bot_prompt(product_name: str, all_products: list, lead_data: dict) -> str:
+    """Build a product-specific bot prompt. Only includes info about the target product."""
+    target = None
+    for p in all_products:
+        if product_name.lower() in p["name"].lower() or p["name"].lower() in product_name.lower():
+            target = p
+            break
+    
+    if not target:
+        return None
+    
+    # Get bot config from product or use defaults
+    bot_cfg = target.get("bot_config", {})
+    personality = bot_cfg.get("personality", "experto amigable en el producto")
+    key_benefits = bot_cfg.get("key_benefits", target.get("description", ""))
+    usage_info = bot_cfg.get("usage_info", "Consultar con un asesor para instrucciones de uso.")
+    restrictions = bot_cfg.get("restrictions", "No hacer promesas medicas. No afirmar que cura enfermedades.")
+    faqs = bot_cfg.get("faqs", "")
+    
+    lead_name = lead_data.get("name", "")
+    lead_city = lead_data.get("city", "")
+    lead_email = lead_data.get("email", "")
+    
+    # Build data context
+    data_context = ""
+    if lead_name:
+        data_context = f"\nEl cliente se llama {lead_name}."
+        if lead_city: data_context += f" Ciudad: {lead_city}."
+        if lead_email: data_context += f" Email: {lead_email}."
+    
+    missing_fields = []
+    if not lead_name: missing_fields.append("nombre y apellido")
+    if not lead_city: missing_fields.append("ciudad")
+    if not lead_email: missing_fields.append("email")
+    missing_instruction = ""
+    if missing_fields:
+        missing_instruction = f"\nDATOS FALTANTES: Recopila de forma natural: {', '.join(missing_fields)}."
+    
+    first_contact = "\nEste es un lead NUEVO. Saluda y pregunta su nombre." if not lead_name else ""
+    
+    # Other products list (just names and prices for redirection)
+    other_products = [f"- {p['name']}: ${p['price']}" for p in all_products if p["id"] != target["id"]]
+    other_products_text = "\n".join(other_products) if other_products else "No hay otros productos."
+    
+    return f"""IDENTIDAD DEL AGENTE
+Eres el asesor virtual especializado en {target['name']} de la marca Faculty por WhatsApp.
+Personalidad: {personality}
+Tu estilo: natural, cercano, humano, profesional, claro, breve.
+Habla como persona real, no como robot. Frases cortas. Maximo 1-2 emojis por mensaje.
+{first_contact}
+{data_context}
+{missing_instruction}
+
+TU PRODUCTO: {target['name']}
+Codigo: {target.get('code', '')}
+Precio: ${target['price']}
+{f"Precio original: ${target.get('original_price', '')}" if target.get('original_price') else ""}
+Descripcion: {target.get('description', '')}
+Beneficios clave: {key_benefits}
+Como se usa: {usage_info}
+{f"Preguntas frecuentes: {faqs}" if faqs else ""}
+
+REGLA CRITICA - PRODUCTO UNICO
+Solo puedes hablar sobre {target['name']}. NO mezcles informacion de otros productos.
+Si el cliente pregunta por otro producto, responde:
+"Claro, tambien tenemos otros productos. Te puedo conectar con informacion de ese producto. Quieres que te cuente sobre alguno de estos?"
+Y lista brevemente los otros productos disponibles:
+{other_products_text}
+
+Luego vuelve a tu producto principal: {target['name']}.
+
+FLUJO
+1. Si no tienes nombre, saluda y pregunta nombre.
+2. Con nombre: "Hola [nombre], me alegra que te interese {target['name']}. Cuentame, ya conocias este producto?"
+3. Adapta la explicacion segun las dudas del cliente.
+4. Guia hacia compra sin presionar.
+
+RESTRICCIONES
+{restrictions}
+- NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
+- Si piden hablar con un humano, responde que un asesor se comunicara pronto.
+
+EXTRACCION AUTOMATICA DE DATOS
+Al final de CADA respuesta, incluye en lineas separadas:
+- Si detectas nombre: [LEAD_NAME:Nombre Apellido]
+- Si detectas ciudad: [UPDATE_LEAD:city=Ciudad]
+- Si detectas email: [UPDATE_LEAD:email=correo@ejemplo.com]
+- Clasifica la etapa:
+  [STAGE:nuevo] - Primer contacto
+  [STAGE:interesado] - Pregunta por producto, precios o beneficios
+  [STAGE:en_negociacion] - Solicita compra, pago, envio
+  [STAGE:cliente_nuevo] - Confirma compra
+  [STAGE:perdido] - Rechaza explicitamente
+Incluye SIEMPRE [STAGE:] al final."""
+
+
 async def process_whatsapp_incoming(phone: str, message_text: str):
     """Process an incoming WhatsApp message through GPT-5.2 AI bot."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -1666,34 +1791,44 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     products = await db.products.find({}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
     
-    # Build context about what data we already have and what's missing
-    missing_fields = []
-    if not lead_name:
-        missing_fields.append("nombre y apellido")
-    if not existing_lead.get("city"):
-        missing_fields.append("ciudad")
-    if not existing_lead.get("email"):
-        missing_fields.append("email")
-    if not existing_lead.get("product_interest"):
-        missing_fields.append("producto de interes")
+    # Check if lead has a product interest -> use product-specific bot
+    product_interest = existing_lead.get("product_interest", "")
+    product_specific_prompt = None
+    if product_interest:
+        product_specific_prompt = await build_product_bot_prompt(product_interest, products, existing_lead)
     
-    data_context = ""
-    if lead_name:
-        data_context = f"\nEl cliente se llama {lead_name}."
-        if existing_lead.get("city"):
-            data_context += f" Ciudad: {existing_lead['city']}."
-        if existing_lead.get("email"):
-            data_context += f" Email: {existing_lead['email']}."
-        if existing_lead.get("product_interest"):
-            data_context += f" Interesado en: {existing_lead['product_interest']}."
-    
-    missing_instruction = ""
-    if missing_fields:
-        missing_instruction = f"\nDATOS QUE AUN FALTAN POR RECOPILAR: {', '.join(missing_fields)}. Recopilalos de forma natural durante la conversacion, uno a la vez, sin parecer formulario."
-    
-    first_contact = "\nEste es un lead NUEVO. Tu primer mensaje debe ser un saludo corto y preguntar su nombre." if not lead_name else ""
-    
-    system_msg = f"""IDENTIDAD DEL AGENTE
+    if product_specific_prompt:
+        system_msg = product_specific_prompt
+    else:
+        # General router bot - helps identify product interest
+        # Build context about what data we already have and what's missing
+        missing_fields = []
+        if not lead_name:
+            missing_fields.append("nombre y apellido")
+        if not existing_lead.get("city"):
+            missing_fields.append("ciudad")
+        if not existing_lead.get("email"):
+            missing_fields.append("email")
+        if not existing_lead.get("product_interest"):
+            missing_fields.append("producto de interes")
+        
+        data_context = ""
+        if lead_name:
+            data_context = f"\nEl cliente se llama {lead_name}."
+            if existing_lead.get("city"):
+                data_context += f" Ciudad: {existing_lead['city']}."
+            if existing_lead.get("email"):
+                data_context += f" Email: {existing_lead['email']}."
+            if existing_lead.get("product_interest"):
+                data_context += f" Interesado en: {existing_lead['product_interest']}."
+        
+        missing_instruction = ""
+        if missing_fields:
+            missing_instruction = f"\nDATOS QUE AUN FALTAN POR RECOPILAR: {', '.join(missing_fields)}. Recopilalos de forma natural durante la conversacion, uno a la vez, sin parecer formulario."
+        
+        first_contact = "\nEste es un lead NUEVO. Tu primer mensaje debe ser un saludo corto y preguntar su nombre." if not lead_name else ""
+        
+        system_msg = f"""IDENTIDAD DEL AGENTE
 Eres el asesor virtual de la marca Faculty por WhatsApp.
 Representas los productos desarrollados por Fakulti Laboratorios.
 Tu estilo: natural, cercano, humano, profesional, claro, breve.
@@ -1706,76 +1841,48 @@ Puedes usar algunos emojis de forma natural (1-2 por mensaje maximo).
 PRODUCTO PRINCIPAL
 Bone Broth Hidrolizado (Bombro).
 Suplemento nutricional a base de caldo de hueso hidrolizado de alta absorcion.
-Concepto clave: No es solo caldo de hueso. Es caldo de hueso HIDROLIZADO, lo que permite una absorcion mas facil para el cuerpo.
 
 TODOS LOS PRODUCTOS:
 {product_info}
 
 FLUJO DE CONVERSACION
 1. Si no tienes el nombre, saluda y pregunta nombre.
-2. Una vez tengas el nombre, saluda "Hola [nombre], mucho gusto" y haz pregunta abierta:
-   "Cuentame, ya conocias el Bone Broth o es la primera vez que escuchas del producto?"
-   o "Que te llamo la atencion del producto?"
-3. Identifica intencion: mejorar digestion, nutricion diaria, mas energia, controlar peso, conocer producto.
-4. Adapta la explicacion segun la respuesta.
-5. Guia hacia compra o recomendacion sin presionar.
+2. Una vez tengas el nombre, saluda "Hola [nombre], mucho gusto" y pregunta que producto le interesa.
+3. Cuando identifiques el producto de interes, incluye: [UPDATE_LEAD:product_interest=NombreProducto]
+4. Una vez detectado el producto, enfocate en ese producto especificamente.
 
-COMO EXPLICAR EL PRODUCTO
-Evita lenguaje tecnico. Ejemplo natural:
-"El Bone Broth es un caldo de hueso, pero hidrolizado, lo que significa que el cuerpo lo absorbe mucho mas facil. Por eso muchas personas lo usan para mejorar su nutricion diaria o apoyar la digestion."
+DETECCION DE PRODUCTO - MUY IMPORTANTE
+Tu objetivo principal es identificar que producto le interesa al cliente.
+Cuando el cliente mencione o muestre interes en un producto especifico, incluye:
+[UPDATE_LEAD:product_interest=NombreExactoDelProducto]
+Esto activara el bot especializado en ese producto para las siguientes interacciones.
 
 COMO RESPONDER
 Evita: "Gracias por su consulta", "Procedo a brindarle la informacion"
 Usa: "Claro, te cuento", "Buena pregunta", "Mira, te explico rapido"
 
-PREGUNTAS DURANTE LA CONVERSACION
-"Lo tomarias mas en la manana o en la noche?"
-"Buscas algo mas para digestion o para nutricion general?"
-"Ya has probado algo parecido antes?"
-
-RESPUESTAS CORTAS: entre 1 y 4 lineas. Evita bloques largos.
-
-GENERAR INTERES
-"Muchos clientes lo estan usando como parte de su rutina diaria porque es una forma facil de agregar proteina al dia."
-
-SI EL CLIENTE DUDA
-"Si quieres, tambien puedo contarte como lo estan usando otras personas."
-"Si quieres, te explico como se toma."
-
-COMO SE TOMA
-"Normalmente se toma un sachet al dia. Muchas personas lo toman en el desayuno o en la noche como una sopa caliente."
-
-PRECIO
-Responde el precio y luego pregunta algo natural:
-"Si quieres, tambien puedo contarte la promocion que tenemos activa."
-
-SI EL CLIENTE CALLA
-"Si tienes alguna duda sobre el producto, con gusto te ayudo."
+RESPUESTAS CORTAS: entre 1 y 4 lineas.
 
 PROHIBIDO
 - No prometer curas.
 - No decir que cura enfermedades.
 - No afirmar que reemplaza tratamientos medicos.
-- No usar lenguaje medico.
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
 - Si piden hablar con un humano, responde que un asesor se comunicara pronto.
 
-OBJETIVO FINAL
-El cliente debe sentir que hablo con una persona real que lo escucho, le explico el producto, resolvio sus dudas y lo ayudo a tomar una decision.
-
 EXTRACCION AUTOMATICA DE DATOS
-Durante o al final de CADA respuesta, incluye en lineas separadas (el cliente NO vera estos tags, el sistema los procesa automaticamente):
-- Si detectas nombre y apellido: [LEAD_NAME:Nombre Apellido]
+Al final de CADA respuesta, incluye en lineas separadas:
+- Si detectas nombre: [LEAD_NAME:Nombre Apellido]
 - Si detectas ciudad: [UPDATE_LEAD:city=Ciudad]
 - Si detectas email: [UPDATE_LEAD:email=correo@ejemplo.com]
 - Si detectas producto de interes: [UPDATE_LEAD:product_interest=NombreProducto]
 - Clasifica la etapa:
-  [STAGE:nuevo] - Primer contacto, sin interes especifico
+  [STAGE:nuevo] - Primer contacto
   [STAGE:interesado] - Pregunta por productos, precios o beneficios
-  [STAGE:en_negociacion] - Solicita compra, pago, envío, cotización
+  [STAGE:en_negociacion] - Solicita compra, pago, envio, cotizacion
   [STAGE:cliente_nuevo] - Confirma compra
   [STAGE:perdido] - Rechaza explicitamente
-Incluye SIEMPRE el tag [STAGE:] al final de cada respuesta."""
+Incluye SIEMPRE [STAGE:] al final."""
 
     # Load conversation history
     session_id = f"wa_{phone}"
@@ -2017,9 +2124,9 @@ async def update_ai_config(req: AIConfigUpdate, user=Depends(get_current_user)):
 @api_router.get("/qr-campaigns")
 async def get_qr_campaigns(user=Depends(get_current_user)):
     campaigns = await db.qr_campaigns.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    # Add stats for each campaign
     for c in campaigns:
         c["leads_count"] = await db.leads.count_documents({"channel": c.get("channel", ""), "source": c.get("source", "")})
+        c.setdefault("scan_count", 0)
     return campaigns
 
 @api_router.post("/qr-campaigns")
@@ -2167,7 +2274,9 @@ async def detect_channel_from_message(message_text: str, lead_id: str):
             if campaign.get("intent"):
                 update["initial_intent"] = campaign["intent"]
             await db.leads.update_one({"id": lead_id}, {"$set": update})
-            logger.info(f"QR campaign matched for lead {lead_id}: {campaign['name']} -> channel={campaign['channel']}")
+            # Increment scan count
+            await db.qr_campaigns.update_one({"id": campaign["id"]}, {"$inc": {"scan_count": 1}})
+            logger.info(f"QR campaign matched for lead {lead_id}: {campaign['name']} -> channel={campaign['channel']} (scan #{campaign.get('scan_count', 0) + 1})")
             return True
     
     # Check configurable intents (keyword matching)
@@ -2242,10 +2351,11 @@ async def startup():
     product_count = await db.products.count_documents({})
     if product_count == 0:
         products = [
-            {"id": str(uuid.uuid4()), "name": "Bombro - Bone Broth Hidrolizado", "code": "BOMBRO", "description": "Bone Broth Hidrolizado premium. Producto unico en Ecuador. Rico en colageno y nutrientes esenciales.", "price": 55.95, "original_price": 59.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2023/02/EDIT_BONE-BROTH-POWDER-200G_FAKULTI_2024.png", "stock": 150, "category": "nutricion", "active": True},
-            {"id": str(uuid.uuid4()), "name": "Gomitas Melatonina", "code": "GUMMELAT", "description": "Gomitas de melatonina para un descanso natural y reparador.", "price": 13.25, "original_price": 15.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 200, "category": "bienestar", "active": True},
-            {"id": str(uuid.uuid4()), "name": "CBD Colageno Hidrolizado", "code": "CBD-COL", "description": "Colageno hidrolizado con CBD para soporte articular y bienestar integral.", "price": 52.36, "original_price": 57.45, "image_url": "https://fakultisupplements.com/wp-content/uploads/2025/08/sachets-17.png", "stock": 100, "category": "cbd", "active": True},
-            {"id": str(uuid.uuid4()), "name": "Pitch Up", "code": "PITCHUP", "description": "Suplemento energetico natural para rendimiento fisico y mental.", "price": 21.84, "original_price": 24.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-EXIT-FAT.png", "stock": 120, "category": "energia", "active": True},
+            {"id": str(uuid.uuid4()), "name": "Bombro - Bone Broth Hidrolizado", "code": "BOMBRO", "description": "Bone Broth Hidrolizado premium. Producto unico en Ecuador. Rico en colageno y nutrientes esenciales.", "price": 55.95, "original_price": 59.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2023/02/EDIT_BONE-BROTH-POWDER-200G_FAKULTI_2024.png", "stock": 150, "category": "nutricion", "active": True, "bot_config": {"personality": "Experto en nutricion y caldo de hueso hidrolizado. Apasionado por ayudar a las personas a mejorar su salud de forma natural.", "key_benefits": "Colageno de alta absorcion, mejora digestion, soporte articular, fuente de proteina, facil de preparar como sopa caliente o fria", "usage_info": "Un sachet al dia. Se puede tomar en el desayuno como sopa caliente o en la noche. Diluir en agua caliente y mezclar.", "restrictions": "No prometer curas. No decir que cura enfermedades. No afirmar que reemplaza tratamientos medicos. Nunca usar lenguaje medico complejo.", "faqs": "Se toma un sachet al dia. Sabe como una sopa de hueso suave. Es apto para toda la familia. No contiene gluten."}},
+            {"id": str(uuid.uuid4()), "name": "Gomitas Melatonina", "code": "GUMMELAT", "description": "Gomitas de melatonina para un descanso natural y reparador.", "price": 13.25, "original_price": 15.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 200, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de bienestar y descanso. Empatico con las personas que tienen problemas de sueno.", "key_benefits": "Ayuda a conciliar el sueno de forma natural, sabor agradable, facil de tomar, sin dependencia", "usage_info": "Tomar 1-2 gomitas 30 minutos antes de dormir. No exceder la dosis recomendada.", "restrictions": "No prometer que cura insomnio. No reemplaza tratamiento medico. No combinar con otros sedantes sin consultar medico.", "faqs": "Son gomitas con sabor frutal. Se toman antes de dormir. No generan dependencia. Aptas para adultos."}},
+            {"id": str(uuid.uuid4()), "name": "CBD Colageno Hidrolizado", "code": "CBD-COL", "description": "Colageno hidrolizado con CBD para soporte articular y bienestar integral.", "price": 52.36, "original_price": 57.45, "image_url": "https://fakultisupplements.com/wp-content/uploads/2025/08/sachets-17.png", "stock": 100, "category": "cbd", "active": True, "bot_config": {"personality": "Especialista en bienestar integral y productos con CBD. Informado y objetivo sobre los beneficios del CBD.", "key_benefits": "Soporte articular, bienestar integral, colageno para piel y articulaciones, CBD para relajacion natural", "usage_info": "Un sachet al dia diluido en agua. Preferiblemente en la manana o antes de dormir.", "restrictions": "No prometer curas. CBD no es medicina. No reemplaza tratamientos medicos. Informar que el CBD es legal en Ecuador como suplemento.", "faqs": "El CBD es legal en Ecuador como suplemento. No produce efectos psicoactivos. Contiene colageno hidrolizado mas CBD."}},
+            {"id": str(uuid.uuid4()), "name": "Pitch Up", "code": "PITCHUP", "description": "Suplemento energetico natural para rendimiento fisico y mental.", "price": 21.84, "original_price": 24.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-EXIT-FAT.png", "stock": 120, "category": "energia", "active": True, "bot_config": {"personality": "Coach de energia y rendimiento. Motivador y practico.", "key_benefits": "Energia natural sin crash, mejora rendimiento fisico y mental, ideal para deportistas y profesionales activos", "usage_info": "Tomar un sachet al dia, preferiblemente en la manana o antes de actividad fisica. Mezclar con agua.", "restrictions": "No prometer resultados deportivos especificos. No es un estimulante. No reemplaza una dieta balanceada.", "faqs": "No contiene cafeina artificial. Es energia natural. Se puede tomar todos los dias."}},
+            {"id": str(uuid.uuid4()), "name": "Magnesio Citrato", "code": "MAGCIT", "description": "Magnesio citrato de alta absorcion para soporte muscular, nervioso y cardiovascular.", "price": 18.50, "original_price": 22.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 180, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de salud preventiva. Conocedor de los beneficios del magnesio para el bienestar diario.", "key_benefits": "Soporte muscular y nervioso, ayuda a relajacion, contribuye al funcionamiento cardiovascular, alta absorcion", "usage_info": "Un sachet al dia diluido en agua. Se puede tomar en cualquier momento del dia.", "restrictions": "No prometer curas. No reemplaza tratamientos medicos. Consultar con medico si toma otros medicamentos.", "faqs": "El magnesio citrato tiene mejor absorcion que otras formas. Ayuda con calambres musculares. Seguro para uso diario."}},
         ]
         for p in products:
             p["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -2474,6 +2584,23 @@ async def startup():
     
     # Ensure initial_intent field exists on all leads
     await db.leads.update_many({"initial_intent": {"$exists": False}}, {"$set": {"initial_intent": ""}})
+    
+    # Ensure scan_count on QR campaigns
+    await db.qr_campaigns.update_many({"scan_count": {"$exists": False}}, {"$set": {"scan_count": 0}})
+    
+    # Ensure bot_config on products
+    products_without_bot = await db.products.find({"bot_config": {"$exists": False}}, {"_id": 0, "id": 1, "name": 1, "description": 1}).to_list(100)
+    for p in products_without_bot:
+        default_bot = {
+            "personality": f"Especialista en {p.get('name', 'el producto')}. Amigable y profesional.",
+            "key_benefits": p.get("description", ""),
+            "usage_info": "Consultar indicaciones del producto.",
+            "restrictions": "No hacer promesas medicas. No afirmar que cura enfermedades.",
+            "faqs": ""
+        }
+        await db.products.update_one({"id": p["id"]}, {"$set": {"bot_config": default_bot}})
+    if products_without_bot:
+        logger.info(f"Added bot_config to {len(products_without_bot)} products")
     
     logger.info("Faculty CRM Backend ready")
 

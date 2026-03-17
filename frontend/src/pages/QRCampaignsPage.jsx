@@ -208,9 +208,9 @@ export default function QRCampaignsPage() {
                 </div>
                 {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Target className="h-3.5 w-3.5" />
-                    <span>{c.leads_count || 0} leads</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Target className="h-3.5 w-3.5" />{c.leads_count || 0} leads</span>
+                    <span className="flex items-center gap-1"><QrCode className="h-3.5 w-3.5" />{c.scan_count || 0} escaneos</span>
                   </div>
                   <span className="text-xs text-muted-foreground">Fuente: {c.source}</span>
                 </div>
