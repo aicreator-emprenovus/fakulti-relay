@@ -176,6 +176,25 @@ class CRMWhatsAppReply(BaseModel):
     lead_id: str
     message: str
 
+class QRCampaignCreate(BaseModel):
+    name: str
+    channel: str
+    source: str
+    product: Optional[str] = ""
+    initial_message: str
+    intent: Optional[str] = ""
+    description: Optional[str] = ""
+    active: Optional[bool] = True
+
+class InitialIntentCreate(BaseModel):
+    name: str
+    keywords: List[str]
+    channel: Optional[str] = ""
+    source: Optional[str] = ""
+    product: Optional[str] = ""
+    response_hint: Optional[str] = ""
+    active: Optional[bool] = True
+
 # ========== AUTH UTILITIES ==========
 
 def create_token(user_id: str, email: str):
@@ -1124,11 +1143,13 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         source = meta.get("source", "chat_ia") if meta else "chat_ia"
         # Get lead info for WhatsApp sessions
         lead_phone = ""
+        lead_channel = ""
         has_alert = False
         if source == "whatsapp" and s.get("lead_id"):
-            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1})
+            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1})
             if lead_doc:
                 lead_phone = lead_doc.get("whatsapp", "")
+                lead_channel = lead_doc.get("channel", "")
                 if not lead_name:
                     lead_name = lead_doc.get("name", "")
             alert = await db.handover_alerts.find_one({"lead_id": s["lead_id"], "status": "pending"}, {"_id": 0})
@@ -1136,7 +1157,7 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         result.append({
             "session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name,
             "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"],
-            "source": source, "lead_phone": lead_phone, "has_alert": has_alert
+            "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "has_alert": has_alert
         })
     return result
 
@@ -1619,7 +1640,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         new_lead = {
             "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
             "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
-            "season": "", "channel": "WhatsApp",
+            "season": "", "channel": "WhatsApp", "initial_intent": "",
             "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
             "purchase_history": [], "coupon_used": None, "recompra_date": None,
             "notes": "Registrado vía WhatsApp",
@@ -1629,6 +1650,17 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         await db.leads.insert_one(new_lead)
         lead_id = new_lead["id"]
         existing_lead = new_lead
+        # Auto-detect channel/source from first message (QR campaigns & intents)
+        await detect_channel_from_message(message_text, lead_id)
+        # Refresh lead data after potential update
+        existing_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0}) or existing_lead
+    elif not existing_lead.get("channel") or existing_lead.get("channel") == "WhatsApp":
+        # Check on subsequent messages too if channel not yet identified
+        history_count = await db.chat_messages.count_documents({"session_id": f"wa_{phone}"})
+        if history_count <= 2:
+            detected = await detect_channel_from_message(message_text, lead_id)
+            if detected:
+                existing_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0}) or existing_lead
     
     # Build product catalog
     products = await db.products.find({}, {"_id": 0}).to_list(100)
@@ -1980,6 +2012,182 @@ async def update_ai_config(req: AIConfigUpdate, user=Depends(get_current_user)):
 
 # ========== HUMAN AGENT DERIVATION ==========
 
+# ========== QR CAMPAIGNS ==========
+
+@api_router.get("/qr-campaigns")
+async def get_qr_campaigns(user=Depends(get_current_user)):
+    campaigns = await db.qr_campaigns.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    # Add stats for each campaign
+    for c in campaigns:
+        c["leads_count"] = await db.leads.count_documents({"channel": c.get("channel", ""), "source": c.get("source", "")})
+    return campaigns
+
+@api_router.post("/qr-campaigns")
+async def create_qr_campaign(req: QRCampaignCreate, user=Depends(get_current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        **req.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.qr_campaigns.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/qr-campaigns/{campaign_id}")
+async def update_qr_campaign(campaign_id: str, req: QRCampaignCreate, user=Depends(get_current_user)):
+    await db.qr_campaigns.update_one({"id": campaign_id}, {"$set": req.model_dump()})
+    campaign = await db.qr_campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    return campaign
+
+@api_router.delete("/qr-campaigns/{campaign_id}")
+async def delete_qr_campaign(campaign_id: str, user=Depends(get_current_user)):
+    await db.qr_campaigns.delete_one({"id": campaign_id})
+    return {"message": "Campaña QR eliminada"}
+
+@api_router.get("/qr-campaigns/{campaign_id}/qrcode")
+async def generate_qr_code(campaign_id: str):
+    """Generate a QR code image for a campaign's WhatsApp link."""
+    import qrcode
+    from PIL import Image
+    
+    campaign = await db.qr_campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    
+    # Get WhatsApp phone number from config
+    config = await get_whatsapp_config()
+    wa_phone = config.get("display_phone", "")
+    if not wa_phone:
+        # Try getting from Meta API
+        if config.get("phone_number_id") and config.get("access_token"):
+            try:
+                url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}"
+                headers = {"Authorization": f"Bearer {config['access_token']}"}
+                async with httpx.AsyncClient() as c:
+                    resp = await c.get(url, headers=headers, timeout=10)
+                    if resp.status_code == 200:
+                        wa_phone = resp.json().get("display_phone_number", "")
+            except Exception:
+                pass
+        if not wa_phone:
+            wa_phone = "593000000000"
+    
+    # Clean phone for wa.me link
+    wa_phone_clean = wa_phone.replace("+", "").replace(" ", "").replace("-", "")
+    if wa_phone_clean.startswith("0"):
+        wa_phone_clean = "593" + wa_phone_clean[1:]
+    
+    # Build WhatsApp link with pre-filled message
+    import urllib.parse
+    encoded_msg = urllib.parse.quote(campaign["initial_message"])
+    wa_link = f"https://wa.me/{wa_phone_clean}?text={encoded_msg}"
+    
+    # Generate QR code
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
+    qr.add_data(wa_link)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#1A6B3C", back_color="white").convert("RGB")
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename=qr_{campaign['name'].replace(' ', '_')}.png"}
+    )
+
+@api_router.get("/qr-campaigns/{campaign_id}/link")
+async def get_qr_link(campaign_id: str, user=Depends(get_current_user)):
+    """Get the WhatsApp link for a QR campaign."""
+    campaign = await db.qr_campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    
+    config = await get_whatsapp_config()
+    wa_phone = config.get("display_phone", "593000000000")
+    wa_phone_clean = wa_phone.replace("+", "").replace(" ", "").replace("-", "")
+    if wa_phone_clean.startswith("0"):
+        wa_phone_clean = "593" + wa_phone_clean[1:]
+    
+    import urllib.parse
+    encoded_msg = urllib.parse.quote(campaign["initial_message"])
+    wa_link = f"https://wa.me/{wa_phone_clean}?text={encoded_msg}"
+    
+    return {"link": wa_link, "campaign": campaign}
+
+# ========== INITIAL INTENTS ==========
+
+@api_router.get("/intents")
+async def get_intents(user=Depends(get_current_user)):
+    intents = await db.initial_intents.find({}, {"_id": 0}).to_list(50)
+    return intents
+
+@api_router.post("/intents")
+async def create_intent(req: InitialIntentCreate, user=Depends(get_current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        **req.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.initial_intents.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/intents/{intent_id}")
+async def update_intent(intent_id: str, req: InitialIntentCreate, user=Depends(get_current_user)):
+    await db.initial_intents.update_one({"id": intent_id}, {"$set": req.model_dump()})
+    intent = await db.initial_intents.find_one({"id": intent_id}, {"_id": 0})
+    return intent
+
+@api_router.delete("/intents/{intent_id}")
+async def delete_intent(intent_id: str, user=Depends(get_current_user)):
+    await db.initial_intents.delete_one({"id": intent_id})
+    return {"message": "Intención eliminada"}
+
+# ========== QR/CHANNEL AUTO-DETECTION HELPER ==========
+
+async def detect_channel_from_message(message_text: str, lead_id: str):
+    """Check if the incoming message matches a QR campaign or initial intent, and auto-tag the lead."""
+    msg_lower = message_text.strip().lower()
+    
+    # Check QR campaigns first (exact match on initial message)
+    campaigns = await db.qr_campaigns.find({"active": True}, {"_id": 0}).to_list(50)
+    for campaign in campaigns:
+        campaign_msg = campaign["initial_message"].strip().lower()
+        if msg_lower == campaign_msg or campaign_msg in msg_lower:
+            update = {
+                "channel": campaign.get("channel", ""),
+                "source": campaign.get("source", ""),
+                "last_interaction": datetime.now(timezone.utc).isoformat()
+            }
+            if campaign.get("product"):
+                update["product_interest"] = campaign["product"]
+            if campaign.get("intent"):
+                update["initial_intent"] = campaign["intent"]
+            await db.leads.update_one({"id": lead_id}, {"$set": update})
+            logger.info(f"QR campaign matched for lead {lead_id}: {campaign['name']} -> channel={campaign['channel']}")
+            return True
+    
+    # Check configurable intents (keyword matching)
+    intents = await db.initial_intents.find({"active": True}, {"_id": 0}).to_list(50)
+    for intent in intents:
+        for keyword in intent.get("keywords", []):
+            if keyword.lower().strip() in msg_lower:
+                update = {"initial_intent": intent["name"], "last_interaction": datetime.now(timezone.utc).isoformat()}
+                if intent.get("channel"):
+                    update["channel"] = intent["channel"]
+                if intent.get("source"):
+                    update["source"] = intent["source"]
+                if intent.get("product"):
+                    update["product_interest"] = intent["product"]
+                await db.leads.update_one({"id": lead_id}, {"$set": update})
+                logger.info(f"Intent matched for lead {lead_id}: {intent['name']}")
+                return True
+    
+    return False
+
 @api_router.post("/leads/{lead_id}/derive-human")
 async def derive_to_human(lead_id: str, reason: str = Query("general"), user=Depends(get_current_user)):
     await db.leads.update_one(
@@ -2206,6 +2414,66 @@ async def startup():
     # Deactivate games except slot machine (standby mode)
     await db.games_config.update_many({"game_type": {"$in": ["roulette", "scratch_card"]}}, {"$set": {"active": False}})
     logger.info("Games standby: only slot_machine active")
+    
+    # Seed default QR campaigns
+    qr_count = await db.qr_campaigns.count_documents({})
+    if qr_count == 0:
+        default_qr_campaigns = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": "TV - Anuncio General",
+                "channel": "TV/QR",
+                "source": "TV",
+                "product": "",
+                "initial_message": "Hola, vi esto en TV",
+                "intent": "consulta_tv",
+                "description": "QR para anuncios de televisión. El cliente escanea el QR que aparece en pantalla.",
+                "active": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Fibeca - Punto de Venta",
+                "channel": "Fibeca",
+                "source": "Fibeca",
+                "product": "",
+                "initial_message": "Hola, los vi en Fibeca",
+                "intent": "consulta_fibeca",
+                "description": "QR para puntos de venta en Fibeca.",
+                "active": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Evento - Feria de Salud",
+                "channel": "Evento",
+                "source": "Evento",
+                "product": "Bombro",
+                "initial_message": "Hola, los conoci en la feria",
+                "intent": "consulta_evento",
+                "description": "QR para ferias y eventos presenciales.",
+                "active": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+        ]
+        await db.qr_campaigns.insert_many(default_qr_campaigns)
+        logger.info("Default QR campaigns seeded")
+    
+    # Seed default initial intents
+    intents_count = await db.initial_intents.count_documents({})
+    if intents_count == 0:
+        default_intents = [
+            {"id": str(uuid.uuid4()), "name": "Consulta de producto", "keywords": ["quiero saber", "información", "que es", "cuanto cuesta", "precio"], "channel": "", "source": "", "product": "", "response_hint": "Responder con catálogo y precios", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Compra directa", "keywords": ["quiero comprar", "necesito pedir", "hacer pedido", "como compro"], "channel": "", "source": "", "product": "", "response_hint": "Guiar al proceso de compra", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Reclamo o queja", "keywords": ["reclamo", "queja", "problema con", "no funciona", "devolucion"], "channel": "", "source": "", "product": "", "response_hint": "Derivar a agente humano", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Referido", "keywords": ["me recomendaron", "mi amigo", "referido", "me dijeron que"], "channel": "", "source": "referido", "product": "", "response_hint": "Agradecer la referencia y ofrecer catálogo", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Recompra", "keywords": ["volver a comprar", "otro pedido", "de nuevo", "repetir pedido"], "channel": "", "source": "", "product": "", "response_hint": "Facilitar recompra rápida", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.initial_intents.insert_many(default_intents)
+        logger.info("Default initial intents seeded")
+    
+    # Ensure initial_intent field exists on all leads
+    await db.leads.update_many({"initial_intent": {"$exists": False}}, {"$set": {"initial_intent": ""}})
     
     logger.info("Faculty CRM Backend ready")
 

@@ -45,7 +45,7 @@ export default function LeadsPage() {
   const [editLead, setEditLead] = useState(null);
   const [draggedLead, setDraggedLead] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
-  const [form, setForm] = useState({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" });
+  const [form, setForm] = useState({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "", season: "" });
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -74,7 +74,7 @@ export default function LeadsPage() {
       }
       setShowAdd(false);
       setEditLead(null);
-      setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" });
+      setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "", season: "" });
       fetchLeads();
     } catch (err) { toast.error(err.response?.data?.detail || "Error al guardar"); }
   };
@@ -90,7 +90,7 @@ export default function LeadsPage() {
 
   const openEdit = (lead) => {
     setEditLead(lead);
-    setForm({ name: lead.name, whatsapp: lead.whatsapp, city: lead.city || "", email: lead.email || "", product_interest: lead.product_interest || "", source: lead.source || "web", notes: lead.notes || "", funnel_stage: lead.funnel_stage });
+    setForm({ name: lead.name, whatsapp: lead.whatsapp, city: lead.city || "", email: lead.email || "", product_interest: lead.product_interest || "", source: lead.source || "web", notes: lead.notes || "", funnel_stage: lead.funnel_stage, channel: lead.channel || "", season: lead.season || "" });
     setShowAdd(true);
   };
 
@@ -249,6 +249,14 @@ export default function LeadsPage() {
                 <Select value={form.funnel_stage} onValueChange={v => setForm(f => ({ ...f, funnel_stage: v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue /></SelectTrigger><SelectContent className="bg-card border-input">{Object.entries(STAGE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-muted-foreground text-xs">Canal</Label>
+                <Select value={form.channel || "none"} onValueChange={v => setForm(f => ({ ...f, channel: v === "none" ? "" : v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue placeholder="Sin canal" /></SelectTrigger><SelectContent className="bg-card border-input"><SelectItem value="none">Sin canal</SelectItem><SelectItem value="TV/QR">TV/QR</SelectItem><SelectItem value="Fibeca">Fibeca</SelectItem><SelectItem value="Evento">Evento</SelectItem><SelectItem value="Pauta Digital">Pauta Digital</SelectItem><SelectItem value="Web">Web</SelectItem><SelectItem value="WhatsApp">WhatsApp</SelectItem><SelectItem value="Redes Sociales">Redes Sociales</SelectItem></SelectContent></Select>
+              </div>
+              <div><Label className="text-muted-foreground text-xs">Temporada</Label>
+                <Select value={form.season || "none"} onValueChange={v => setForm(f => ({ ...f, season: v === "none" ? "" : v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue placeholder="Sin temporada" /></SelectTrigger><SelectContent className="bg-card border-input"><SelectItem value="none">Sin temporada</SelectItem><SelectItem value="verano">Verano</SelectItem><SelectItem value="invierno">Invierno</SelectItem><SelectItem value="todo_el_año">Todo el año</SelectItem></SelectContent></Select>
+              </div>
+            </div>
             <div><Label className="text-muted-foreground text-xs">Notas</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
             <Button data-testid="save-lead-btn" onClick={handleSave} className="w-full bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">{editLead ? "Actualizar" : "Crear Lead"}</Button>
           </div>
@@ -328,11 +336,12 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
 
       <p className="text-xs text-muted-foreground mb-1">{formatPhoneEC(lead.whatsapp) || "Sin teléfono"}</p>
 
-      {(lead.source || lead.city || lead.product_interest) && (
-        <div className="text-[11px] text-muted-foreground/70 mb-1.5 space-y-0">
-          {lead.source && <p>{lead.source}</p>}
-          {lead.city && <p>{lead.city}</p>}
-          {lead.product_interest && <p>{lead.product_interest}</p>}
+      {(lead.channel || lead.source || lead.city || lead.product_interest || lead.email) && (
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {lead.channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/15 text-emerald-500">{lead.channel}</span>}
+          {lead.source && lead.source !== lead.channel && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-500">{lead.source}</span>}
+          {lead.city && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/15 text-violet-400">{lead.city}</span>}
+          {lead.product_interest && <span className="text-[10px] px-1.5 py-0 rounded bg-amber-500/15 text-amber-500">{lead.product_interest}</span>}
         </div>
       )}
 

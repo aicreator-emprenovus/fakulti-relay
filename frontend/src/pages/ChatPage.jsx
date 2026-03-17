@@ -96,6 +96,7 @@ function SessionItem({ s, isActive, onClick }) {
             {s.has_alert && <AlertTriangle size={11} className="text-red-500 flex-shrink-0" />}
           </div>
           <p className="truncate text-muted-foreground mt-0.5">{s.lead_phone || s.session_id.replace("wa_", "")}</p>
+          {s.lead_channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/20 text-emerald-400 inline-block mt-0.5">{s.lead_channel}</span>}
         </div>
       </div>
       <div className="flex items-center justify-between mt-1 pl-9">
