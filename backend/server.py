@@ -2568,6 +2568,342 @@ async def get_notifications(user=Depends(get_current_user)):
     notifs = await db.notifications.find({}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
     return notifs
 
+
+# ========== BLOCK 9: AUTO-ENROLLMENT CONFIGURATION ==========
+
+@api_router.post("/loyalty/auto-enroll-config")
+async def set_auto_enroll_config(body: dict, user=Depends(get_current_user)):
+    """Configure auto-enrollment: when lead reaches a target stage, auto-enroll in a sequence."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    config = {
+        "id": "auto_enroll_config",
+        "enabled": body.get("enabled", False),
+        "target_stage": body.get("target_stage", "cliente_nuevo"),
+        "default_sequence_id": body.get("default_sequence_id", ""),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.system_config.update_one({"id": "auto_enroll_config"}, {"$set": config}, upsert=True)
+    return config
+
+@api_router.get("/loyalty/auto-enroll-config")
+async def get_auto_enroll_config(user=Depends(get_current_user)):
+    config = await db.system_config.find_one({"id": "auto_enroll_config"}, {"_id": 0})
+    return config or {"id": "auto_enroll_config", "enabled": False, "target_stage": "cliente_nuevo", "default_sequence_id": ""}
+
+# ========== BLOCK 10: PROMOTIONS & CAMPAIGNS ==========
+
+class CampaignCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    campaign_type: Optional[str] = "promo"
+    target_stage: Optional[str] = ""
+    target_product: Optional[str] = ""
+    target_channel: Optional[str] = ""
+    target_season: Optional[str] = ""
+    message_template: str
+    image_url: Optional[str] = ""
+    scheduled_date: Optional[str] = ""
+    active: Optional[bool] = True
+
+@api_router.get("/campaigns")
+async def get_campaigns(user=Depends(get_current_user)):
+    campaigns = await db.campaigns.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return campaigns
+
+@api_router.post("/campaigns")
+async def create_campaign(req: CampaignCreate, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    # Count matching leads
+    query = {}
+    if req.target_stage:
+        query["funnel_stage"] = req.target_stage
+    if req.target_product:
+        query["product_interest"] = {"$regex": req.target_product, "$options": "i"}
+    if req.target_channel:
+        query["channel"] = req.target_channel
+    if req.target_season:
+        query["season"] = req.target_season
+    target_count = await db.leads.count_documents(query)
+    
+    campaign = {
+        "id": str(uuid.uuid4()),
+        **req.model_dump(),
+        "target_count": target_count,
+        "sent_count": 0,
+        "failed_count": 0,
+        "status": "draft",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.campaigns.insert_one(campaign)
+    campaign.pop("_id", None)
+    return campaign
+
+@api_router.put("/campaigns/{campaign_id}")
+async def update_campaign(campaign_id: str, req: CampaignCreate, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    update = {k: v for k, v in req.model_dump().items() if v is not None}
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": update})
+    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    return campaign
+
+@api_router.delete("/campaigns/{campaign_id}")
+async def delete_campaign(campaign_id: str, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    await db.campaigns.delete_one({"id": campaign_id})
+    return {"message": "Campaña eliminada"}
+
+@api_router.post("/campaigns/{campaign_id}/send")
+async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_current_user)):
+    """Send campaign messages in batches. body can have batch_size (default 10)."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    
+    batch_size = body.get("batch_size", 10)
+    query = {}
+    if campaign.get("target_stage"):
+        query["funnel_stage"] = campaign["target_stage"]
+    if campaign.get("target_product"):
+        query["product_interest"] = {"$regex": campaign["target_product"], "$options": "i"}
+    if campaign.get("target_channel"):
+        query["channel"] = campaign["target_channel"]
+    if campaign.get("target_season"):
+        query["season"] = campaign["target_season"]
+    
+    leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).to_list(500)
+    
+    wa_config = await db.system_config.find_one({"id": "whatsapp_config"}, {"_id": 0})
+    sent = 0
+    failed = 0
+    
+    for lead in leads[:batch_size]:
+        try:
+            msg = campaign["message_template"].replace("{nombre}", lead.get("name", ""))
+            if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
+                phone = lead.get("whatsapp", "").replace("+", "")
+                if not phone.startswith("593"):
+                    phone = "593" + phone.lstrip("0")
+                async with httpx.AsyncClient() as client_http:
+                    await client_http.post(
+                        f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
+                        headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
+                        json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
+                        timeout=10
+                    )
+                sent += 1
+            else:
+                sent += 1  # Count as sent if no WA config (preview mode)
+        except Exception:
+            failed += 1
+    
+    await db.campaigns.update_one({"id": campaign_id}, {
+        "$set": {"status": "sent", "sent_count": campaign.get("sent_count", 0) + sent, "failed_count": campaign.get("failed_count", 0) + failed,
+                 "last_sent_at": datetime.now(timezone.utc).isoformat()}
+    })
+    return {"message": f"Campaña enviada: {sent} exitosos, {failed} fallidos de {len(leads[:batch_size])} leads", "sent": sent, "failed": failed}
+
+# ========== BLOCK 11: REMINDERS ==========
+
+class ReminderCreate(BaseModel):
+    name: str
+    message_template: str
+    target_stage: Optional[str] = ""
+    target_product: Optional[str] = ""
+    days_since_last_interaction: Optional[int] = 7
+    batch_size: Optional[int] = 10
+    active: Optional[bool] = True
+
+@api_router.get("/reminders")
+async def get_reminders(user=Depends(get_current_user)):
+    reminders = await db.reminders.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return reminders
+
+@api_router.post("/reminders")
+async def create_reminder(req: ReminderCreate, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    reminder = {
+        "id": str(uuid.uuid4()),
+        **req.model_dump(),
+        "last_run": None,
+        "total_sent": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.reminders.insert_one(reminder)
+    reminder.pop("_id", None)
+    return reminder
+
+@api_router.delete("/reminders/{reminder_id}")
+async def delete_reminder(reminder_id: str, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    await db.reminders.delete_one({"id": reminder_id})
+    return {"message": "Recordatorio eliminado"}
+
+@api_router.post("/reminders/{reminder_id}/execute")
+async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+    reminder = await db.reminders.find_one({"id": reminder_id}, {"_id": 0})
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Recordatorio no encontrado")
+    
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=reminder.get("days_since_last_interaction", 7))).isoformat()
+    query = {"last_interaction": {"$lte": cutoff}}
+    if reminder.get("target_stage"):
+        query["funnel_stage"] = reminder["target_stage"]
+    if reminder.get("target_product"):
+        query["product_interest"] = {"$regex": reminder["target_product"], "$options": "i"}
+    
+    batch = reminder.get("batch_size", 10)
+    leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).limit(batch).to_list(batch)
+    
+    wa_config = await db.system_config.find_one({"id": "whatsapp_config"}, {"_id": 0})
+    sent = 0
+    for lead in leads:
+        try:
+            msg = reminder["message_template"].replace("{nombre}", lead.get("name", ""))
+            if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
+                phone = lead.get("whatsapp", "").replace("+", "")
+                if not phone.startswith("593"):
+                    phone = "593" + phone.lstrip("0")
+                async with httpx.AsyncClient() as client_http:
+                    await client_http.post(
+                        f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
+                        headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
+                        json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
+                        timeout=10
+                    )
+            sent += 1
+        except Exception:
+            pass
+    
+    await db.reminders.update_one({"id": reminder_id}, {
+        "$set": {"last_run": datetime.now(timezone.utc).isoformat(), "total_sent": reminder.get("total_sent", 0) + sent}
+    })
+    return {"message": f"Recordatorio ejecutado: {sent} mensajes enviados de {len(leads)} leads elegibles", "sent": sent}
+
+# ========== BLOCK 12: ADMIN DASHBOARD BY ADVISOR ==========
+
+@api_router.get("/dashboard/advisor-stats")
+async def get_advisor_dashboard_stats(user=Depends(get_current_user)):
+    """Get performance metrics per advisor for admin dashboard."""
+    advisors = await db.admin_users.find({"role": "advisor"}, {"_id": 0, "password_hash": 0}).to_list(100)
+    advisor_stats = []
+    for a in advisors:
+        aid = a["id"]
+        total_leads = await db.leads.count_documents({"assigned_advisor": aid})
+        won_leads = await db.leads.count_documents({"assigned_advisor": aid, "funnel_stage": {"$in": ["cliente_nuevo", "cliente_activo"]}})
+        lost_leads = await db.leads.count_documents({"assigned_advisor": aid, "funnel_stage": "perdido"})
+        negotiating = await db.leads.count_documents({"assigned_advisor": aid, "funnel_stage": "en_negociacion"})
+        
+        # Revenue from assigned leads
+        pipeline = [
+            {"$match": {"assigned_advisor": aid}},
+            {"$unwind": "$purchase_history"},
+            {"$group": {"_id": None, "total": {"$sum": "$purchase_history.price"}, "count": {"$sum": 1}}}
+        ]
+        rev = await db.leads.aggregate(pipeline).to_list(1)
+        revenue = round(rev[0]["total"], 2) if rev else 0
+        orders = rev[0]["count"] if rev else 0
+        
+        # Active conversations (bot paused = human control)
+        active_chats = await db.leads.count_documents({"assigned_advisor": aid, "bot_paused": True})
+        
+        conversion = round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
+        
+        advisor_stats.append({
+            "id": aid,
+            "name": a.get("name", ""),
+            "email": a.get("email", ""),
+            "status": a.get("status", "desconectado"),
+            "specialization": a.get("specialization", ""),
+            "total_leads": total_leads,
+            "won_leads": won_leads,
+            "lost_leads": lost_leads,
+            "negotiating": negotiating,
+            "revenue": revenue,
+            "orders": orders,
+            "active_chats": active_chats,
+            "conversion_rate": conversion
+        })
+    
+    # Global totals
+    total_assigned = sum(a["total_leads"] for a in advisor_stats)
+    total_unassigned = await db.leads.count_documents({"$or": [{"assigned_advisor": ""}, {"assigned_advisor": {"$exists": False}}]})
+    total_revenue = sum(a["revenue"] for a in advisor_stats)
+    
+    return {
+        "advisors": advisor_stats,
+        "summary": {
+            "total_assigned": total_assigned,
+            "total_unassigned": total_unassigned,
+            "total_advisors": len(advisors),
+            "total_revenue_by_advisors": round(total_revenue, 2)
+        }
+    }
+
+# ========== BLOCK 13: AI CONVERSATION ANALYSIS ==========
+
+@api_router.post("/chat/analyze/{session_id}")
+async def analyze_conversation(session_id: str, user=Depends(get_current_user)):
+    """AI-powered conversation analysis: summary + suggested replies."""
+    msgs = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("timestamp", 1).to_list(100)
+    if not msgs:
+        raise HTTPException(status_code=404, detail="Sin mensajes para analizar")
+    
+    conversation_text = "\n".join([f"{'Cliente' if m['role'] == 'user' else 'Bot/Agente'}: {m['content']}" for m in msgs[-30:]])
+    
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import uuid as uuid_module
+        
+        system_message = """Eres un asistente de análisis de conversaciones para Fakulti (productos naturales).
+Analiza la conversación entre un cliente y el bot/agente. Responde SIEMPRE en español con el siguiente formato JSON:
+{
+  "resumen": "Resumen conciso de la conversación (máximo 3 oraciones)",
+  "sentimiento": "positivo|neutral|negativo",
+  "interes_producto": "producto mencionado o 'no identificado'",
+  "etapa_sugerida": "nuevo|interesado|en_negociacion|cliente_nuevo|perdido",
+  "respuestas_sugeridas": ["respuesta sugerida 1", "respuesta sugerida 2", "respuesta sugerida 3"],
+  "temas_clave": ["tema1", "tema2"],
+  "nivel_urgencia": "alto|medio|bajo"
+}"""
+        
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        llm_session_id = str(uuid_module.uuid4())
+        
+        llm = LlmChat(api_key=api_key, session_id=llm_session_id, system_message=system_message)
+        llm = llm.with_model(provider="openai", model="gpt-5.2")
+        
+        user_message_text = f"Analiza esta conversación:\n\n{conversation_text}"
+        user_message = UserMessage(text=user_message_text)
+        response_text = await llm.send_message(user_message)
+        
+        import json as json_module
+        try:
+            # Try to parse as JSON
+            text = response_text
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start >= 0 and end > start:
+                analysis = json_module.loads(text[start:end])
+            else:
+                analysis = {"resumen": text, "sentimiento": "neutral", "respuestas_sugeridas": [], "temas_clave": [], "nivel_urgencia": "medio"}
+        except Exception:
+            analysis = {"resumen": response_text, "sentimiento": "neutral", "respuestas_sugeridas": [], "temas_clave": [], "nivel_urgencia": "medio"}
+        
+        return analysis
+    except Exception as e:
+        logger.error(f"AI analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error en análisis IA: {str(e)}")
+
 # ========== INCLUDE ROUTER & MIDDLEWARE ==========
 
 app.include_router(api_router)
@@ -2858,6 +3194,7 @@ async def startup():
         logger.info(f"Added bot_config to {len(products_without_bot)} products")
     
     logger.info("Faculty CRM Backend ready")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

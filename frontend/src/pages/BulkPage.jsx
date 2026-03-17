@@ -142,6 +142,33 @@ export default function BulkPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-card border-border rounded-2xl">
+        <CardHeader>
+          <CardTitle className="text-lg text-foreground flex items-center gap-2"><Upload size={18} className="text-amber-500" /> Carga Histórica</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">Importa datos históricos de compras. El Excel debe tener las columnas: nombre, whatsapp, producto, precio, fecha_compra.</p>
+          <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg">Los leads existentes se actualizarán con el historial de compras. Los nuevos se crearán con etapa "cliente_activo".</p>
+          <input
+            type="file" accept=".xlsx,.xls,.csv"
+            data-testid="historical-upload-input"
+            className="text-sm file:bg-amber-600 file:text-white file:border-0 file:px-4 file:py-2 file:rounded-full file:font-bold file:cursor-pointer text-foreground/70 w-full"
+            onChange={async (e) => {
+              const f = e.target.files[0];
+              if (!f) return;
+              const fd = new FormData();
+              fd.append("file", f);
+              fd.append("type", "historical");
+              try {
+                const res = await axios.post(`${API}/leads/bulk`, fd);
+                setUploadResult(res.data);
+                toast.success("Datos históricos cargados");
+              } catch (err) { toast.error(err?.response?.data?.detail || "Error en carga"); }
+            }}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

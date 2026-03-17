@@ -10,7 +10,7 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import {
   Send, Trash2, X, Phone, Clock, AlertTriangle,
   Activity, Shield, MessageCircle, CheckCircle, Users, Zap,
-  Pause, Play, UserCheck, Bot
+  Pause, Play, UserCheck, Bot, Brain, Loader2
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -166,6 +166,8 @@ export default function ChatPage() {
   const [stats, setStats] = useState({});
   const [alerts, setAlerts] = useState([]);
   const [botPaused, setBotPaused] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -345,6 +347,22 @@ export default function ChatPage() {
     } catch { toast.error("Error al pausar bot"); }
   };
 
+  const analyzeConversation = async () => {
+    if (!activeSession) return;
+    setAnalyzing(true);
+    setAiAnalysis(null);
+    try {
+      const res = await axios.post(`${API}/chat/analyze/${activeSession}`);
+      setAiAnalysis(res.data);
+      toast.success("Análisis completado");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Error en análisis IA"); }
+    setAnalyzing(false);
+  };
+
+  const applySuggestion = (text) => {
+    setInput(text);
+  };
+
   const pendingAlertCount = alerts.filter(a => a.status === "pending").length;
 
   return (
@@ -434,6 +452,13 @@ export default function ChatPage() {
                       <Trash2 size={14} />
                     </Button>
                   )}
+                  {activeSession && messages.length > 0 && (
+                    <Button data-testid="analyze-btn" variant="outline" size="sm" disabled={analyzing}
+                      className="text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 h-8 text-xs" onClick={analyzeConversation}>
+                      {analyzing ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Brain size={12} className="mr-1" />}
+                      {analyzing ? "Analizando..." : "IA Análisis"}
+                    </Button>
+                  )}
                 </div>
               </div>
               {/* Customer Context Card - Block 8 */}
@@ -484,6 +509,40 @@ export default function ChatPage() {
                 </div>
               )}
             </div>
+
+            {/* AI Analysis Panel - Block 13 */}
+            {aiAnalysis && (
+              <div data-testid="ai-analysis-panel" className="p-3 border-b border-input bg-violet-500/5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Brain size={14} className="text-violet-500" />
+                    <span className="text-xs font-semibold text-violet-500 uppercase tracking-wider">Análisis IA</span>
+                  </div>
+                  <button onClick={() => setAiAnalysis(null)} className="p-0.5 rounded hover:bg-muted text-muted-foreground"><X size={12} /></button>
+                </div>
+                <p className="text-xs text-foreground mb-2">{aiAnalysis.resumen}</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {aiAnalysis.sentimiento && <span className={`text-[10px] px-1.5 py-0 rounded ${aiAnalysis.sentimiento === "positivo" ? "bg-green-500/15 text-green-500" : aiAnalysis.sentimiento === "negativo" ? "bg-red-500/15 text-red-400" : "bg-muted text-muted-foreground"}`}>Sentimiento: {aiAnalysis.sentimiento}</span>}
+                  {aiAnalysis.nivel_urgencia && <span className={`text-[10px] px-1.5 py-0 rounded ${aiAnalysis.nivel_urgencia === "alto" ? "bg-red-500/15 text-red-400" : aiAnalysis.nivel_urgencia === "medio" ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground"}`}>Urgencia: {aiAnalysis.nivel_urgencia}</span>}
+                  {aiAnalysis.interes_producto && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-400">Producto: {aiAnalysis.interes_producto}</span>}
+                  {aiAnalysis.etapa_sugerida && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/15 text-violet-400">Etapa: {aiAnalysis.etapa_sugerida}</span>}
+                  {aiAnalysis.temas_clave?.map((t, i) => <span key={i} className="text-[10px] px-1.5 py-0 rounded bg-muted text-muted-foreground">{t}</span>)}
+                </div>
+                {aiAnalysis.respuestas_sugeridas?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">Respuestas sugeridas:</p>
+                    <div className="space-y-1">
+                      {aiAnalysis.respuestas_sugeridas.map((s, i) => (
+                        <button key={i} data-testid={`suggestion-${i}`} onClick={() => applySuggestion(s)}
+                          className="w-full text-left text-[11px] p-1.5 rounded bg-muted/50 text-foreground/80 hover:bg-violet-500/10 hover:text-violet-500 transition-colors truncate">
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">

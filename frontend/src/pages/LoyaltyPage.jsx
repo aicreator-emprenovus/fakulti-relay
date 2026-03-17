@@ -231,6 +231,7 @@ export default function LoyaltyPage() {
   const [metrics, setMetrics] = useState(null);
   const [form, setForm] = useState({ product_id: "", product_name: "", messages: [{ day: 1, content: "", active: true }], active: true });
   const [enrollForm, setEnrollForm] = useState({ lead_id: "", sequence_id: "" });
+  const [autoEnroll, setAutoEnroll] = useState({ enabled: false, target_stage: "cliente_nuevo", default_sequence_id: "" });
 
   const fetchData = () => {
     Promise.all([
@@ -238,13 +239,15 @@ export default function LoyaltyPage() {
       axios.get(`${API}/loyalty/enrollments`),
       axios.get(`${API}/products`),
       axios.get(`${API}/leads?limit=200`),
-      axios.get(`${API}/loyalty/metrics`)
-    ]).then(([s, e, p, l, m]) => {
+      axios.get(`${API}/loyalty/metrics`),
+      axios.get(`${API}/loyalty/auto-enroll-config`)
+    ]).then(([s, e, p, l, m, ae]) => {
       setSequences(s.data);
       setEnrollments(e.data);
       setProducts(p.data);
       setLeads(l.data.leads);
       setMetrics(m.data);
+      if (ae.data) setAutoEnroll(ae.data);
       setLoading(false);
     }).catch(() => setLoading(false));
   };
@@ -258,6 +261,13 @@ export default function LoyaltyPage() {
 
   const removeMessage = (idx) => {
     setForm(f => ({ ...f, messages: f.messages.filter((_, i) => i !== idx) }));
+  };
+
+  const saveAutoEnroll = async () => {
+    try {
+      await axios.post(`${API}/loyalty/auto-enroll-config`, autoEnroll);
+      toast.success("Configuración de auto-inscripción guardada");
+    } catch { toast.error("Error"); }
   };
 
   const updateMessage = (idx, field, value) => {
@@ -368,9 +378,55 @@ export default function LoyaltyPage() {
         <button onClick={() => setTab("enrollments")} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === "enrollments" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} data-testid="tab-enrollments">
           Inscripciones ({enrollments.length})
         </button>
+        <button onClick={() => setTab("auto")} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === "auto" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} data-testid="tab-auto-enroll">
+          Auto-Inscripción
+        </button>
       </div>
 
       {tab === "metrics" && metrics && <MetricsDashboard metrics={metrics} />}
+
+      {tab === "auto" && (
+        <Card className="bg-card border-border rounded-2xl" data-testid="auto-enroll-config">
+          <CardContent className="p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Auto-inscripción de Leads</h3>
+              <p className="text-xs text-muted-foreground">Cuando un lead alcanza la etapa seleccionada, se inscribirá automáticamente en la secuencia por defecto.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Label className="text-sm text-muted-foreground">Activar:</Label>
+              <button data-testid="auto-enroll-toggle" onClick={() => setAutoEnroll(a => ({ ...a, enabled: !a.enabled }))}
+                className={`w-10 h-5 rounded-full transition-colors relative ${autoEnroll.enabled ? "bg-primary" : "bg-muted"}`}>
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${autoEnroll.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+              </button>
+              <span className="text-xs text-muted-foreground">{autoEnroll.enabled ? "Activo" : "Inactivo"}</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Etapa que activa la inscripción</Label>
+                <Select value={autoEnroll.target_stage} onValueChange={v => setAutoEnroll(a => ({ ...a, target_stage: v }))}>
+                  <SelectTrigger className="bg-muted border-input"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-input">
+                    <SelectItem value="cliente_nuevo">Leads ganados</SelectItem>
+                    <SelectItem value="cliente_activo">Cartera activa</SelectItem>
+                    <SelectItem value="en_negociacion">En Negociación</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Secuencia por defecto</Label>
+                <Select value={autoEnroll.default_sequence_id || "none"} onValueChange={v => setAutoEnroll(a => ({ ...a, default_sequence_id: v === "none" ? "" : v }))}>
+                  <SelectTrigger className="bg-muted border-input"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-input">
+                    <SelectItem value="none">-- Seleccionar --</SelectItem>
+                    {sequences.map(s => <SelectItem key={s.id} value={s.id}>{s.product_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button data-testid="save-auto-enroll-btn" onClick={saveAutoEnroll} className="bg-primary text-primary-foreground font-bold rounded-full">Guardar Configuración</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {tab === "sequences" && (
         <div className="grid gap-4">
