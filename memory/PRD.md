@@ -1,83 +1,111 @@
-# Fakulti CRM + WhatsApp Bot - Product Requirements Document
+# Fakulti CRM - Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive CRM and sales funnel automation platform for the brand "Fakulti" (Ecuador-based). The system manages leads, conversations, campaigns, promotions, and human advisors, with specialized bots per product, intelligent handover to human agents, channel segmentation, automations, AI analysis, and campaign reminders.
+CRM and sales funnel automation platform for "Fakulti" brand. A comprehensive 13-phase plan to upgrade the existing system including lead management, AI WhatsApp bots, advisor management, campaign tools, and analytics.
 
-## Core Architecture
-- **Backend**: FastAPI + MongoDB (motor) + Pydantic + JWT auth
+## Architecture
+- **Backend**: FastAPI + MongoDB (motor) + Pydantic + JWT Auth
 - **Frontend**: React + Tailwind CSS + Shadcn/UI + Axios
-- **AI**: OpenAI GPT-5.2 via Emergent LLM Key
-- **External**: WhatsApp Cloud API (via Railway.app relay)
-- **DB Collections**: leads, products, games_config, game_plays, quotations, loyalty_sequences, loyalty_enrollments, automation_rules, chat_messages, chat_sessions_meta, admin_users, whatsapp_config, ai_config, handover_alerts, qr_campaigns, initial_intents
+- **External**: WhatsApp Cloud API, OpenAI GPT-5.2 (via Emergent LLM Key)
+- **Monolith**: `backend/server.py` (~2860 lines)
 
-## Key Technical Decisions
-- Phone numbers: Ecuador local format (0XXXXXXXXX), international (593XXXXXXXXX) for API
-- Funnel stages: Contacto inicial, Chat, En Negociación, Leads ganados, Cartera activa, Perdido
-- Games: standby (only slot_machine active)
-- 5 products with independent bot personalities
-- Bot pause/resume per lead for human handover
-- 1-minute timeout detection triggers handover alerts
+## Core Credentials
+- Admin: admin@fakulti.com / admin123
+- Advisors: carlos@fakulti.com, ana@fakulti.com / advisor123
 
 ## Completed Phases
 
-### Block 1: Configuration & Normalization (2026-03-17)
-- [x] Phone normalization Ecuador, stage labels, season/channel fields, games standby, bulk upload
+### Block 1: General Config & Normalization ✅
+- Phone normalization for Ecuador (+593)
+- Lead stage renaming (Contacto inicial, Chat, En Negociación, etc.)
+- Season filter (verano, invierno, todo el año)
+- Games on standby (only slot_machine active)
 
-### Block 2: Lead Sources, QR & Channels (2026-03-17)
-- [x] QR Campaign CRUD + QR code generation, initial intents, auto-channel detection
+### Block 2: Lead Sources & QR Codes ✅
+- "QR y Canales" page for QR campaign management
+- QR code generation per campaign
+- Lead source tracking by channel
+- Scan count tracking
 
-### Block 3: Specialized Bots per Product (2026-03-17)
-- [x] 5 products with bot_config, product-specific prompts, scan counter
+### Block 3: Specialized Product Bots ✅
+- 5 product-specific AI bot personalities
+- Auto-routing to correct product bot
+- Bot configuration UI in Settings page
 
-### Block 4: Human Agent Handover (2026-03-17)
-- [x] Handover detection: user request keywords + 1-minute timeout (3+ messages, still "nuevo" stage)
-- [x] Pause/resume bot per lead (PUT /api/leads/{id}/pause-bot, /resume-bot)
-- [x] When bot paused: messages still stored in chat history, but no GPT auto-reply
-- [x] Handover alerts enriched with: reason, product, channel, city, stage, bot_paused
-- [x] "Tomar Control" / "Reactivar Bot" buttons in WhatsApp Bot UI
-- [x] Bot status indicator: "Bot activo (especializado en X)" or "Modo humano activo"
-- [x] "HUMANO" badge in session list, "BOT PAUSADO" header indicator
-- [x] Alert panel with reason labels, product/channel/city badges, take-over button
-- [x] Lead context header: name, stage, phone, city, product_interest
+### Block 4: Human Agent Handover ✅
+- Keyword-triggered handover
+- 1-minute bot response timeout detection
+- Manual "Tomar Control" / "Reactivar Bot" UI
+- Handover alert system
 
-### Previously Completed
-- [x] Live WhatsApp Integration & Bot Intelligence (GPT-5.2)
-- [x] WhatsApp Chat Monitor, Gamification UI, Excel Reporting
-- [x] Spanish orthography, Full responsiveness, CRM Dashboard
+### Block 5: Advisor Management ✅ (Completed 2026-03-17)
+- Full advisor CRUD (create, read, update, delete)
+- Role-based access control (admin vs advisor)
+- Advisor assignment dropdown in lead detail dialog
+- Advisor name badge on lead cards (orange)
+- Role-based filtering: advisors only see assigned leads/conversations
+- Advisor filter in leads search bar
 
-## Upcoming Tasks
+### Block 6: Internal Alerts ✅ (Completed 2026-03-17)
+- NotificationBell component in top bar (all pages)
+- Real-time polling for handover alerts + advisor notifications
+- Sound toggle with localStorage persistence
+- Visual indicator (red badge with count, pulse animation)
+- Mark as read / mark all read functionality
 
-### Block 5: Advisor Registration & Management (P1)
-- [ ] Advisor module in admin panel (name, WhatsApp, status, availability)
-- [ ] Lead/conversation assignment to advisors
-- [ ] Role-based permissions (advisor sees only their data)
-- [ ] Notification when assigned lead writes again
+### Block 7: Leads Panel UI Changes ✅ (Completed 2026-03-17)
+- Lead cards show colored tag badges (channel, source, city, product, advisor)
+- Advisor filter dropdown for admin users
+- Stage labels properly renamed
 
-### Block 6: Internal Alerts (P2)
-- [ ] Visual alerts with blinking + sound on/off toggle
-- [ ] Alert routing to assigned advisor
+### Block 8: WhatsApp Bot with Customer Context ✅ (Completed 2026-03-17)
+- Persistent customer context card in chat header
+- Shows: Tel, Email, Ciudad, Fuente, Canal, Producto, Temporada, Asesor
+- Loads via GET /api/leads/{lead_id} with _advisor_name
 
-### Block 7: Lead Panel Changes (P2)
-- [ ] Filter by advisor in lead search
+## Upcoming Tasks (Prioritized Backlog)
 
-### Block 8: WhatsApp Bot with Client Context (P2)
-- [ ] Client card visible at top of conversation (PARTIALLY DONE - header shows context)
-- [ ] Advisor profile sees only assigned conversations
+### P0 - Block 9: Fidelización y Automatizaciones
+- Post-sale follow-up sequence enhancement
+- Loyalty program features
 
-### Block 9: Loyalty & Automations (P2)
-- [ ] Auto-follow-up 200h, per-advisor automation
+### P1 - Block 10: Promociones y Campañas
+- Campaign creation and management module
+- Auto-generated promotional images
+- Campaign sending system
 
-### Block 10: Promotions & Campaigns (P3)
-- [ ] "Promociones" admin tab, AI images, templates
+### P1 - Block 11: Carga Masiva y Recordatorios
+- Enhanced bulk upload for historical data
+- Controlled, batched reminder campaign system
 
-### Block 11: Bulk Upload & Batch Reminders (P3)
-- [ ] Controlled batch sending with pause/continue
+### P2 - Block 12: Dashboard del Administrador
+- Sales and performance metrics per advisor
+- Dashboard revamp with analytics
 
-### Block 12: Admin Dashboard by Advisor (P3)
-- [ ] Sales by advisor charts
+### P2 - Block 13: IA para Análisis de Conversaciones
+- AI conversation summarization
+- Suggested replies for human agents
 
-### Block 13: AI Conversation Analysis (P3)
-- [ ] AI classifies lead progress, suggests responses
+## Refactoring Backlog
+- Break down `server.py` monolith into modular structure (routes, models, services)
 
-## Credentials
-- CRM Login: admin@fakulti.com / admin123
+## Key API Endpoints
+- `/api/auth/login`, `/api/auth/me` - Authentication
+- `/api/leads` - CRUD with role-based filtering
+- `/api/leads/{id}/assign` - Assign advisor to lead
+- `/api/leads/{id}/pause-bot`, `/api/leads/{id}/resume-bot` - Bot control
+- `/api/advisors` - CRUD for advisors
+- `/api/advisors/notifications` - Notification polling
+- `/api/chat/sessions`, `/api/chat/history/{id}` - Chat management
+- `/api/chat/alerts` - Handover alerts
+- `/api/qr_campaigns` - QR campaign management
+- `/api/products/{id}/bot_config` - Bot configuration
+
+## Key Files
+- `backend/server.py` - All backend logic
+- `frontend/src/pages/LeadsPage.jsx` - Kanban board with advisor assignment
+- `frontend/src/pages/ChatPage.jsx` - WhatsApp bot monitor with context card
+- `frontend/src/pages/AdvisorsPage.jsx` - Advisor management
+- `frontend/src/components/NotificationBell.jsx` - Alert notification system
+- `frontend/src/components/Sidebar.jsx` - Role-aware navigation
+- `frontend/src/App.js` - Routes and layout with NotificationBell
