@@ -17,7 +17,7 @@ export default function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [showBotConfig, setShowBotConfig] = useState(null);
-  const [botForm, setBotForm] = useState({ personality: "", key_benefits: "", usage_info: "", restrictions: "", faqs: "" });
+  const [botForm, setBotForm] = useState({ personality: "", key_benefits: "", usage_info: "", restrictions: "", faqs: "", sales_flow: "" });
   const [form, setForm] = useState({ name: "", code: "", description: "", price: 0, original_price: 0, image_url: "", stock: 100, category: "general", active: true });
 
   const fetchProducts = () => {
@@ -149,6 +149,12 @@ export default function SettingsPage() {
                   <div>
                     <Label className="text-muted-foreground text-[10px]">Preguntas frecuentes</Label>
                     <Textarea value={botForm.faqs} onChange={e => setBotForm(f => ({ ...f, faqs: e.target.value }))} className="bg-muted border-input text-foreground text-xs" rows={2} placeholder="Se toma un sachet al dia..." />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] font-semibold text-amber-500">Flujo de Ventas Avanzado (opcional)</Label>
+                    <p className="text-[9px] text-muted-foreground mb-1">Script detallado de ventas: apertura, respuestas por intencion, objeciones, cierre. Si se llena, el bot seguira este flujo.</p>
+                    <Textarea value={botForm.sales_flow || ""} onChange={e => setBotForm(f => ({ ...f, sales_flow: e.target.value }))} className="bg-muted border-input text-foreground text-xs font-mono" rows={6} placeholder="FLUJO DE VENTAS - PRODUCTO...&#10;1. MENSAJE DE APERTURA&#10;2. RESPUESTA SEGUN INTENCION&#10;..." />
+                    {botForm.sales_flow && <p className="text-[9px] text-amber-500 mt-0.5">{botForm.sales_flow.length} caracteres configurados</p>}
                   </div>
                   <Button data-testid={`save-bot-config-${p.id}`} size="sm" className="w-full bg-violet-600 hover:bg-violet-700 text-white text-xs" onClick={() => saveBotConfig(p.id)}>
                     <Save size={12} className="mr-1" /> Guardar Config del Bot

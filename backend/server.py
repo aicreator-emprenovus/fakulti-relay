@@ -105,6 +105,8 @@ class LeadUpdate(BaseModel):
     season: Optional[str] = None
     channel: Optional[str] = None
     assigned_advisor: Optional[str] = None
+    ci_ruc: Optional[str] = None
+    address: Optional[str] = None
 
 class AdvisorCreate(BaseModel):
     name: str
@@ -603,13 +605,13 @@ async def get_product_bot_config(product_id: str, user=Depends(get_current_user)
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     # Merge stored config with defaults to ensure all fields are present
-    defaults = {"personality": "", "key_benefits": "", "usage_info": "", "restrictions": "", "faqs": ""}
+    defaults = {"personality": "", "key_benefits": "", "usage_info": "", "restrictions": "", "faqs": "", "sales_flow": ""}
     stored_config = product.get("bot_config", {})
     return {**defaults, **stored_config}
 
 @api_router.put("/products/{product_id}/bot-config")
 async def update_product_bot_config(product_id: str, config: dict, user=Depends(get_current_user)):
-    allowed = {"personality", "key_benefits", "usage_info", "restrictions", "faqs"}
+    allowed = {"personality", "key_benefits", "usage_info", "restrictions", "faqs", "sales_flow"}
     clean = {k: v for k, v in config.items() if k in allowed}
     await db.products.update_one({"id": product_id}, {"$set": {"bot_config": clean}})
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
@@ -1857,6 +1859,7 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
     usage_info = bot_cfg.get("usage_info", "Consultar con un asesor para instrucciones de uso.")
     restrictions = bot_cfg.get("restrictions", "No hacer promesas medicas. No afirmar que cura enfermedades.")
     faqs = bot_cfg.get("faqs", "")
+    sales_flow = bot_cfg.get("sales_flow", "")
     
     lead_name = lead_data.get("name", "")
     lead_city = lead_data.get("city", "")
@@ -1883,6 +1886,58 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
     other_products = [f"- {p['name']}: ${p['price']}" for p in all_products if p["id"] != target["id"]]
     other_products_text = "\n".join(other_products) if other_products else "No hay otros productos."
     
+    # If there's a detailed sales_flow, use it as the primary prompt structure
+    if sales_flow:
+        return f"""IDENTIDAD DEL AGENTE
+Eres el asesor virtual especializado en {target['name']} de la marca Fakulti por WhatsApp.
+Personalidad: {personality}
+Tu estilo: Cercano, experto, humano, confiable (no robotico). Ciencia + natural = Biotecnologia.
+Habla como persona real, NO como robot. Frases cortas. Emojis moderados (1-2 por mensaje).
+{first_contact}
+{data_context}
+{missing_instruction}
+
+TU PRODUCTO: {target['name']}
+Codigo: {target.get('code', '')}
+Precio oferta: ${target['price']}
+{f"Precio normal: ${target.get('original_price', '')}" if target.get('original_price') else ""}
+
+=== FLUJO DE VENTAS COMPLETO ===
+{sales_flow}
+=== FIN DEL FLUJO ===
+
+REGLA CRITICA - PRODUCTO UNICO
+Solo puedes hablar sobre {target['name']}. NO mezcles informacion de otros productos.
+Si el cliente pregunta por otro producto, responde:
+"Claro, tambien tenemos otros productos. Te puedo conectar con informacion de ese producto."
+Y lista brevemente:
+{other_products_text}
+Luego vuelve a tu producto principal.
+
+RESTRICCIONES GENERALES
+{restrictions}
+- NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano y emojis.
+- Si piden hablar con un humano, responde que un asesor se comunicara pronto.
+- Respuestas CORTAS y CLARAS (maximo 4-6 lineas por mensaje). NO envies bloques largos.
+- Siempre lleva la conversacion hacia el cierre de venta.
+- Prioriza beneficios + resultado sobre informacion tecnica.
+
+EXTRACCION AUTOMATICA DE DATOS
+Al final de CADA respuesta, incluye en lineas separadas:
+- Si detectas nombre: [LEAD_NAME:Nombre Apellido]
+- Si detectas ciudad: [UPDATE_LEAD:city=Ciudad]
+- Si detectas email: [UPDATE_LEAD:email=correo@ejemplo.com]
+- Si detectas CI/RUC: [UPDATE_LEAD:ci_ruc=valor]
+- Si detectas direccion: [UPDATE_LEAD:address=direccion completa]
+- Clasifica la etapa:
+  [STAGE:nuevo] - Primer contacto
+  [STAGE:interesado] - Pregunta por producto, precios o beneficios
+  [STAGE:en_negociacion] - Solicita compra, pago, envio, pide info de precio
+  [STAGE:cliente_nuevo] - Confirma compra, da datos de facturacion
+  [STAGE:perdido] - Rechaza explicitamente
+Incluye SIEMPRE [STAGE:] al final."""
+    
+    # Fallback: original simple prompt for products without sales_flow
     return f"""IDENTIDAD DEL AGENTE
 Eres el asesor virtual especializado en {target['name']} de la marca Faculty por WhatsApp.
 Personalidad: {personality}
@@ -2119,7 +2174,7 @@ Incluye SIEMPRE [STAGE:] al final."""
     update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', reply)
     if update_matches:
         update_fields = {}
-        allowed_fields = {"city", "product_interest", "email"}
+        allowed_fields = {"city", "product_interest", "email", "ci_ruc", "address"}
         for field, value in update_matches:
             if field in allowed_fields:
                 update_fields[field] = value.strip()
