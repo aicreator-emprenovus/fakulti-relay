@@ -2992,6 +2992,10 @@ Analiza la conversación entre un cliente y el bot/agente. Responde SIEMPRE en e
 
 app.include_router(api_router)
 
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -2999,6 +3003,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve React static files in production (Railway)
+import pathlib
+_static_dir = pathlib.Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    from starlette.staticfiles import StaticFiles
+    from starlette.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = _static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(_static_dir / "index.html")
+
+    app.mount("/static", StaticFiles(directory=str(_static_dir / "static")), name="static-assets")
 
 # ========== STARTUP - SEED DATA ==========
 
