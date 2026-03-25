@@ -1,5 +1,5 @@
 # Stage 1: Build React frontend
-FROM node:18-slim AS frontend-build
+FROM node:20-slim AS frontend-build
 WORKDIR /build
 COPY frontend/ .
 RUN yarn install --network-timeout 120000
@@ -14,7 +14,6 @@ WORKDIR /app
 
 RUN pip install --upgrade pip setuptools wheel
 
-COPY backend/requirements.txt .
 RUN pip install --no-cache-dir \
     fastapi==0.110.1 \
     uvicorn==0.25.0 \
