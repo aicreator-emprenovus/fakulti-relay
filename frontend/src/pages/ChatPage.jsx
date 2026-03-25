@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { ScrollArea } from "../components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
   Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
@@ -135,6 +136,8 @@ export default function ChatPage() {
   const [botPaused, setBotPaused] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [advisors, setAdvisors] = useState([]);
+  const [showAssignAdvisor, setShowAssignAdvisor] = useState(false);
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -151,6 +154,7 @@ export default function ChatPage() {
   useEffect(() => {
     fetchSessions();
     fetchAlerts();
+    axios.get(`${API}/advisors`).then(res => setAdvisors(res.data)).catch(() => {});
   }, [fetchSessions, fetchAlerts]);
 
   useEffect(() => {
@@ -308,6 +312,17 @@ export default function ChatPage() {
     } catch { toast.error("Error al pausar bot"); }
   };
 
+  const assignAdvisor = async (advisorId) => {
+    if (!activeLeadId) return;
+    try {
+      await axios.put(`${API}/leads/${activeLeadId}/assign`, { advisor_id: advisorId });
+      const advisorName = advisorId ? advisors.find(a => a.id === advisorId)?.name || "" : "";
+      setLeadInfo(prev => prev ? { ...prev, assigned_advisor_name: advisorName } : prev);
+      setShowAssignAdvisor(false);
+      toast.success(advisorId ? "Asesor asignado" : "Asesor removido");
+    } catch { toast.error("Error al asignar asesor"); }
+  };
+
   const analyzeConversation = async () => {
     if (!activeSession) return;
     setAnalyzing(true);
@@ -404,6 +419,9 @@ export default function ChatPage() {
                           <Pause size={12} className="mr-1" /> Tomar Control
                         </Button>
                       )}
+                      <Button data-testid="assign-advisor-btn" variant="outline" size="sm" className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 h-8 text-xs" onClick={() => setShowAssignAdvisor(!showAssignAdvisor)}>
+                        <UserCheck size={12} className="mr-1" /> Asignar Asesor
+                      </Button>
                     </>
                   )}
                   {activeSession && messages.length > 0 && (
@@ -449,6 +467,23 @@ export default function ChatPage() {
                 </div>
               )}
               {/* Bot status indicator */}
+              {showAssignAdvisor && activeLeadId && advisors.length > 0 && (
+                <div className="mt-2 p-2 rounded-lg bg-orange-500/5 border border-orange-500/20" data-testid="assign-advisor-dropdown">
+                  <p className="text-[10px] text-orange-500 font-medium mb-1.5">Asignar asesor a esta conversación:</p>
+                  <Select
+                    value={leadInfo?.assigned_advisor_name ? advisors.find(a => a.name === leadInfo.assigned_advisor_name)?.id || "none" : "none"}
+                    onValueChange={(v) => assignAdvisor(v === "none" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-8 text-xs bg-card border-orange-500/30">
+                      <SelectValue placeholder="Seleccionar asesor" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-input">
+                      <SelectItem value="none">Sin asesor</SelectItem>
+                      {advisors.map(a => <SelectItem key={a.id} value={a.id}>{a.name} {a.specialization ? `(${a.specialization})` : ""}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {activeSession && (
                 <div className={`mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md ${botPaused ? "bg-amber-500/10 text-amber-500" : "bg-green-500/10 text-green-500"}`}>
                   {botPaused ? (

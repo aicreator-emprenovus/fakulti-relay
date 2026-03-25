@@ -142,6 +142,14 @@ export default function LeadsPage() {
     } catch { toast.error("Error al cambiar etapa"); }
   };
 
+  const handleAssignAdvisor = async (leadId, advisorId) => {
+    try {
+      await axios.put(`${API}/leads/${leadId}/assign`, { advisor_id: advisorId });
+      toast.success("Asesor asignado");
+      fetchLeads();
+    } catch { toast.error("Error al asignar asesor"); }
+  };
+
   const openChat = (leadId) => {
     navigate(`/chat?lead_id=${leadId}`);
   };
@@ -274,11 +282,14 @@ export default function LeadsPage() {
                           onDelete={() => handleDelete(lead.id)}
                           onWhatsApp={() => openChat(lead.id)}
                           onStageChange={(s) => handleStageChange(lead.id, s)}
+                          onAssignAdvisor={handleAssignAdvisor}
                           onDragStart={(e) => onDragStart(e, lead)}
                           onDragEnd={onDragEnd}
                           isDragging={draggedLead?.id === lead.id}
                           formatDate={formatDate}
                           advisorName={advisorObj?.name}
+                          advisors={advisors}
+                          userRole={userRole}
                         />
                       );
                     })}
@@ -393,8 +404,9 @@ export default function LeadsPage() {
   );
 }
 
-function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, onDragStart, onDragEnd, isDragging, formatDate, advisorName }) {
+function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, onAssignAdvisor, onDragStart, onDragEnd, isDragging, formatDate, advisorName, advisors, userRole }) {
   const cfg = STAGE_CONFIG[lead.funnel_stage] || STAGE_CONFIG.nuevo;
+  const [showAssign, setShowAssign] = useState(false);
 
   return (
     <div
@@ -439,6 +451,11 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
             <button onClick={onEdit} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Editar" data-testid={`edit-lead-${lead.id}`}>
               <Edit size={13} />
             </button>
+            {userRole === "admin" && (
+              <button onClick={() => setShowAssign(!showAssign)} className={`p-1 rounded hover:bg-muted transition-colors ${showAssign ? "text-orange-500" : "text-muted-foreground hover:text-orange-400"}`} title="Asignar asesor" data-testid={`assign-advisor-${lead.id}`}>
+                <UserCheck size={13} />
+              </button>
+            )}
             <button onClick={onWhatsApp} className="p-1 rounded hover:bg-muted text-emerald-500 hover:text-emerald-400 transition-colors" title="Chat IA" data-testid={`chat-lead-${lead.id}`}>
               <MessageSquare size={13} />
             </button>
@@ -448,6 +465,20 @@ function LeadCard({ lead, onView, onEdit, onDelete, onWhatsApp, onStageChange, o
           </div>
         </div>
       </div>
+
+      {showAssign && userRole === "admin" && (
+        <div className="mt-1.5" data-testid={`assign-dropdown-${lead.id}`}>
+          <Select value={lead.assigned_advisor || "none"} onValueChange={(v) => { onAssignAdvisor(lead.id, v === "none" ? "" : v); setShowAssign(false); }}>
+            <SelectTrigger className="h-7 text-xs w-full border-orange-500/30 bg-orange-500/5 text-muted-foreground">
+              <SelectValue placeholder="Asignar asesor" />
+            </SelectTrigger>
+            <SelectContent className="bg-card border-input">
+              <SelectItem value="none">Sin asesor</SelectItem>
+              {advisors.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="mt-1.5">
         <Select value={lead.funnel_stage} onValueChange={onStageChange}>
