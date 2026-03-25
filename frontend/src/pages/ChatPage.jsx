@@ -8,8 +8,8 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { ScrollArea } from "../components/ui/scroll-area";
 import {
-  Send, Trash2, X, Phone, Clock, AlertTriangle,
-  Activity, Shield, MessageCircle, CheckCircle, Users, Zap,
+  Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
+  Shield, MessageCircle, CheckCircle, Users,
   Pause, Play, UserCheck, Bot, Brain, Loader2
 } from "lucide-react";
 
@@ -29,38 +29,6 @@ const REASON_LABELS = {
   timeout_bot: { label: "Timeout del bot", color: "bg-red-500/20 text-red-400" },
   regla_operativa: { label: "Regla operativa", color: "bg-blue-500/20 text-blue-400" },
 };
-
-function StatsBar({ stats, alertCount }) {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-      <div className="bg-card border border-border rounded-xl p-3 text-center">
-        <Users size={16} className="mx-auto mb-1 text-green-500" />
-        <p className="text-lg font-bold text-foreground">{stats.total_leads || 0}</p>
-        <p className="text-[10px] text-muted-foreground">Leads WhatsApp</p>
-      </div>
-      <div className="bg-card border border-border rounded-xl p-3 text-center">
-        <MessageCircle size={16} className="mx-auto mb-1 text-blue-500" />
-        <p className="text-lg font-bold text-foreground">{stats.total_messages || 0}</p>
-        <p className="text-[10px] text-muted-foreground">Mensajes</p>
-      </div>
-      <div className="bg-card border border-border rounded-xl p-3 text-center">
-        <Zap size={16} className="mx-auto mb-1 text-amber-500" />
-        <p className="text-lg font-bold text-foreground">{stats.avg_response_time || "N/A"}</p>
-        <p className="text-[10px] text-muted-foreground">Resp. Prom.</p>
-      </div>
-      <div className="bg-card border border-border rounded-xl p-3 text-center">
-        <Activity size={16} className="mx-auto mb-1 text-violet-500" />
-        <p className="text-lg font-bold text-foreground">{stats.active_today || 0}</p>
-        <p className="text-[10px] text-muted-foreground">Activos Hoy</p>
-      </div>
-      <div className={`bg-card border rounded-xl p-3 text-center ${alertCount > 0 ? "border-red-500/50 bg-red-500/5" : "border-border"}`}>
-        <AlertTriangle size={16} className={`mx-auto mb-1 ${alertCount > 0 ? "text-red-500" : "text-muted-foreground"}`} />
-        <p className={`text-lg font-bold ${alertCount > 0 ? "text-red-500" : "text-foreground"}`}>{alertCount}</p>
-        <p className="text-[10px] text-muted-foreground">Alertas</p>
-      </div>
-    </div>
-  );
-}
 
 function SessionItem({ s, isActive, onClick }) {
   const timeAgo = s.timestamp ? (() => { const d = (Date.now() - new Date(s.timestamp).getTime()) / 60000; return d < 1 ? "ahora" : d < 60 ? `${Math.floor(d)}m` : d < 1440 ? `${Math.floor(d / 60)}h` : `${Math.floor(d / 1440)}d`; })() : "";
@@ -163,7 +131,6 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [leadInfo, setLeadInfo] = useState(null);
   const [initialized, setInitialized] = useState(false);
-  const [stats, setStats] = useState({});
   const [alerts, setAlerts] = useState([]);
   const [botPaused, setBotPaused] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -177,24 +144,18 @@ export default function ChatPage() {
     }).catch(() => {});
   }, []);
 
-  const fetchStats = useCallback(() => {
-    axios.get(`${API}/chat/whatsapp-stats`).then(res => setStats(res.data)).catch(() => {});
-  }, []);
-
   const fetchAlerts = useCallback(() => {
     axios.get(`${API}/chat/alerts`).then(res => setAlerts(res.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
     fetchSessions();
-    fetchStats();
     fetchAlerts();
-  }, [fetchSessions, fetchStats, fetchAlerts]);
+  }, [fetchSessions, fetchAlerts]);
 
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchSessions();
-      fetchStats();
       fetchAlerts();
       if (activeSession) {
         axios.get(`${API}/chat/history/${activeSession}`).then(res => {
@@ -206,7 +167,7 @@ export default function ChatPage() {
       }
     }, 8000);
     return () => clearInterval(pollRef.current);
-  }, [activeSession, fetchSessions, fetchStats, fetchAlerts]);
+  }, [activeSession, fetchSessions, fetchAlerts]);
 
   useEffect(() => {
     if (initialized) return;
@@ -370,7 +331,6 @@ export default function ChatPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground font-heading">WhatsApp Bot</h1>
-          <p className="text-sm text-muted-foreground">Monitor en tiempo real - GPT-5.2</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1.5">
@@ -380,7 +340,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <StatsBar stats={stats} alertCount={pendingAlertCount} />
       <AlertPanel alerts={alerts} onResolve={resolveAlert} onTakeOver={takeOverConversation} />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "380px" : "300px"})` }}>
