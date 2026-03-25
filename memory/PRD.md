@@ -1,44 +1,36 @@
-# Fakulti CRM - Product Requirements Document
+# Fakulti CRM - PRD
 
-## Original Problem Statement
-CRM and sales funnel automation platform for "Fakulti" brand. A comprehensive 13-phase plan to upgrade the existing system including lead management, AI WhatsApp bots, advisor management, campaign tools, and analytics.
+## Problema Original
+Plataforma CRM completa con automatización de ventas por WhatsApp para la marca "Fakulti". Incluye tracking de leads, bots de IA por producto, campañas masivas, gamificación y reportes.
 
-## Architecture
-- **Backend**: FastAPI + MongoDB (motor) + Pydantic + JWT Auth
-- **Frontend**: React + Tailwind CSS + Shadcn/UI + Axios
-- **External**: WhatsApp Cloud API, OpenAI GPT-5.2 (via Emergent LLM Key)
-- **Monolith**: `backend/server.py` (~3260 lines)
+## Stack Técnico
+- **Frontend**: React, Tailwind, Shadcn UI
+- **Backend**: FastAPI, MongoDB (Motor)
+- **AI**: GPT-5.2 via emergentintegrations
+- **Deploy**: Docker multi-stage (Node 20 + Python 3.11) para Railway
 
-## Core Credentials
+## Bloques Completados (1-13) ✅
+- Dashboard con métricas
+- Gestión de leads con kanban
+- WhatsApp Bot con IA
+- Asesores con roles
+- Campañas masivas
+- QR y canales de tracking
+- Gamificación
+- Fidelización (métricas)
+- Configuración y Productos
+
+## Cambios Recientes (25/03/2026)
+- **Chat adaptativo**: Ventana de conversaciones expandida (calc 100vh - 140px)
+- **Leads mejorados**: Etiquetas "Canal" y "Agentes" en filtros, separación 80px, botones Cargar/Descargar integrados
+- **Carga/Descarga eliminada**: Funcionalidad movida a Leads, tab removida del sidebar
+- **Fidelización simplificada**: Solo métricas (Revenue, Retención, Recompra, Top Compradores)
+
+## Tareas Pendientes
+- **P1**: Deploy Railway (Dockerfile listo con Node 20, pendiente configurar servicio)
+- **P1**: Flujos de venta para 4 productos (bloqueado: scripts del usuario)
+- **P2**: Refactoring backend (server.py ~3300 líneas → módulos)
+- **P2**: Reportes automáticos por email
+
+## Credenciales de Prueba
 - Admin: admin@fakulti.com / admin123
-- Advisors: carlos@fakulti.com, ana@fakulti.com / advisor123
-
-## ALL 13 Blocks - COMPLETED
-
-### Block 1-8: Previously Completed ✅
-### Block 9-13: Completed in previous session ✅
-
-### Product Bot Configuration - Bone Broth ✅ (Completed 2026-03-17)
-- Full sales flow script (3267 chars) loaded into bot_config.sales_flow
-- 9-stage sales funnel: Hook → Intent Classification → Education → Qualification → Recommendation → Offer → Objection Handling → Close → Follow-up
-- Intent detection: Digestion, Articulaciones, Energia, Info general
-- Objection handling: Price, pharmacy comparison, "I'll think about it"
-- Data extraction: name, CI/RUC, email, address, city
-- New fields: ci_ruc, address in LeadUpdate model
-- Settings UI: New "Flujo de Ventas Avanzado" textarea field
-- Enhanced build_product_bot_prompt: Uses sales_flow when present, falls back to simple prompt
-
-## Key API Endpoints
-- All previous endpoints remain
-- `/api/products/{id}/bot-config` - Now supports `sales_flow` field
-
-## Product Bot Status
-- **Bombro - Bone Broth Hidrolizado**: ✅ Full sales flow configured
-- **Gomitas Melatonina**: Basic config (needs sales flow)
-- **Gomitas Biotina**: Basic config (needs sales flow)
-- **Colágeno Hidrolizado**: Basic config (needs sales flow)
-- **Magnesio Citrato**: Basic config (needs sales flow)
-
-## Pending
-- Configure sales flows for remaining 4 products (user to provide scripts)
-- Refactoring: Break server.py monolith into modules
