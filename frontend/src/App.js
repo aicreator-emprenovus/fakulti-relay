@@ -16,7 +16,6 @@ import QRCampaignsPage from "@/pages/QRCampaignsPage";
 import AdvisorsPage from "@/pages/AdvisorsPage";
 import CampaignsPage from "@/pages/CampaignsPage";
 import Sidebar from "@/components/Sidebar";
-import NotificationBell from "@/components/NotificationBell";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -134,11 +133,8 @@ function AdminLayout({ children }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar currentPath={location.pathname} />
-      <main className={`flex-1 ml-0 ${sidebarCollapsed ? "md:ml-16" : "md:ml-52"} min-h-screen flex flex-col transition-all duration-300`}>
-        <div className="flex items-center justify-end p-2 md:p-3 border-b border-border bg-card/50">
-          <NotificationBell />
-        </div>
-        <div className="p-4 md:p-8 flex-1">
+      <main className={`flex-1 ml-0 ${sidebarCollapsed ? "md:ml-16" : "md:ml-52"} h-screen flex flex-col transition-all duration-300 overflow-hidden`}>
+        <div className="p-4 md:p-6 flex-1 overflow-auto">
           {children}
         </div>
         <Footer />

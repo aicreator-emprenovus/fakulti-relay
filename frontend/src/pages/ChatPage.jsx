@@ -357,7 +357,7 @@ export default function ChatPage() {
 
       <AlertPanel alerts={alerts} onResolve={resolveAlert} onTakeOver={takeOverConversation} />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "220px" : "140px"})` }}>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "180px" : "120px"})` }}>
         {/* Sessions Sidebar */}
         <Card className="bg-card border-border rounded-2xl md:col-span-1 hidden md:block overflow-hidden">
           <CardContent className="p-3 h-full flex flex-col">
