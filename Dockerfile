@@ -1,11 +1,12 @@
 # Stage 1: Build React frontend
 FROM node:20-slim AS frontend-build
 WORKDIR /build
-COPY frontend/ .
-RUN yarn install --network-timeout 120000
 ENV REACT_APP_BACKEND_URL=""
 ENV GENERATE_SOURCEMAP=false
 ENV NODE_OPTIONS=--max-old-space-size=2048
+COPY frontend/package.json frontend/yarn.lock ./
+RUN yarn install --network-timeout 120000
+COPY frontend/ .
 RUN yarn build
 
 # Stage 2: Python backend + serve static frontend
