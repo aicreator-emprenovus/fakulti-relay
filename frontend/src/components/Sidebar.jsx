@@ -8,13 +8,13 @@ const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-48
 
 const allNavItems = [
   { path: "/", icon: LayoutDashboard, label: "Dashboard", roles: ["admin", "advisor"] },
+  { path: "/chat", icon: Phone, label: "WhatsApp Bot", roles: ["admin", "advisor"] },
   { path: "/leads", icon: Users, label: "Leads", roles: ["admin", "advisor"] },
   { path: "/advisors", icon: UserCheck, label: "Asesores", roles: ["admin"] },
   { path: "/campaigns", icon: Megaphone, label: "Campañas", roles: ["admin"] },
   { path: "/qr-campaigns", icon: QrCode, label: "QR y Canales", roles: ["admin"] },
   { path: "/games", icon: Gamepad2, label: "Juegos", roles: ["admin"] },
   { path: "/loyalty", icon: Heart, label: "Fidelización", roles: ["admin"] },
-  { path: "/chat", icon: Phone, label: "WhatsApp Bot", roles: ["admin", "advisor"] },
   { path: "/bulk", icon: Upload, label: "Carga / Descarga", roles: ["admin"] },
   { path: "/config", icon: Zap, label: "Configuración", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "Productos y Bots", roles: ["admin"] },
