@@ -234,7 +234,7 @@ export default function LeadsPage() {
         )}
       </div>
 
-      <div style={{ height: "80px" }} />
+      <div style={{ height: "25px" }} />
 
       {loading ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground">Cargando leads...</div>
