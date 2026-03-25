@@ -3005,20 +3005,24 @@ app.add_middleware(
 )
 
 # Serve React static files in production (Railway)
-import pathlib
-_static_dir = pathlib.Path(__file__).parent / "static"
-if _static_dir.is_dir():
+import pathlib as _pathlib
+_static_dir = _pathlib.Path(__file__).parent / "static"
+if _static_dir.is_dir() and (_static_dir / "index.html").is_file():
     from starlette.staticfiles import StaticFiles
     from starlette.responses import FileResponse
 
+    _static_assets = _static_dir / "static"
+    if _static_assets.is_dir():
+        app.mount("/static", StaticFiles(directory=str(_static_assets)), name="spa-static")
+
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
         file_path = _static_dir / full_path
-        if file_path.is_file():
+        if file_path.is_file() and ".." not in full_path:
             return FileResponse(file_path)
         return FileResponse(_static_dir / "index.html")
-
-    app.mount("/static", StaticFiles(directory=str(_static_dir / "static")), name="static-assets")
 
 # ========== STARTUP - SEED DATA ==========
 
