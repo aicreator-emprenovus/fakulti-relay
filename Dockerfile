@@ -12,8 +12,27 @@ RUN yarn build
 FROM python:3.11-slim
 WORKDIR /app
 
+RUN pip install --upgrade pip setuptools wheel
+
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+RUN pip install --no-cache-dir \
+    fastapi==0.110.1 \
+    uvicorn==0.25.0 \
+    motor==3.3.1 \
+    pydantic==2.12.5 \
+    openpyxl==3.1.5 \
+    "qrcode[pil]==8.2" \
+    httpx==0.28.1 \
+    "python-jose[cryptography]==3.5.0" \
+    "passlib[bcrypt]==1.7.4" \
+    python-dotenv==1.2.1 \
+    python-multipart==0.0.22 \
+    bcrypt==4.1.3 \
+    Pillow
+
+RUN pip install --no-cache-dir \
+    --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
+    emergentintegrations
 
 COPY backend/ .
 COPY --from=frontend-build /build/build ./static
