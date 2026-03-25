@@ -41,7 +41,6 @@ export default function LeadsPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
-  const [seasonFilter, setSeasonFilter] = useState("");
   const [advisorFilter, setAdvisorFilter] = useState("");
   const [advisors, setAdvisors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +49,7 @@ export default function LeadsPage() {
   const [editLead, setEditLead] = useState(null);
   const [draggedLead, setDraggedLead] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
-  const [form, setForm] = useState({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "", season: "" });
+  const [form, setForm] = useState({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "" });
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -58,14 +57,13 @@ export default function LeadsPage() {
       const params = { limit: 500 };
       if (search) params.search = search;
       if (sourceFilter) params.source = sourceFilter;
-      if (seasonFilter) params.season = seasonFilter;
       if (advisorFilter) params.advisor = advisorFilter;
       const res = await axios.get(`${API}/leads`, { params });
       setLeads(res.data.leads);
       setTotal(res.data.total);
     } catch { toast.error("Error al cargar leads"); }
     setLoading(false);
-  }, [search, sourceFilter, seasonFilter, advisorFilter]);
+  }, [search, sourceFilter, advisorFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -84,7 +82,7 @@ export default function LeadsPage() {
       }
       setShowAdd(false);
       setEditLead(null);
-      setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "", season: "" });
+      setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "" });
       fetchLeads();
     } catch (err) { toast.error(err.response?.data?.detail || "Error al guardar"); }
   };
@@ -100,7 +98,7 @@ export default function LeadsPage() {
 
   const openEdit = (lead) => {
     setEditLead(lead);
-    setForm({ name: lead.name, whatsapp: lead.whatsapp, city: lead.city || "", email: lead.email || "", product_interest: lead.product_interest || "", source: lead.source || "web", notes: lead.notes || "", funnel_stage: lead.funnel_stage, channel: lead.channel || "", season: lead.season || "" });
+    setForm({ name: lead.name, whatsapp: lead.whatsapp, city: lead.city || "", email: lead.email || "", product_interest: lead.product_interest || "", source: lead.source || "web", notes: lead.notes || "", funnel_stage: lead.funnel_stage, channel: lead.channel || "" });
     setShowAdd(true);
   };
 
@@ -176,15 +174,6 @@ export default function LeadsPage() {
           <SelectContent className="bg-card border-input">
             <SelectItem value="all">Todas</SelectItem>
             {SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={seasonFilter || "all"} onValueChange={v => setSeasonFilter(v === "all" ? "" : v)}>
-          <SelectTrigger data-testid="season-filter" className="w-36 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Temporada" /></SelectTrigger>
-          <SelectContent className="bg-card border-input">
-            <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="verano">Verano</SelectItem>
-            <SelectItem value="invierno">Invierno</SelectItem>
-            <SelectItem value="todo_el_año">Todo el año</SelectItem>
           </SelectContent>
         </Select>
         {userRole === "admin" && advisors.length > 0 && (
@@ -276,9 +265,6 @@ export default function LeadsPage() {
               <div><Label className="text-muted-foreground text-xs">Canal</Label>
                 <Select value={form.channel || "none"} onValueChange={v => setForm(f => ({ ...f, channel: v === "none" ? "" : v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue placeholder="Sin canal" /></SelectTrigger><SelectContent className="bg-card border-input"><SelectItem value="none">Sin canal</SelectItem><SelectItem value="TV/QR">TV/QR</SelectItem><SelectItem value="Fibeca">Fibeca</SelectItem><SelectItem value="Evento">Evento</SelectItem><SelectItem value="Pauta Digital">Pauta Digital</SelectItem><SelectItem value="Web">Web</SelectItem><SelectItem value="WhatsApp">WhatsApp</SelectItem><SelectItem value="Redes Sociales">Redes Sociales</SelectItem></SelectContent></Select>
               </div>
-              <div><Label className="text-muted-foreground text-xs">Temporada</Label>
-                <Select value={form.season || "none"} onValueChange={v => setForm(f => ({ ...f, season: v === "none" ? "" : v }))}><SelectTrigger className="bg-muted border-input text-foreground"><SelectValue placeholder="Sin temporada" /></SelectTrigger><SelectContent className="bg-card border-input"><SelectItem value="none">Sin temporada</SelectItem><SelectItem value="verano">Verano</SelectItem><SelectItem value="invierno">Invierno</SelectItem><SelectItem value="todo_el_año">Todo el año</SelectItem></SelectContent></Select>
-              </div>
             </div>
             <div><Label className="text-muted-foreground text-xs">Notas</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
             <Button data-testid="save-lead-btn" onClick={handleSave} className="w-full bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">{editLead ? "Actualizar" : "Crear Lead"}</Button>
@@ -307,7 +293,6 @@ export default function LeadsPage() {
                   <div><span className="text-muted-foreground">Fuente:</span><p className="text-foreground">{showDetail.source}</p></div>
                   <div><span className="text-muted-foreground">Canal:</span><p className="text-foreground">{showDetail.channel || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Producto Interes:</span><p className="text-foreground">{showDetail.product_interest || "N/A"}</p></div>
-                  <div><span className="text-muted-foreground">Temporada:</span><p className="text-foreground">{showDetail.season || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Juego Usado:</span><p className="text-foreground">{showDetail.game_used || "Ninguno"}</p></div>
                   <div><span className="text-muted-foreground">Premio:</span><p className="text-foreground">{showDetail.prize_obtained || "N/A"}</p></div>
                   <div><span className="text-muted-foreground">Cupon:</span><p className="text-foreground">{showDetail.coupon_used || "N/A"}</p></div>

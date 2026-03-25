@@ -442,9 +442,6 @@ export default function ChatPage() {
                     {leadInfo.product_interest && (
                       <div><span className="text-muted-foreground">Producto:</span> <span className="text-blue-400 font-medium">{leadInfo.product_interest}</span></div>
                     )}
-                    {leadInfo.season && (
-                      <div><span className="text-muted-foreground">Temporada:</span> <span className="text-foreground font-medium">{leadInfo.season}</span></div>
-                    )}
                     {leadInfo.assigned_advisor_name && (
                       <div><span className="text-muted-foreground">Asesor:</span> <span className="text-orange-500 font-medium">{leadInfo.assigned_advisor_name}</span></div>
                     )}
