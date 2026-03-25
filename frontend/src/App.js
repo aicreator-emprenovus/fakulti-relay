@@ -124,10 +124,19 @@ function ProtectedRoute({ children }) {
 
 function AdminLayout({ children }) {
   const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("fk_sidebar") === "collapsed");
+
+  useEffect(() => {
+    const handler = () => setSidebarCollapsed(localStorage.getItem("fk_sidebar") === "collapsed");
+    window.addEventListener("storage", handler);
+    const iv = setInterval(handler, 300);
+    return () => { window.removeEventListener("storage", handler); clearInterval(iv); };
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar currentPath={location.pathname} />
-      <main className="flex-1 ml-0 md:ml-64 min-h-screen flex flex-col">
+      <main className={`flex-1 ml-0 ${sidebarCollapsed ? "md:ml-16" : "md:ml-52"} min-h-screen flex flex-col transition-all duration-300`}>
         <div className="flex items-center justify-end p-2 md:p-3 border-b border-border bg-card/50">
           <NotificationBell />
         </div>

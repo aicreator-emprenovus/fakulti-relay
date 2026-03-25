@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Upload, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, Bell } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Upload, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, Bell, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png";
@@ -26,6 +26,7 @@ export default function Sidebar({ currentPath }) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("fk_sidebar") === "collapsed");
   const userRole = user?.role || "admin";
 
   const navItems = allNavItems.filter(item => item.roles.includes(userRole));
@@ -35,18 +36,32 @@ export default function Sidebar({ currentPath }) {
     setMobileOpen(false);
   };
 
+  const toggleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem("fk_sidebar", next ? "collapsed" : "expanded");
+  };
+
+  const w = collapsed ? "w-16" : "w-52";
+
   const sidebarContent = (
     <div className="flex flex-col h-full bg-card border-r border-border">
-      <div className="p-4 flex items-center gap-3 border-b border-border">
-        <img src={LOGO_URL} alt="Faculty" className="h-10 w-auto" />
-        <div className="hidden md:block">
-          <p className="text-xs text-muted-foreground tracking-wider uppercase">
-            {userRole === "advisor" ? "Panel Asesor" : "CRM Panel"}
-          </p>
-        </div>
+      {/* Logo */}
+      <div className={`p-3 flex items-center justify-center border-b border-border ${collapsed ? "px-2" : "px-4"}`}>
+        <img src={LOGO_URL} alt="Fakulti" className={`${collapsed ? "h-7" : "h-9"} w-auto transition-all`} />
       </div>
 
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {/* Collapse toggle */}
+      <button
+        data-testid="sidebar-toggle"
+        onClick={toggleCollapse}
+        className="hidden md:flex items-center justify-center py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-b border-border"
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
+
+      {/* Nav */}
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {navItems.map(item => {
           const isActive = currentPath === item.path;
           return (
@@ -54,50 +69,68 @@ export default function Sidebar({ currentPath }) {
               key={item.path}
               data-testid={`nav-${item.path.replace("/", "") || "dashboard"}`}
               onClick={() => handleNav(item.path)}
-              className={`sidebar-item w-full flex items-center gap-3 text-sm font-medium transition-all ${
+              title={collapsed ? item.label : undefined}
+              className={`w-full flex items-center ${collapsed ? "justify-center px-2" : "gap-2.5 px-3"} py-2 rounded-lg text-sm font-medium transition-all ${
                 isActive
-                  ? "active text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
             >
-              <item.icon size={18} />
-              <span>{item.label}</span>
+              <item.icon size={18} className="flex-shrink-0" />
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </button>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-border space-y-3">
+      {/* Footer */}
+      <div className={`border-t border-border ${collapsed ? "p-2 space-y-2" : "p-3 space-y-2"}`}>
         <button
           data-testid="theme-toggle-btn"
           onClick={toggleTheme}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+          title={collapsed ? (theme === "dark" ? "Modo Claro" : "Modo Oscuro") : undefined}
+          className={`w-full flex items-center ${collapsed ? "justify-center px-2" : "gap-2.5 px-3"} py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all`}
         >
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          <span>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</span>
+          {!collapsed && <span>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</span>}
         </button>
-        <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-            userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
-          }`}>
-            {user?.name?.[0] || "A"}
+
+        {!collapsed && (
+          <div className="flex items-center gap-2.5 px-1">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+              userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+            }`}>
+              {user?.name?.[0] || "A"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-foreground truncate">{user?.name || "Admin"}</p>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {userRole === "advisor" ? "Asesor" : "Administrador"} - {user?.email || ""}
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{user?.name || "Admin"}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {userRole === "advisor" ? "Asesor" : "Administrador"} - {user?.email || ""}
-            </p>
+        )}
+
+        {collapsed && (
+          <div className="flex justify-center">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+              userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+            }`} title={user?.name || "Admin"}>
+              {user?.name?.[0] || "A"}
+            </div>
           </div>
-        </div>
+        )}
+
         <Button
           data-testid="logout-btn"
           variant="ghost"
           size="sm"
-          className="w-full text-muted-foreground hover:text-red-400 hover:bg-red-400/5 justify-start gap-2"
+          title={collapsed ? "Cerrar Sesión" : undefined}
+          className={`w-full text-muted-foreground hover:text-red-400 hover:bg-red-400/5 ${collapsed ? "justify-center px-2" : "justify-start gap-2"}`}
           onClick={logout}
         >
           <LogOut size={16} />
-          Cerrar Sesión
+          {!collapsed && "Cerrar Sesión"}
         </Button>
       </div>
     </div>
@@ -117,7 +150,7 @@ export default function Sidebar({ currentPath }) {
         <div className="md:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileOpen(false)} />
       )}
 
-      <aside className={`fixed top-0 left-0 h-full w-64 z-40 transition-transform duration-300 md:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed top-0 left-0 h-full ${w} z-40 transition-all duration-300 md:translate-x-0 ${mobileOpen ? "translate-x-0 w-52" : "-translate-x-full md:translate-x-0"}`}>
         {sidebarContent}
       </aside>
     </>
