@@ -2213,7 +2213,8 @@ async def whatsapp_verify(request: Request):
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
     config = await get_whatsapp_config()
-    if mode == "subscribe" and token == config.get("verify_token", ""):
+    valid_token = config.get("verify_token", "") or os.environ.get("VERIFY_TOKEN", "")
+    if mode == "subscribe" and token and token == valid_token:
         logger.info("WhatsApp webhook verified successfully")
         return PlainTextResponse(content=challenge, status_code=200)
     raise HTTPException(status_code=403, detail="Verification failed")
