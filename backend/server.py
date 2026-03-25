@@ -68,6 +68,19 @@ def phone_to_international(phone: str) -> str:
         return phone
     return '593' + phone
 
+def phone_variants(phone: str) -> list:
+    """Return all possible format variants for a phone number for flexible lookup."""
+    normalized = normalize_phone_ec(phone)
+    international = phone_to_international(phone)
+    variants = list(set([normalized, international, phone.strip()]))
+    return variants
+
+async def find_lead_by_phone(phone: str):
+    """Find a lead by phone number, checking all format variants."""
+    variants = phone_variants(phone)
+    lead = await db.leads.find_one({"whatsapp": {"$in": variants}}, {"_id": 0})
+    return lead
+
 # ========== PYDANTIC MODELS ==========
 
 class LoginRequest(BaseModel):
@@ -674,17 +687,17 @@ async def play_game(req: GamePlayRequest):
     }
     await db.game_plays.insert_one(play_doc)
     
-    existing_lead = await db.leads.find_one({"whatsapp": req.whatsapp})
+    existing_lead = await find_lead_by_phone(req.whatsapp)
     if existing_lead:
         await db.leads.update_one(
-            {"whatsapp": req.whatsapp},
-            {"$set": {"game_used": req.game_type, "prize_obtained": selected_prize["name"], "last_interaction": datetime.now(timezone.utc).isoformat()}}
+            {"id": existing_lead["id"]},
+            {"$set": {"game_used": req.game_type, "prize_obtained": selected_prize["name"], "last_interaction": datetime.now(timezone.utc).isoformat(), "whatsapp": normalize_phone_ec(req.whatsapp)}}
         )
     else:
         lead_doc = {
             "id": str(uuid.uuid4()),
             "name": req.name,
-            "whatsapp": req.whatsapp,
+            "whatsapp": normalize_phone_ec(req.whatsapp),
             "city": req.city or "",
             "email": "",
             "product_interest": "",
@@ -1529,13 +1542,13 @@ async def bulk_upload(file: UploadFile = File(...), user=Depends(get_current_use
             has_purchase = "purchase_date" in header_map and row[header_map["purchase_date"]]
             stage = "cliente_nuevo" if has_purchase else "nuevo"
             
-            existing = await db.leads.find_one({"whatsapp": whatsapp})
+            existing = await find_lead_by_phone(whatsapp)
             if existing:
-                update_data = {"name": name, "last_interaction": datetime.now(timezone.utc).isoformat()}
+                update_data = {"name": name, "whatsapp": whatsapp, "last_interaction": datetime.now(timezone.utc).isoformat()}
                 if city: update_data["city"] = city
                 if product: update_data["product_interest"] = product
                 if has_purchase: update_data["funnel_stage"] = stage
-                await db.leads.update_one({"whatsapp": whatsapp}, {"$set": update_data})
+                await db.leads.update_one({"id": existing["id"]}, {"$set": update_data})
                 updated += 1
             else:
                 lead_doc = {
@@ -1994,7 +2007,14 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     """Process an incoming WhatsApp message through GPT-5.2 AI bot."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     
-    existing_lead = await db.leads.find_one({"whatsapp": phone}, {"_id": 0})
+    phone = normalize_phone_ec(phone)
+    existing_lead = await find_lead_by_phone(phone)
+    
+    # If found with different format, normalize the stored phone
+    if existing_lead and existing_lead.get("whatsapp") != phone:
+        await db.leads.update_one({"id": existing_lead["id"]}, {"$set": {"whatsapp": phone}})
+        existing_lead["whatsapp"] = phone
+    
     is_new = existing_lead is None
     lead_id = existing_lead["id"] if existing_lead else None
     lead_name = existing_lead.get("name", "") if existing_lead else ""
@@ -2329,7 +2349,7 @@ class WhatsAppMessage(BaseModel):
 
 @api_router.post("/whatsapp/webhook")
 async def whatsapp_webhook_legacy(req: WhatsAppMessage):
-    reply, lead_id = await process_whatsapp_incoming(req.from_number.strip(), req.message)
+    reply, lead_id = await process_whatsapp_incoming(normalize_phone_ec(req.from_number.strip()), req.message)
     return {"reply": reply, "lead_id": lead_id}
 
 # ========== AUTOMATION RULES ==========
@@ -3203,13 +3223,92 @@ async def startup():
     if migrated_caliente.modified_count or migrated_frio.modified_count:
         logger.info(f"Migrated stages: caliente->en_negociacion ({migrated_caliente.modified_count}), frio->perdido ({migrated_frio.modified_count})")
     
-    # Normalize existing phone numbers (remove +593 prefix)
-    leads_with_plus = await db.leads.find({"whatsapp": {"$regex": "^\\+593"}}, {"_id": 0, "id": 1, "whatsapp": 1}).to_list(10000)
-    if leads_with_plus:
-        for lead in leads_with_plus:
-            normalized = normalize_phone_ec(lead["whatsapp"])
-            await db.leads.update_one({"id": lead["id"]}, {"$set": {"whatsapp": normalized}})
-        logger.info(f"Normalized {len(leads_with_plus)} phone numbers (removed +593)")
+    # ===== COMPREHENSIVE PHONE NORMALIZATION & LEAD DEDUP =====
+    all_leads = await db.leads.find({}, {"_id": 0}).to_list(10000)
+    phone_groups = {}
+    for lead in all_leads:
+        raw_phone = lead.get("whatsapp", "")
+        if not raw_phone:
+            continue
+        norm = normalize_phone_ec(raw_phone)
+        if norm not in phone_groups:
+            phone_groups[norm] = []
+        phone_groups[norm].append(lead)
+    
+    merged_count = 0
+    normalized_count = 0
+    for norm_phone, leads_group in phone_groups.items():
+        if len(leads_group) == 1:
+            lead = leads_group[0]
+            if lead.get("whatsapp") != norm_phone:
+                old_phone = lead["whatsapp"]
+                await db.leads.update_one({"id": lead["id"]}, {"$set": {"whatsapp": norm_phone}})
+                # Update session meta and messages that reference this lead by old phone session
+                old_session = f"wa_{old_phone}"
+                new_session = f"wa_{norm_phone}"
+                if old_session != new_session:
+                    await db.chat_sessions_meta.update_many({"session_id": old_session}, {"$set": {"session_id": new_session}})
+                    await db.chat_messages.update_many({"session_id": old_session}, {"$set": {"session_id": new_session}})
+                normalized_count += 1
+        else:
+            # Multiple leads with the same normalized phone - merge them
+            # Pick the primary lead (the one with most data: has name, has purchase_history, most recent interaction)
+            leads_group.sort(key=lambda l: (
+                bool(l.get("name", "").strip()),
+                len(l.get("purchase_history", [])),
+                l.get("last_interaction", ""),
+            ), reverse=True)
+            primary = leads_group[0]
+            primary_id = primary["id"]
+            
+            for dup in leads_group[1:]:
+                dup_id = dup["id"]
+                # Merge purchase_history
+                dup_purchases = dup.get("purchase_history", [])
+                if dup_purchases:
+                    await db.leads.update_one({"id": primary_id}, {"$push": {"purchase_history": {"$each": dup_purchases}}})
+                # Fill missing fields from duplicate
+                update_fields = {}
+                for field in ["name", "city", "email", "product_interest", "source", "channel", "game_used", "prize_obtained", "coupon_used"]:
+                    if not primary.get(field) and dup.get(field):
+                        update_fields[field] = dup[field]
+                if dup.get("assigned_advisor") and not primary.get("assigned_advisor"):
+                    update_fields["assigned_advisor"] = dup["assigned_advisor"]
+                if update_fields:
+                    await db.leads.update_one({"id": primary_id}, {"$set": update_fields})
+                
+                # Transfer chat messages and sessions from duplicate to primary
+                old_sessions_for_dup = [f"wa_{dup.get('whatsapp', '')}", f"wa_{normalize_phone_ec(dup.get('whatsapp', ''))}"]
+                for old_sid in old_sessions_for_dup:
+                    await db.chat_messages.update_many({"lead_id": dup_id}, {"$set": {"lead_id": primary_id}})
+                    await db.chat_sessions_meta.update_many({"lead_id": dup_id}, {"$set": {"lead_id": primary_id, "lead_name": primary.get("name", "")}})
+                
+                # Delete the duplicate lead
+                await db.leads.delete_one({"id": dup_id})
+                logger.info(f"Merged duplicate lead {dup.get('name','')} ({dup.get('whatsapp','')}) into {primary.get('name','')} ({primary.get('whatsapp','')})")
+            
+            # Normalize primary phone and update session IDs
+            old_phone = primary.get("whatsapp", "")
+            if old_phone != norm_phone:
+                await db.leads.update_one({"id": primary_id}, {"$set": {"whatsapp": norm_phone}})
+            
+            # Consolidate all session variants to normalized session ID
+            all_variants = set()
+            for l in leads_group:
+                p = l.get("whatsapp", "")
+                all_variants.add(f"wa_{p}")
+                all_variants.add(f"wa_{normalize_phone_ec(p)}")
+                all_variants.add(f"wa_{phone_to_international(p)}")
+            target_session = f"wa_{norm_phone}"
+            for old_sid in all_variants:
+                if old_sid != target_session:
+                    await db.chat_sessions_meta.update_many({"session_id": old_sid}, {"$set": {"session_id": target_session, "lead_name": primary.get("name", "")}})
+                    await db.chat_messages.update_many({"session_id": old_sid}, {"$set": {"session_id": target_session, "lead_id": primary_id}})
+            
+            merged_count += len(leads_group) - 1
+    
+    if normalized_count or merged_count:
+        logger.info(f"Phone migration: {normalized_count} normalized, {merged_count} duplicates merged")
     
     # Ensure season and channel fields exist on all leads
     await db.leads.update_many({"season": {"$exists": False}}, {"$set": {"season": ""}})

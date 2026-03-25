@@ -9,27 +9,21 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 - **AI**: GPT-5.2 via emergentintegrations
 - **Deploy**: Docker multi-stage (Node 20 + Python 3.11) para Railway
 
-## Bloques Completados (1-13) ✅
-- Dashboard con métricas
-- Gestión de leads con kanban
-- WhatsApp Bot con IA
-- Asesores con roles
-- Campañas masivas
-- QR y canales de tracking
-- Gamificación
-- Fidelización (métricas)
-- Configuración y Productos
+## Bloques Completados (1-13)
+Todos los 13 bloques del roadmap implementados y testeados.
 
 ## Cambios Recientes (25/03/2026)
-- **Chat adaptativo**: Ventana de conversaciones expandida (calc 100vh - 140px)
-- **Leads mejorados**: Etiquetas "Canal" y "Agentes" en filtros, separación 80px, botones Cargar/Descargar integrados
-- **Carga/Descarga eliminada**: Funcionalidad movida a Leads, tab removida del sidebar
-- **Fidelización simplificada**: Solo métricas (Revenue, Retención, Recompra, Top Compradores)
+- **Chat adaptativo**: Ventana expandida en alto
+- **Leads mejorados**: Etiquetas "Canal"/"Agentes", separación 25px, botones Cargar/Descargar integrados
+- **Carga/Descarga eliminada**: Funcionalidad movida a Leads, tab removida
+- **Fidelización simplificada**: Solo métricas
+- **Asignar Asesor**: Ícono en tarjetas de leads + botón en chat WhatsApp
+- **Depuración de datos**: Normalización de teléfonos, fusión de duplicados, función `find_lead_by_phone()` para búsqueda flexible, migración automática en startup
 
 ## Tareas Pendientes
-- **P1**: Deploy Railway (Dockerfile listo con Node 20, pendiente configurar servicio)
+- **P1**: Deploy Railway (Dockerfile listo con Node 20)
 - **P1**: Flujos de venta para 4 productos (bloqueado: scripts del usuario)
-- **P2**: Refactoring backend (server.py ~3300 líneas → módulos)
+- **P2**: Refactoring backend (server.py ~3400 líneas → módulos)
 - **P2**: Reportes automáticos por email
 
 ## Credenciales de Prueba
