@@ -183,7 +183,7 @@ export default function ChatPage() {
             id: l.id, name: l.name, funnel_stage: l.funnel_stage,
             whatsapp: l.whatsapp, city: l.city, email: l.email,
             product_interest: l.product_interest, source: l.source,
-            channel: l.channel, season: l.season,
+            channel: l.channel,
             assigned_advisor_name: l._advisor_name || ""
           });
           setBotPaused(l.bot_paused || false);
@@ -215,7 +215,7 @@ export default function ChatPage() {
           id: lead.id, name: lead.name, funnel_stage: lead.funnel_stage,
           whatsapp: lead.whatsapp, city: lead.city, email: lead.email,
           product_interest: lead.product_interest, source: lead.source,
-          channel: lead.channel, season: lead.season,
+          channel: lead.channel,
           assigned_advisor_name: lead._advisor_name || ""
         });
         setBotPaused(lead.bot_paused || false);

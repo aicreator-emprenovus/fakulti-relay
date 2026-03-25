@@ -34,7 +34,7 @@ export default function CampaignsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "",
-    target_channel: "", target_season: "", message_template: "", image_url: "", active: true
+    target_channel: "", message_template: "", image_url: "", active: true
   });
   const [sending, setSending] = useState(null);
 
@@ -54,7 +54,7 @@ export default function CampaignsPage() {
       await axios.post(`${API}/campaigns`, form);
       toast.success("Campaña creada");
       setShowForm(false);
-      setForm({ name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "", target_channel: "", target_season: "", message_template: "", image_url: "", active: true });
+      setForm({ name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "", target_channel: "", message_template: "", image_url: "", active: true });
       fetch_();
     } catch (e) { toast.error(e?.response?.data?.detail || "Error"); }
   };
@@ -136,7 +136,6 @@ export default function CampaignsPage() {
                       {c.target_stage && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/15 text-violet-400">Etapa: {STAGE_OPTIONS.find(s => s.value === c.target_stage)?.label || c.target_stage}</span>}
                       {c.target_product && <span className="text-[10px] px-1.5 py-0 rounded bg-amber-500/15 text-amber-500">Producto: {c.target_product}</span>}
                       {c.target_channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/15 text-emerald-500">Canal: {c.target_channel}</span>}
-                      {c.target_season && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-400">Temporada: {c.target_season}</span>}
                     </div>
                     <p className="text-xs text-muted-foreground bg-muted/30 rounded p-2 line-clamp-2">{c.message_template}</p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -184,11 +183,6 @@ export default function CampaignsPage() {
                 <Select value={form.target_channel || "all"} onValueChange={v => setForm(f => ({ ...f, target_channel: v === "all" ? "" : v }))}>
                   <SelectTrigger className="bg-muted border-input"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-input"><SelectItem value="all">Todos</SelectItem><SelectItem value="TV/QR">TV/QR</SelectItem><SelectItem value="Fibeca">Fibeca</SelectItem><SelectItem value="Evento">Evento</SelectItem><SelectItem value="WhatsApp">WhatsApp</SelectItem></SelectContent>
-                </Select></div>
-              <div><Label className="text-muted-foreground text-xs">Temporada</Label>
-                <Select value={form.target_season || "all"} onValueChange={v => setForm(f => ({ ...f, target_season: v === "all" ? "" : v }))}>
-                  <SelectTrigger className="bg-muted border-input"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-card border-input"><SelectItem value="all">Todas</SelectItem><SelectItem value="verano">Verano</SelectItem><SelectItem value="invierno">Invierno</SelectItem></SelectContent>
                 </Select></div>
             </div>
             <div><Label className="text-muted-foreground text-xs">Mensaje (usa {"{nombre}"} para personalizar) *</Label>
