@@ -2713,14 +2713,14 @@ async def delete_campaign(campaign_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/campaigns/{campaign_id}/send")
 async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_current_user)):
-    """Send campaign messages in batches. body can have batch_size (default 10)."""
+    """Send campaign messages in batches. Records each message in chat history."""
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo admin")
     campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaña no encontrada")
     
-    batch_size = body.get("batch_size", 10)
+    batch_size = body.get("batch_size", 50)
     query = {}
     if campaign.get("target_stage"):
         query["funnel_stage"] = campaign["target_stage"]
@@ -2728,38 +2728,67 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
         query["product_interest"] = {"$regex": campaign["target_product"], "$options": "i"}
     if campaign.get("target_channel"):
         query["channel"] = campaign["target_channel"]
-    if campaign.get("target_season"):
-        query["season"] = campaign["target_season"]
     
     leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).to_list(500)
     
     wa_config = await db.system_config.find_one({"id": "whatsapp_config"}, {"_id": 0})
     sent = 0
     failed = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
     
     for lead in leads[:batch_size]:
         try:
             msg = campaign["message_template"].replace("{nombre}", lead.get("name", ""))
+            lead_id = lead["id"]
+            
+            # 1. Find or create chat session for this lead
+            meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
+            if not meta:
+                session_id = f"lead_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
+                await db.chat_sessions_meta.insert_one({
+                    "session_id": session_id, "lead_id": lead_id,
+                    "lead_name": lead.get("name", ""), "lead_phone": lead.get("whatsapp", "")
+                })
+            else:
+                session_id = meta["session_id"]
+            
+            # 2. Record the campaign message in chat history
+            chat_msg = {
+                "id": str(uuid.uuid4()),
+                "session_id": session_id,
+                "role": "assistant",
+                "content": f"[Campaña: {campaign['name']}]\n{msg}",
+                "timestamp": now_iso,
+                "source": "campaign"
+            }
+            await db.chat_messages.insert_one(chat_msg)
+            
+            # 3. Send via WhatsApp API if configured
             if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
                 phone = lead.get("whatsapp", "").replace("+", "")
                 if not phone.startswith("593"):
                     phone = "593" + phone.lstrip("0")
                 async with httpx.AsyncClient() as client_http:
-                    await client_http.post(
+                    resp = await client_http.post(
                         f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
                         headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
                         json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
                         timeout=10
                     )
-                sent += 1
-            else:
-                sent += 1  # Count as sent if no WA config (preview mode)
-        except Exception:
+                    if resp.status_code >= 400:
+                        logger.warning(f"WA send failed for {phone}: {resp.text}")
+            
+            # 4. Update lead last_interaction
+            await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": now_iso}})
+            
+            sent += 1
+        except Exception as e:
+            logger.error(f"Campaign send error for lead {lead.get('id')}: {e}")
             failed += 1
     
     await db.campaigns.update_one({"id": campaign_id}, {
         "$set": {"status": "sent", "sent_count": campaign.get("sent_count", 0) + sent, "failed_count": campaign.get("failed_count", 0) + failed,
-                 "last_sent_at": datetime.now(timezone.utc).isoformat()}
+                 "last_sent_at": now_iso}
     })
     return {"message": f"Campaña enviada: {sent} exitosos, {failed} fallidos de {len(leads[:batch_size])} leads", "sent": sent, "failed": failed}
 
