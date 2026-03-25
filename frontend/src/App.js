@@ -11,7 +11,6 @@ import GamePublicPage from "@/pages/GamePublicPage";
 import LoyaltyPage from "@/pages/LoyaltyPage";
 import ChatPage from "@/pages/ChatPage";
 import SettingsPage from "@/pages/SettingsPage";
-import BulkPage from "@/pages/BulkPage";
 import ConfigPage from "@/pages/ConfigPage";
 import QRCampaignsPage from "@/pages/QRCampaignsPage";
 import AdvisorsPage from "@/pages/AdvisorsPage";
@@ -161,7 +160,6 @@ function AppContent() {
         <Route path="/games" element={<ProtectedRoute><AdminLayout><GamesConfigPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/loyalty" element={<ProtectedRoute><AdminLayout><LoyaltyPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><AdminLayout><ChatPage /></AdminLayout></ProtectedRoute>} />
-        <Route path="/bulk" element={<ProtectedRoute><AdminLayout><BulkPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/qr-campaigns" element={<ProtectedRoute><AdminLayout><QRCampaignsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/advisors" element={<ProtectedRoute><AdminLayout><AdvisorsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/campaigns" element={<ProtectedRoute><AdminLayout><CampaignsPage /></AdminLayout></ProtectedRoute>} />

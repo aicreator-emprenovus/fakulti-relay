@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical, UserCheck } from "lucide-react";
+import { Plus, Search, Trash2, Edit, Eye, MessageSquare, GripVertical, UserCheck, Upload, Download } from "lucide-react";
 import { useAuth } from "@/App";
 
 const STAGE_CONFIG = {
@@ -50,6 +50,38 @@ export default function LeadsPage() {
   const [draggedLead, setDraggedLead] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [form, setForm] = useState({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo", channel: "" });
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return toast.error("Selecciona un archivo Excel (.xlsx)");
+    if (!file.name.endsWith(".xlsx")) return toast.error("Solo se permiten archivos .xlsx");
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await axios.post(`${API}/bulk/upload`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`Carga completada: ${res.data.created} creados, ${res.data.updated} actualizados`);
+      fileRef.current.value = "";
+      fetchLeads();
+    } catch (err) { toast.error(err.response?.data?.detail || "Error al subir archivo"); }
+    setUploading(false);
+  };
+
+  const handleDownload = async () => {
+    try {
+      const res = await axios.get(`${API}/bulk/download?download_type=all`, { responseType: "blob" });
+      const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      const disposition = res.headers["content-disposition"];
+      link.download = disposition ? disposition.split("filename=")[1] : "fakulti_leads.xlsx";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast.success("Descarga completada");
+    } catch (err) { toast.error(err.response?.data?.detail || "Error al descargar"); }
+  };
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -159,9 +191,18 @@ export default function LeadsPage() {
           <h1 className="text-3xl font-bold text-foreground font-heading">Gestión de Leads</h1>
           <p className="text-sm text-muted-foreground">Funnel de ventas con IA &middot; {total} leads</p>
         </div>
-        <Button data-testid="add-lead-btn" onClick={() => { setEditLead(null); setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" }); setShowAdd(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 shadow-sm">
-          <Plus size={16} className="mr-1" /> Nuevo Lead
-        </Button>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input ref={fileRef} type="file" accept=".xlsx" className="hidden" id="upload-file-leads" data-testid="upload-file-input" onChange={handleUpload} />
+          <Button data-testid="upload-btn" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="border-input text-foreground hover:bg-muted rounded-full">
+            <Upload size={14} className="mr-1" /> {uploading ? "Subiendo..." : "Cargar Archivo"}
+          </Button>
+          <Button data-testid="download-btn" variant="outline" onClick={handleDownload} className="border-input text-foreground hover:bg-muted rounded-full">
+            <Download size={14} className="mr-1" /> Descargar Excel
+          </Button>
+          <Button data-testid="add-lead-btn" onClick={() => { setEditLead(null); setForm({ name: "", whatsapp: "", city: "", email: "", product_interest: "", source: "web", notes: "", funnel_stage: "nuevo" }); setShowAdd(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 shadow-sm">
+            <Plus size={16} className="mr-1" /> Nuevo Lead
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -169,23 +210,31 @@ export default function LeadsPage() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input data-testid="leads-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o teléfono..." className="pl-10 bg-muted/50 border-input text-foreground h-10" />
         </div>
-        <Select value={sourceFilter || "all"} onValueChange={v => setSourceFilter(v === "all" ? "" : v)}>
-          <SelectTrigger data-testid="source-filter" className="w-36 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Todas" /></SelectTrigger>
-          <SelectContent className="bg-card border-input">
-            <SelectItem value="all">Todas</SelectItem>
-            {SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {userRole === "admin" && advisors.length > 0 && (
-          <Select value={advisorFilter || "all"} onValueChange={v => setAdvisorFilter(v === "all" ? "" : v)}>
-            <SelectTrigger data-testid="advisor-filter" className="w-40 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Asesor" /></SelectTrigger>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Canal</span>
+          <Select value={sourceFilter || "all"} onValueChange={v => setSourceFilter(v === "all" ? "" : v)}>
+            <SelectTrigger data-testid="source-filter" className="w-36 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Todas" /></SelectTrigger>
             <SelectContent className="bg-card border-input">
-              <SelectItem value="all">Todos</SelectItem>
-              {advisors.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              <SelectItem value="all">Todas</SelectItem>
+              {SOURCES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+        </div>
+        {userRole === "admin" && advisors.length > 0 && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Agentes</span>
+            <Select value={advisorFilter || "all"} onValueChange={v => setAdvisorFilter(v === "all" ? "" : v)}>
+              <SelectTrigger data-testid="advisor-filter" className="w-40 bg-muted/50 border-input text-foreground h-10"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent className="bg-card border-input">
+                <SelectItem value="all">Todos</SelectItem>
+                {advisors.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
       </div>
+
+      <div style={{ height: "80px" }} />
 
       {loading ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground">Cargando leads...</div>
