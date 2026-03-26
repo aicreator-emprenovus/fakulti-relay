@@ -7,7 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { QrCode, Plus, Pencil, Trash2, Download, Link2, Copy, Eye, EyeOff, Zap, Target, ChevronDown, ChevronUp } from "lucide-react";
+import { QrCode, Plus, Pencil, Trash2, Download, Link2, Copy, Eye, EyeOff, Target } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -16,34 +16,24 @@ const SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "Even
 
 export default function QRCampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
-  const [intents, setIntents] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCampaignDialog, setShowCampaignDialog] = useState(false);
-  const [showIntentDialog, setShowIntentDialog] = useState(false);
-  const [showIntentsSection, setShowIntentsSection] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
-  const [editingIntent, setEditingIntent] = useState(null);
   const [previewQR, setPreviewQR] = useState(null);
 
   const [campaignForm, setCampaignForm] = useState({
-    name: "", channel: "TV/QR", source: "TV", product: "", initial_message: "Hola, vi esto en TV", intent: "", description: "", active: true,
-  });
-
-  const [intentForm, setIntentForm] = useState({
-    name: "", keywords: "", channel: "", source: "", product: "", response_hint: "", active: true,
+    name: "", channel: "TV/QR", source: "TV", product: "", initial_message: "Hola, vi esto en TV", description: "", active: true,
   });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [camRes, intRes, prodRes] = await Promise.all([
+      const [camRes, prodRes] = await Promise.all([
         axios.get(`${API}/qr-campaigns`),
-        axios.get(`${API}/intents`),
         axios.get(`${API}/products`),
       ]);
       setCampaigns(camRes.data);
-      setIntents(intRes.data);
       setProducts(prodRes.data);
     } catch { toast.error("Error al cargar datos"); }
     setLoading(false);
@@ -54,13 +44,13 @@ export default function QRCampaignsPage() {
   // Campaign CRUD
   const openNewCampaign = () => {
     setEditingCampaign(null);
-    setCampaignForm({ name: "", channel: "TV/QR", source: "TV", product: "", initial_message: "Hola, vi esto en TV", intent: "", description: "", active: true });
+    setCampaignForm({ name: "", channel: "TV/QR", source: "TV", product: "", initial_message: "Hola, vi esto en TV", description: "", active: true });
     setShowCampaignDialog(true);
   };
 
   const openEditCampaign = (c) => {
     setEditingCampaign(c);
-    setCampaignForm({ name: c.name, channel: c.channel, source: c.source, product: c.product || "", initial_message: c.initial_message, intent: c.intent || "", description: c.description || "", active: c.active });
+    setCampaignForm({ name: c.name, channel: c.channel, source: c.source, product: c.product || "", initial_message: c.initial_message, description: c.description || "", active: c.active });
     setShowCampaignDialog(true);
   };
 
@@ -106,50 +96,6 @@ export default function QRCampaignsPage() {
     } catch { toast.error("Error al copiar enlace"); }
   };
 
-  // Intent CRUD
-  const openNewIntent = () => {
-    setEditingIntent(null);
-    setIntentForm({ name: "", keywords: "", channel: "", source: "", product: "", response_hint: "", active: true });
-    setShowIntentDialog(true);
-  };
-
-  const openEditIntent = (i) => {
-    setEditingIntent(i);
-    setIntentForm({ name: i.name, keywords: (i.keywords || []).join(", "), channel: i.channel || "", source: i.source || "", product: i.product || "", response_hint: i.response_hint || "", active: i.active });
-    setShowIntentDialog(true);
-  };
-
-  const saveIntent = async () => {
-    if (!intentForm.name || !intentForm.keywords) {
-      toast.error("Nombre y palabras clave son requeridos");
-      return;
-    }
-    const payload = {
-      ...intentForm,
-      keywords: intentForm.keywords.split(",").map(k => k.trim()).filter(Boolean),
-    };
-    try {
-      if (editingIntent) {
-        await axios.put(`${API}/intents/${editingIntent.id}`, payload);
-        toast.success("Intención actualizada");
-      } else {
-        await axios.post(`${API}/intents`, payload);
-        toast.success("Intención creada");
-      }
-      setShowIntentDialog(false);
-      fetchData();
-    } catch { toast.error("Error al guardar"); }
-  };
-
-  const deleteIntent = async (id) => {
-    if (!window.confirm("¿Eliminar esta intención?")) return;
-    try {
-      await axios.delete(`${API}/intents/${id}`);
-      toast.success("Intención eliminada");
-      fetchData();
-    } catch { toast.error("Error al eliminar"); }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -159,7 +105,7 @@ export default function QRCampaignsPage() {
             <QrCode className="h-7 w-7 text-emerald-500" />
             Campañas QR y Canales
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Genera códigos QR para cada campaña y gestiona intenciones iniciales</p>
+          <p className="text-sm text-muted-foreground mt-1">Genera códigos QR para cada campaña y rastrea el origen de tus leads</p>
         </div>
         <div className="flex gap-2">
           <Button data-testid="new-campaign-btn" onClick={openNewCampaign} className="bg-emerald-600 hover:bg-emerald-700 text-white">
@@ -250,61 +196,6 @@ export default function QRCampaignsPage() {
         )}
       </div>
 
-      {/* Intents Section */}
-      <Card className="bg-card border-border">
-        <div className="cursor-pointer px-6 py-4" onClick={() => setShowIntentsSection(!showIntentsSection)}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-amber-500" />
-              <h3 className="text-lg font-semibold text-foreground">Intenciones Iniciales</h3>
-              <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{intents.length}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button data-testid="new-intent-btn" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openNewIntent(); }}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Nueva Intención
-              </Button>
-              {showIntentsSection ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Define palabras clave para clasificar automáticamente a los leads según su primer mensaje</p>
-        </div>
-        {showIntentsSection && (
-          <CardContent>
-            <div className="space-y-3">
-              {intents.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No hay intenciones configuradas</p>
-              ) : (
-                intents.map((intent) => (
-                  <div key={intent.id} data-testid={`intent-row-${intent.id}`} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg bg-muted/30 border border-border ${!intent.active ? "opacity-50" : ""}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm text-foreground">{intent.name}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${intent.active ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
-                          {intent.active ? "Activa" : "Inactiva"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1 mb-1">
-                        {(intent.keywords || []).map((kw, i) => (
-                          <span key={i} className="text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">{kw}</span>
-                        ))}
-                      </div>
-                      {intent.response_hint && <p className="text-xs text-muted-foreground">{intent.response_hint}</p>}
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEditIntent(intent)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => deleteIntent(intent.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        )}
-      </Card>
       <Dialog open={showCampaignDialog} onOpenChange={setShowCampaignDialog}>
         <DialogContent className="bg-card border-border max-w-lg">
           <DialogHeader>
@@ -368,58 +259,6 @@ export default function QRCampaignsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Intent Dialog */}
-      <Dialog open={showIntentDialog} onOpenChange={setShowIntentDialog}>
-        <DialogContent className="bg-card border-border max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">{editingIntent ? "Editar Intención" : "Nueva Intención Inicial"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-muted-foreground text-xs">Nombre *</Label>
-              <Input data-testid="intent-name" value={intentForm.name} onChange={e => setIntentForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej: Consulta de producto" className="bg-muted border-input" />
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">Palabras clave * (separadas por coma)</Label>
-              <Input data-testid="intent-keywords" value={intentForm.keywords} onChange={e => setIntentForm(f => ({ ...f, keywords: e.target.value }))} placeholder="quiero saber, información, cuanto cuesta" className="bg-muted border-input" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-muted-foreground text-xs">Canal (opcional)</Label>
-                <Input value={intentForm.channel} onChange={e => setIntentForm(f => ({ ...f, channel: e.target.value }))} placeholder="TV/QR" className="bg-muted border-input" />
-              </div>
-              <div>
-                <Label className="text-muted-foreground text-xs">Fuente (opcional)</Label>
-                <Input value={intentForm.source} onChange={e => setIntentForm(f => ({ ...f, source: e.target.value }))} placeholder="web" className="bg-muted border-input" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">Producto (opcional)</Label>
-              <Select value={intentForm.product || "none"} onValueChange={v => setIntentForm(f => ({ ...f, product: v === "none" ? "" : v }))}>
-                <SelectTrigger className="bg-muted border-input"><SelectValue placeholder="Sin producto" /></SelectTrigger>
-                <SelectContent className="bg-card border-input">
-                  <SelectItem value="none">Sin producto</SelectItem>
-                  {products.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">Sugerencia de respuesta</Label>
-              <Input value={intentForm.response_hint} onChange={e => setIntentForm(f => ({ ...f, response_hint: e.target.value }))} placeholder="Guiar al proceso de compra" className="bg-muted border-input" />
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={intentForm.active} onChange={e => setIntentForm(f => ({ ...f, active: e.target.checked }))} className="rounded" />
-              <Label className="text-sm text-foreground">Intención activa</Label>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowIntentDialog(false)}>Cancelar</Button>
-              <Button data-testid="save-intent-btn" className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={saveIntent}>
-                {editingIntent ? "Actualizar" : "Crear Intención"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

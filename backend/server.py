@@ -206,17 +206,7 @@ class QRCampaignCreate(BaseModel):
     source: str
     product: Optional[str] = ""
     initial_message: str
-    intent: Optional[str] = ""
     description: Optional[str] = ""
-    active: Optional[bool] = True
-
-class InitialIntentCreate(BaseModel):
-    name: str
-    keywords: List[str]
-    channel: Optional[str] = ""
-    source: Optional[str] = ""
-    product: Optional[str] = ""
-    response_hint: Optional[str] = ""
     active: Optional[bool] = True
 
 # ========== AUTH UTILITIES ==========
@@ -2090,7 +2080,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         new_lead = {
             "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
             "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
-            "season": "", "channel": "WhatsApp", "initial_intent": "",
+            "season": "", "channel": "WhatsApp",
             "game_used": None, "prize_obtained": None, "funnel_stage": "nuevo", "status": "activo",
             "purchase_history": [], "coupon_used": None, "recompra_date": None,
             "notes": "Registrado vía WhatsApp",
@@ -2602,40 +2592,14 @@ async def get_qr_link(campaign_id: str, user=Depends(get_current_user)):
 
 # ========== INITIAL INTENTS ==========
 
-@api_router.get("/intents")
-async def get_intents(user=Depends(get_current_user)):
-    intents = await db.initial_intents.find({}, {"_id": 0}).to_list(50)
-    return intents
-
-@api_router.post("/intents")
-async def create_intent(req: InitialIntentCreate, user=Depends(get_current_user)):
-    doc = {
-        "id": str(uuid.uuid4()),
-        **req.model_dump(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.initial_intents.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-@api_router.put("/intents/{intent_id}")
-async def update_intent(intent_id: str, req: InitialIntentCreate, user=Depends(get_current_user)):
-    await db.initial_intents.update_one({"id": intent_id}, {"$set": req.model_dump()})
-    intent = await db.initial_intents.find_one({"id": intent_id}, {"_id": 0})
-    return intent
-
-@api_router.delete("/intents/{intent_id}")
-async def delete_intent(intent_id: str, user=Depends(get_current_user)):
-    await db.initial_intents.delete_one({"id": intent_id})
-    return {"message": "Intención eliminada"}
 
 # ========== QR/CHANNEL AUTO-DETECTION HELPER ==========
 
 async def detect_channel_from_message(message_text: str, lead_id: str):
-    """Check if the incoming message matches a QR campaign or initial intent, and auto-tag the lead."""
+    """Check if the incoming message matches a QR campaign and auto-tag the lead."""
     msg_lower = message_text.strip().lower()
     
-    # Check QR campaigns first (exact match on initial message)
+    # Check QR campaigns (exact match on initial message)
     campaigns = await db.qr_campaigns.find({"active": True}, {"_id": 0}).to_list(50)
     for campaign in campaigns:
         campaign_msg = campaign["initial_message"].strip().lower()
@@ -2647,29 +2611,11 @@ async def detect_channel_from_message(message_text: str, lead_id: str):
             }
             if campaign.get("product"):
                 update["product_interest"] = campaign["product"]
-            if campaign.get("intent"):
-                update["initial_intent"] = campaign["intent"]
             await db.leads.update_one({"id": lead_id}, {"$set": update})
             # Increment scan count
             await db.qr_campaigns.update_one({"id": campaign["id"]}, {"$inc": {"scan_count": 1}})
             logger.info(f"QR campaign matched for lead {lead_id}: {campaign['name']} -> channel={campaign['channel']} (scan #{campaign.get('scan_count', 0) + 1})")
             return True
-    
-    # Check configurable intents (keyword matching)
-    intents = await db.initial_intents.find({"active": True}, {"_id": 0}).to_list(50)
-    for intent in intents:
-        for keyword in intent.get("keywords", []):
-            if keyword.lower().strip() in msg_lower:
-                update = {"initial_intent": intent["name"], "last_interaction": datetime.now(timezone.utc).isoformat()}
-                if intent.get("channel"):
-                    update["channel"] = intent["channel"]
-                if intent.get("source"):
-                    update["source"] = intent["source"]
-                if intent.get("product"):
-                    update["product_interest"] = intent["product"]
-                await db.leads.update_one({"id": lead_id}, {"$set": update})
-                logger.info(f"Intent matched for lead {lead_id}: {intent['name']}")
-                return True
     
     return False
 
@@ -3395,7 +3341,6 @@ async def startup():
                 "source": "TV",
                 "product": "",
                 "initial_message": "Hola, vi esto en TV",
-                "intent": "consulta_tv",
                 "description": "QR para anuncios de televisión. El cliente escanea el QR que aparece en pantalla.",
                 "active": True,
                 "created_at": datetime.now(timezone.utc).isoformat()
@@ -3407,7 +3352,6 @@ async def startup():
                 "source": "Fibeca",
                 "product": "",
                 "initial_message": "Hola, los vi en Fibeca",
-                "intent": "consulta_fibeca",
                 "description": "QR para puntos de venta en Fibeca.",
                 "active": True,
                 "created_at": datetime.now(timezone.utc).isoformat()
@@ -3419,7 +3363,6 @@ async def startup():
                 "source": "Evento",
                 "product": "Bombro",
                 "initial_message": "Hola, los conoci en la feria",
-                "intent": "consulta_evento",
                 "description": "QR para ferias y eventos presenciales.",
                 "active": True,
                 "created_at": datetime.now(timezone.utc).isoformat()
@@ -3427,22 +3370,6 @@ async def startup():
         ]
         await db.qr_campaigns.insert_many(default_qr_campaigns)
         logger.info("Default QR campaigns seeded")
-    
-    # Seed default initial intents
-    intents_count = await db.initial_intents.count_documents({})
-    if intents_count == 0:
-        default_intents = [
-            {"id": str(uuid.uuid4()), "name": "Consulta de producto", "keywords": ["quiero saber", "información", "que es", "cuanto cuesta", "precio"], "channel": "", "source": "", "product": "", "response_hint": "Responder con catálogo y precios", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "name": "Compra directa", "keywords": ["quiero comprar", "necesito pedir", "hacer pedido", "como compro"], "channel": "", "source": "", "product": "", "response_hint": "Guiar al proceso de compra", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "name": "Reclamo o queja", "keywords": ["reclamo", "queja", "problema con", "no funciona", "devolucion"], "channel": "", "source": "", "product": "", "response_hint": "Derivar a agente humano", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "name": "Referido", "keywords": ["me recomendaron", "mi amigo", "referido", "me dijeron que"], "channel": "", "source": "referido", "product": "", "response_hint": "Agradecer la referencia y ofrecer catálogo", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "name": "Recompra", "keywords": ["volver a comprar", "otro pedido", "de nuevo", "repetir pedido"], "channel": "", "source": "", "product": "", "response_hint": "Facilitar recompra rápida", "active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        ]
-        await db.initial_intents.insert_many(default_intents)
-        logger.info("Default initial intents seeded")
-    
-    # Ensure initial_intent field exists on all leads
-    await db.leads.update_many({"initial_intent": {"$exists": False}}, {"$set": {"initial_intent": ""}})
     
     # Ensure scan_count on QR campaigns
     await db.qr_campaigns.update_many({"scan_count": {"$exists": False}}, {"$set": {"scan_count": 0}})
