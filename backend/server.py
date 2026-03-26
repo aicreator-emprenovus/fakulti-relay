@@ -2718,6 +2718,15 @@ async def update_campaign(campaign_id: str, req: CampaignCreate, user=Depends(ge
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo admin")
     update = {k: v for k, v in req.model_dump().items() if v is not None}
+    # Recalculate target_count based on new filters
+    query = {}
+    if req.target_stage:
+        query["funnel_stage"] = req.target_stage
+    if req.target_product:
+        query["product_interest"] = {"$regex": req.target_product, "$options": "i"}
+    if req.target_channel:
+        query["channel"] = req.target_channel
+    update["target_count"] = await db.leads.count_documents(query)
     await db.campaigns.update_one({"id": campaign_id}, {"$set": update})
     campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
     return campaign
@@ -2748,6 +2757,9 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
         query["channel"] = campaign["target_channel"]
     
     leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).to_list(500)
+    
+    # Update target_count with real-time data
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": {"target_count": len(leads)}})
     
     wa_config = await get_whatsapp_config()
     sent = 0
