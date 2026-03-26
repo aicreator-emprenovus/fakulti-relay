@@ -2775,7 +2775,7 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
     
     for lead in leads[:batch_size]:
         try:
-            msg = campaign["message_template"].replace("{nombre}", lead.get("name", ""))
+            msg = campaign["message_template"].replace("{nombre}", lead.get("name", "").split()[0] if lead.get("name") else "")
             lead_id = lead["id"]
             image_url = campaign.get("image_url", "")
             
