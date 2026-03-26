@@ -12,19 +12,22 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 ## Bloques Completados (1-13)
 Todos los 13 bloques del roadmap implementados y testeados.
 
-## Cambios Recientes (25/03/2026)
-- **Chat adaptativo**: Ventana expandida en alto
-- **Leads mejorados**: Etiquetas "Canal"/"Agentes", separación 25px, botones Cargar/Descargar integrados
-- **Carga/Descarga eliminada**: Funcionalidad movida a Leads, tab removida
-- **Fidelización simplificada**: Solo métricas
-- **Asignar Asesor**: Ícono en tarjetas de leads + botón en chat WhatsApp
-- **Depuración de datos**: Normalización de teléfonos, fusión de duplicados, función `find_lead_by_phone()` para búsqueda flexible, migración automática en startup
+## Cambios Recientes
+### 26/03/2026
+- **P0 FIX: Imágenes en campañas WhatsApp**: Corregida la resolución de URLs de imágenes locales. Se usa `PUBLIC_URL` env var en vez de dominio hardcodeado. `send_whatsapp_image` envía payload multimedia correcto a Meta API (`"type": "image"` con `"link"` y `"caption"`)
+- **Chat: Renderizado de imágenes inline**: ChatPage.jsx ahora detecta `[Imagen: url]` en contenido de mensajes y renderiza la imagen inline con click para abrir en nueva pestaña
+
+### 25/03/2026
+- Chat adaptativo, Leads mejorados, Asignar Asesor, Normalización de teléfonos
+- Campañas editables con soporte de carga de imágenes
+- Notificaciones con navegación a chat, Modo Humano Avanzado para Bone Broth
+- Corrección ortográfica integral
 
 ## Tareas Pendientes
-- **P1**: Deploy Railway (Dockerfile listo con Node 20)
-- **P1**: Flujos de venta para 4 productos (bloqueado: scripts del usuario)
-- **P2**: Refactoring backend (server.py ~3400 líneas → módulos)
-- **P2**: Reportes automáticos por email
+- **P1**: Flujos de venta IA para 3 productos restantes (Gomitas Melatonina, Colágeno CBD, Magnesio Citrato) - bloqueado: scripts del usuario
+- **P1**: Refactoring backend (server.py ~3470 líneas -> módulos routes/, models/, services/)
+- **P2**: Reportes automáticos por email semanal para asesores
+- **P2**: Deploy Railway (SUSPENDIDO por instrucción del usuario)
 
 ## Credenciales de Prueba
 - Admin: admin@fakulti.com / admin123
