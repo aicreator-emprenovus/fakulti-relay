@@ -2779,13 +2779,21 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
             lead_id = lead["id"]
             image_url = campaign.get("image_url", "")
             
-            # 1. Find or create chat session for this lead
-            meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
+            # 1. Find or create chat session for this lead (prefer wa_ session)
+            phone = lead.get("whatsapp", "")
+            wa_session_id = f"wa_{phone}" if phone else None
+            meta = None
+            if wa_session_id:
+                meta = await db.chat_sessions_meta.find_one({"session_id": wa_session_id}, {"_id": 0})
             if not meta:
-                session_id = f"lead_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
+                meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id, "source": "whatsapp"}, {"_id": 0})
+            if not meta:
+                meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
+            if not meta:
+                session_id = wa_session_id or f"lead_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
                 await db.chat_sessions_meta.insert_one({
                     "session_id": session_id, "lead_id": lead_id,
-                    "lead_name": lead.get("name", ""), "lead_phone": lead.get("whatsapp", "")
+                    "lead_name": lead.get("name", ""), "lead_phone": phone, "source": "whatsapp"
                 })
             else:
                 session_id = meta["session_id"]
@@ -2806,9 +2814,7 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
             
             # 3. Send via WhatsApp API if configured
             if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
-                phone = lead.get("whatsapp", "").replace("+", "")
-                if not phone.startswith("593"):
-                    phone = "593" + phone.lstrip("0")
+                wa_phone = phone
                 
                 if image_url:
                     # Send image with caption via WhatsApp media message
@@ -2817,18 +2823,10 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
                         public_url = os.environ.get("PUBLIC_URL", "").rstrip("/")
                         full_image_url = f"{public_url}{image_url}"
                     logger.info(f"Campaign image URL resolved: {full_image_url}")
-                    await send_whatsapp_image(phone, full_image_url, msg)
+                    await send_whatsapp_image(wa_phone, full_image_url, msg)
                 else:
                     # Send text only
-                    async with httpx.AsyncClient() as client_http:
-                        resp = await client_http.post(
-                            f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
-                            headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
-                            json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
-                            timeout=10
-                        )
-                        if resp.status_code >= 400:
-                            logger.warning(f"WA send failed for {phone}: {resp.text}")
+                    await send_whatsapp_message(wa_phone, msg)
             
             # 4. Update lead last_interaction
             await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": now_iso}})
