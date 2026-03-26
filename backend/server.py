@@ -1854,6 +1854,57 @@ async def send_whatsapp_message(to_phone: str, text: str):
         logger.error(f"WhatsApp send exception: {e}")
         return False
 
+async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
+    """Send an image with optional caption via WhatsApp Cloud API."""
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        logger.warning("WhatsApp not configured - image not sent")
+        return False
+    international_phone = phone_to_international(to_phone)
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
+    headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
+    image_payload = {"link": image_url}
+    if caption:
+        image_payload["caption"] = caption
+    payload = {"messaging_product": "whatsapp", "to": international_phone, "type": "image", "image": image_payload}
+    try:
+        async with httpx.AsyncClient() as client_http:
+            resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                logger.info(f"WhatsApp image sent to {to_phone}")
+                return True
+            else:
+                logger.error(f"WhatsApp image send error: {resp.status_code} {resp.text}")
+                return False
+    except Exception as e:
+        logger.error(f"WhatsApp image send exception: {e}")
+        return False
+
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+
+@api_router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...), user=Depends(get_current_user)):
+    """Upload an image and return its public URL."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Solo se permiten imágenes")
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = UPLOADS_DIR / filename
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Imagen muy grande (máx 5MB)")
+    with open(filepath, "wb") as f:
+        f.write(content)
+    return {"url": f"/api/uploads/{filename}", "filename": filename}
+
+@api_router.get("/uploads/{filename}")
+async def serve_upload(filename: str):
+    filepath = UPLOADS_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(filepath)
+
 async def build_product_bot_prompt(product_name: str, all_products: list, lead_data: dict) -> str:
     """Build a product-specific bot prompt. Only includes info about the target product."""
     target = None
@@ -2761,6 +2812,7 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
         try:
             msg = campaign["message_template"].replace("{nombre}", lead.get("name", ""))
             lead_id = lead["id"]
+            image_url = campaign.get("image_url", "")
             
             # 1. Find or create chat session for this lead
             meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
@@ -2774,11 +2826,14 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
                 session_id = meta["session_id"]
             
             # 2. Record the campaign message in chat history
+            content = f"[Campaña: {campaign['name']}]\n{msg}"
+            if image_url:
+                content += f"\n[Imagen: {image_url}]"
             chat_msg = {
                 "id": str(uuid.uuid4()),
                 "session_id": session_id,
                 "role": "assistant",
-                "content": f"[Campaña: {campaign['name']}]\n{msg}",
+                "content": content,
                 "timestamp": now_iso,
                 "source": "campaign"
             }
@@ -2789,15 +2844,24 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
                 phone = lead.get("whatsapp", "").replace("+", "")
                 if not phone.startswith("593"):
                     phone = "593" + phone.lstrip("0")
-                async with httpx.AsyncClient() as client_http:
-                    resp = await client_http.post(
-                        f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
-                        headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
-                        json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
-                        timeout=10
-                    )
-                    if resp.status_code >= 400:
-                        logger.warning(f"WA send failed for {phone}: {resp.text}")
+                
+                if image_url:
+                    # Send image with caption
+                    full_image_url = image_url
+                    if image_url.startswith("/api/"):
+                        full_image_url = f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'sales-funnel-bot.preview.emergentagent.com')}{image_url}"
+                    await send_whatsapp_image(phone, full_image_url, msg)
+                else:
+                    # Send text only
+                    async with httpx.AsyncClient() as client_http:
+                        resp = await client_http.post(
+                            f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
+                            headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
+                            json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
+                            timeout=10
+                        )
+                        if resp.status_code >= 400:
+                            logger.warning(f"WA send failed for {phone}: {resp.text}")
             
             # 4. Update lead last_interaction
             await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": now_iso}})
