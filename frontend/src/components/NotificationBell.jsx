@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API, useAuth } from "@/App";
 import { Bell, X, AlertTriangle, UserCheck, MessageCircle, CheckCircle, Volume2, VolumeX } from "lucide-react";
@@ -16,6 +17,7 @@ const REASON_LABELS = {
 
 export default function NotificationBell() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -128,7 +130,7 @@ export default function NotificationBell() {
               <div className="p-2 space-y-1.5">
                 {/* Handover Alerts */}
                 {alerts.map(a => (
-                  <div key={a.id} className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
+                  <div key={a.id} className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20 cursor-pointer hover:bg-red-500/10 transition-colors" onClick={() => { setOpen(false); navigate(`/chat?lead_id=${a.lead_id}`); }}>
                     <div className="flex items-start gap-2">
                       <AlertTriangle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -137,7 +139,7 @@ export default function NotificationBell() {
                         <p className="text-[10px] text-muted-foreground truncate mt-0.5">"{a.message}"</p>
                         <span className="text-[10px] text-muted-foreground">{timeAgo(a.created_at)}</span>
                       </div>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-green-500 hover:bg-green-500/10" onClick={() => resolveAlert(a.id)} data-testid={`resolve-notif-${a.id}`}>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-green-500 hover:bg-green-500/10" onClick={(e) => { e.stopPropagation(); resolveAlert(a.id); }} data-testid={`resolve-notif-${a.id}`}>
                         <CheckCircle size={14} />
                       </Button>
                     </div>
@@ -145,7 +147,7 @@ export default function NotificationBell() {
                 ))}
                 {/* Advisor Notifications */}
                 {notifications.map(n => (
-                  <div key={n.id} className="p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-colors cursor-pointer" onClick={() => markRead(n.id)}>
+                  <div key={n.id} className="p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-colors cursor-pointer" onClick={() => { markRead(n.id); setOpen(false); navigate(`/chat?lead_id=${n.lead_id}`); }}>
                     <div className="flex items-start gap-2">
                       <MessageCircle size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">

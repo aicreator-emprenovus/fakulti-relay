@@ -174,34 +174,34 @@ export default function ChatPage() {
   }, [activeSession, fetchSessions, fetchAlerts]);
 
   useEffect(() => {
-    if (initialized) return;
     const leadId = searchParams.get("lead_id");
-    if (leadId) {
-      axios.get(`${API}/chat/lead-session/${leadId}`).then(res => {
-        setActiveSession(res.data.session_id);
-        setActiveLeadId(leadId);
-        setMessages(res.data.messages || []);
-        if (res.data.lead) {
-          const l = res.data.lead;
-          setLeadInfo({
-            id: l.id, name: l.name, funnel_stage: l.funnel_stage,
-            whatsapp: l.whatsapp, city: l.city, email: l.email,
-            product_interest: l.product_interest, source: l.source,
-            channel: l.channel,
-            assigned_advisor_name: l._advisor_name || ""
-          });
-          setBotPaused(l.bot_paused || false);
-        }
-        setInitialized(true);
-        setSearchParams({}, { replace: true });
-      }).catch(() => {
-        toast.error("Lead no encontrado");
-        setInitialized(true);
-      });
-    } else {
-      setInitialized(true);
+    if (!leadId) {
+      if (!initialized) setInitialized(true);
+      return;
     }
-  }, [searchParams, initialized, setSearchParams]);
+    // Navigate to lead conversation (works on initial load and subsequent navigations)
+    axios.get(`${API}/chat/lead-session/${leadId}`).then(res => {
+      setActiveSession(res.data.session_id);
+      setActiveLeadId(leadId);
+      setMessages(res.data.messages || []);
+      if (res.data.lead) {
+        const l = res.data.lead;
+        setLeadInfo({
+          id: l.id, name: l.name, funnel_stage: l.funnel_stage,
+          whatsapp: l.whatsapp, city: l.city, email: l.email,
+          product_interest: l.product_interest, source: l.source,
+          channel: l.channel,
+          assigned_advisor_name: l._advisor_name || ""
+        });
+        setBotPaused(l.bot_paused || false);
+      }
+      setInitialized(true);
+      setSearchParams({}, { replace: true });
+    }).catch(() => {
+      toast.error("Lead no encontrado");
+      setInitialized(true);
+    });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
