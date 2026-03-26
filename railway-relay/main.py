@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("relay")
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "fakulti-whatsapp-verify-token")
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://sales-funnel-bot.preview.emergentagent.com")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://gamified-sales-flow.preview.emergentagent.com")
 
 @app.get("/api/webhook/whatsapp")
 async def verify(request: Request):

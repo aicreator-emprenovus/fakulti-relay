@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, Header
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -2846,10 +2846,12 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
                     phone = "593" + phone.lstrip("0")
                 
                 if image_url:
-                    # Send image with caption
+                    # Send image with caption via WhatsApp media message
                     full_image_url = image_url
-                    if image_url.startswith("/api/"):
-                        full_image_url = f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'sales-funnel-bot.preview.emergentagent.com')}{image_url}"
+                    if image_url.startswith("/api/") or image_url.startswith("/"):
+                        public_url = os.environ.get("PUBLIC_URL", "").rstrip("/")
+                        full_image_url = f"{public_url}{image_url}"
+                    logger.info(f"Campaign image URL resolved: {full_image_url}")
                     await send_whatsapp_image(phone, full_image_url, msg)
                 else:
                     # Send text only

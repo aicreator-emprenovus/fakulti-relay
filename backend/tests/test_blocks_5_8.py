@@ -5,7 +5,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://sales-funnel-bot.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://gamified-sales-flow.preview.emergentagent.com').rstrip('/')
 
 @pytest.fixture(scope="module")
 def admin_token():

@@ -1,127 +1,139 @@
 <analysis>**original_problem_statement**: 
-The user wants to build a comprehensive CRM and sales funnel automation platform for a brand called Fakulti. The plan included 13 distinct phases (Blocks) to upgrade the existing system, focusing on lead tracking, human-agent handover, advisor management, specialized AI product bots with complex sales flows, bulk campaigns, and deployment on Railway.
+The user is building a comprehensive CRM and sales funnel automation platform for Fakulti brand. The system integrates a live WhatsApp connection powered by GPT-5.2, role-based access, QR campaign tracking, specialized AI bots per product, gamification, and lead management. 
 
 **User's preferred language**: Spanish (INSTRUCT NEXT AGENT to respond in Spanish ONLY)
 
 **what currently exists?** 
-A full-stack CRM (FastAPI/MongoDB backend, React frontend) with a live WhatsApp integration powered by GPT-5.2. It features role-based access (Admins and Advisors), QR campaign tracking, specialized AI bots per product, gamification, and extensive reporting. All 13 Blocks of the user's feature roadmap have been successfully implemented, including complex AI sales flows, campaign broadcasting, and dynamic sidebars. A Dockerfile has been setup for production deployment on Railway.
+A fully functional full-stack CRM (FastAPI/MongoDB backend, React frontend) with a live, bi-directional WhatsApp integration. It features lead management, an advanced Human Mode AI sales bot, editable bulk campaigns with image upload support, notifications that route directly to active chats, and normalized phone numbers for perfect synchronization between WhatsApp and the CRM. The Railway deployment task was explicitly suspended by the user to focus on functional enhancements.
 
 **Last working item**: 
-- **Last item agent was working**: Fixing the Railway production deployment. The build was failing because the Dockerfile was using Node 18, but the  package requires Node >= 20. The agent updated the Dockerfile to use .
-- **Status**: USER VERIFICATION PENDING
-- **Agent Testing Done**: Y (locally checked Dockerfile syntax and dependencies)
-- **Which testing method agent to use?**: NA (Relies on Railway automated build triggered by GitHub push)
+- **Last item agent was working**: Fixing the campaign broadcast feature so that uploaded images are sent as actual media messages via WhatsApp, rather than sending the image URL as plain text. 
+- **Status**: IN PROGRESS
+- **Agent Testing Done**: N (Agent was just about to investigate the  campaign send function)
+- **Which testing method agent to use?**: backend testing agent or manual testing via curl / WhatsApp API simulation
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1 (P0): Railway Deployment Verification**
-   - **Attempted fixes**: Created , , fixed static file serving in FastAPI, cleaned , resolved  conflicts, and finally bumped Node.js to v20 to fix Yarn install errors.
-   - **Next debug checklist**: Check user's next message for Railway build logs. If the build succeeds, ensure the app runs and connects to the Railway MongoDB instance.
-   - **Why fix this issue and what will be achieved with the fix?**: The application needs to be live in production for the user's business to operate.
-   - **Status**: USER VERIFICATION PENDING
-   - **Is recurring issue?**: Y (User reported deployment failures multiple times)
-   - **Should Test frontend/backend/both after fix?**: both (in production)
-   - **Blocked on other issue**: None
+  - Issue 1: **Campaign images sent as plain text URLs instead of media** (P0)
+     - **Attempted fixes**: Agent successfully added image upload () and UI for campaigns. However, when the broadcast loops over leads, it seems to append the URL to the text body instead of formatting a proper WhatsApp media payload.
+     - **Next debug checklist**: Check  around line 2779 () or . Ensure that if an  is present, the Meta Cloud API payload uses  and  instead of .
+     - **Why fix this issue and what will be achieved with the fix?**: The user explicitly requested promotional campaigns to include images to improve conversion.
+     - **Status**: IN PROGRESS
+     - **Is recurring issue?**: N
+     - **Should Test frontend/backend/both after fix?**: backend
+     - **Blocked on other issue**: None
+
+  - Issue 2: **Railway Deployment** (P2 - SUSPENDED BY USER)
+     - **Attempted fixes**: Updated Dockerfile to Node 20. Verified local builds.
+     - **Next debug checklist**: Await user instructions to resume. 
+     - **Why fix this issue and what will be achieved with the fix?**: Production deployment.
+     - **Status**: BLOCKED (User explicitly ordered: quiero que suspendas las tareas con railway)
+     - **Is recurring issue?**: Y
+     - **Should Test frontend/backend/both after fix?**: both
+     - **Blocked on other issue**: User instruction to resume.
 
 **In progress Task List**:
-- **Task 1: Configure AI Sales Flows for remaining 4 products**
-   - **Where to resume**: Wait for the user to provide the exact sales scripts for Gomitas Melatonina, Gomitas Biotina, Colágeno Hidrolizado, and Magnesio Citrato. Then update their configurations via the Settings UI or API ().
-   - **What will be achieved with this?**: All products will have highly specialized, high-converting AI bots.
-   - **Status**: BLOCKED (Waiting for user to provide the scripts)
-   - **Should Test frontend/backend/both after fix?**: backend (Test bot responses via )
-   - **Blocked on something**: User input
+  - Task 1: **Configure AI Sales Flows for remaining 3 products** (P1)
+     - **Where to resume**: The Bone Broth product was successfully updated with the Modo Humano Avanzado prompt. Waiting for the user to provide the scripts for Gomitas Melatonina, Colágeno Hidrolizado con CBD, and Magnesio Citrato (or ask if they want the same Human Mode template applied).
+     - **What will be achieved with this?**: Completes the AI configuration for all catalog products.
+     - **Status**: BLOCKED (Pending user scripts)
+     - **Should Test frontend/backend/both after fix?**: backend
+     - **Blocked on something**: User input
 
-**Upcoming and Future Tasks**:
-- **P2: Automated Email Reports**: Implement automatic weekly email reports to human advisors detailing their performance metrics.
-- **P1: Refactoring Backend**: Break down the massive  monolith (~3300 lines) into a modular structure (e.g., , , ).
+**Upcoming and Future Tasks**
+    Upcoming Tasks:
+    - P1: Refactoring Backend: Break down the massive  monolith (~3400 lines) into a modular structure (, , ).
+    
+    Future Tasks:
+    - P2: Automated Email Reports: Implement automatic weekly email reports to human advisors detailing their performance metrics.
 
-**Completed work in this session**:
-- **Blocks 5-8**: Advisor UI assignment, Notification bell, Chat context card, Lead cards with advisor names (DONE)
-- **Blocks 9-13**: Loyalty auto-enrollment, Campaigns page, Dashboard advisor metrics, AI conversation analysis (DONE)
-- **Sales Flow Configuration**: Updated the bot prompt builder to accept complex, multi-stage sales scripts. Configured the Bone Broth product bot with a 9-step sales flow. Tested and verified it handles objections and extracts data perfectly (DONE)
-- **UI Cleanups**: 
-  - Removed Monitor en tiempo real and 5 stats cards from 
-  - Removed Carga histórica from 
-  - Removed Temporada (Season) feature globally (from Leads, Campaigns, Chat, Backend models)
-  - Removed Recordatorios (Reminders) feature completely globally
-  - Redesigned  (removed CRM Panel text, centered logo, added expand/collapse toggle, reduced width)
-  - Reordered Sidebar menu (WhatsApp Bot moved under Dashboard)
-- **Bug Fix**: Fixed campaign broadcasts so that sent messages are properly inserted into  and appear in the CRM chat history (DONE)
-- **Deployment**: Configured Dockerfile, , and  for full-stack deployment on Railway (DONE)
+**Completed work in this session**
+- Railway Dockerfile updated to  (Deployment suspended by user).
+- UI: Expanded WhatsApp bot chat window height adaptively (DONE).
+- UI: Added Canal and Agentes labels to Leads page, set 25px spacing (DONE).
+- UI: Moved Bulk Upload/Download functionality directly to Leads page and deleted  (DONE).
+- UI: Cleaned up Loyalty page to only show metrics (DONE).
+- Feature: Added Assign Advisor functionality directly in Lead Cards (User icon) and Chat Page Header (DONE).
+- Bug Fix: **Data Synchronization fixed**. Leads were duplicating due to  vs  phone formats. Implemented  and an idempotent startup script to merge existing duplicates (DONE).
+- UI: Changed app backgrounds to light gray to reduce screen glare, keeping popovers white (DONE).
+- UI: Moved Notification bell to the Sidebar, removed top navigation bar (DONE).
+- Content: Comprehensive orthography/accent correction across frontend and backend prompts (DONE).
+- Feature: Clicking a notification now dynamically navigates to that specific lead's WhatsApp chat (DONE).
+- AI: Updated Bone Broth prompt to a 10-step Modo Humano Avanzado behavior (DONE).
+- Feature: Campaigns made editable and support Image Upload via URL or file (UI DONE).
 
-**Earlier issues found/mentioned but not fixed**:
-- None.
+**Earlier issues found/mentioned but not fixed**
+None.
 
-**Known issue recurrence from previous fork**:
-- None.
+**Known issue recurrence from previous fork**
+- Railway deployment failures (Recurrence count: 3). Currently SUSPENDED by user to focus on application logic. Do not prompt user about Railway unless they ask.
 
-**Code Architecture**:
+**Code Architecture**
 
 
-**Key Technical Concepts**:
-- **Frontend**: React, Tailwind, Shadcn UI
-- **Backend**: FastAPI, MongoDB (Motor)
-- **AI**: GPT-5.2 via  package
-- **Deployment**: Docker multi-stage build serving React static files through FastAPI on a dynamic .
+**Key Technical Concepts**
+- Frontend: React, Tailwind, Shadcn UI
+- Backend: FastAPI, MongoDB (Motor)
+- AI: GPT-5.2 via 
+- Uploads:  saves to local  and serves them statically.
 
-**key DB schema**:
-- :  object now includes a  string field for complex prompt instructions.
-- : Now records automated campaign messages sent to users.
+**key DB schema**
+- : Now includes  field.
+- : Phones are strictly normalized (no , starts with ).
 
-**changes in tech stack**:
-- **Docker**: Added multi-stage  and  to handle mono-repo deployment on Railway. Node version explicitly set to v20.
+**changes in tech stack**
+- None, but added local file upload capabilities inside .
 
-**All files of reference**:
-- : Critical for Railway build. Handles frontend build and backend setup.
-- : Heavily modified to serve static files on  and route API on .
-- : Modified for dynamic width and layout.
-- : Contains the UI to inject the bot's .
+**All files of reference** 
+- : Contains API, webhook, prompt logic, and new upload route.
+- : Contains the campaign editing and image upload UI.
 
-**Areas that need refactoring**:
--  is overly large (>3200 lines). Routes and Database models need to be decoupled.
+**Areas that need refactoring**
+-  is critically large (>3400 lines) and desperately needs refactoring into modular routers.
 
-**key api endpoints**:
-- : Sends bulk WhatsApp messages and now properly logs them in the chat history.
-- : Updates AI behavior and sales flows.
+**key api endpoints**
+- : Broadcasts campaign. (Currently failing to send images properly).
+- : Handles image uploads.
+- : Unified webhook for incoming WhatsApp messages.
 
-**Critical Info for New Agent**:
-- **Railway Deployment**: The user is actively trying to deploy to Railway. Ensure you do not break the . The React app requires Node 20 (). The backend uses a catch-all route to serve  for SPA routing.
+**Critical Info for New Agent**
 - **Language**: MUST speak in Spanish.
-- **MongoDB**: Railway requires an external MongoDB instance. The user has set the  to point to a Railway-internal MongoDB plugin. Do not attempt to revert to localhost.
+- **Railway**: DO NOT MENTION RAILWAY. The user explicitly commanded to suspend Railway tasks. 
+- **WhatsApp Phone Numbers**: All phones are normalized using . Keep this logic intact if you create any new phone-related endpoints.
+- **Images in WhatsApp**: Meta's WhatsApp Cloud API requires a specific JSON payload for media ( with  and ). Do not just append URLs to text strings.
 
-**documents and test reports created in this job**:
--  (Updated with Phase 9-13 completions)
+**documents and test reports created in this job** 
+-  (Frontend UI checks)
 - 
-- 
 
-**Last 10 User Messages and any pending HUMAN messages**:
-1. User asked to remove carga histórica from Bulk page. (Done)
-2. User asked to redesign the Sidebar (remove text, center logo, reduce width, add collapse arrow). (Done)
-3. User asked to remove the Temporada (Season) feature globally. (Done)
-4. User noticed Temporada was still on the New Campaign page; asked to remove it everywhere. (Done)
-5. User reported clicking Send on Campaigns didn't reflect messages in the WhatsApp chat history. (Done)
-6. User reported Railway deploy failure (). (Done - Created Dockerfile)
-7. User reported deploy still failing; asked agent to configure everything. (Done - Fixed static routes/Dockerfile)
-8. User provided Railway MongoDB URL to bypass localhost limitations. (Acknowledged)
-9. User asked to completely delete the Recordatorios (Reminders) tab and move WhatsApp Bot under Dashboard in the sidebar menu. (Done)
-10. User provided detailed Railway build logs showing  failing due to Node 18 incompatibility. (Done - Agent updated Dockerfile to Node 20. Verification pending).
+**Last 10 User Messages and any pending HUMAN messages** 
+1. Asked for proof of notifications working. (Done)
+2. Asked to correct spelling/accents across the system. (Done)
+3. Reported WA messages not arriving. (Done - backend verified)
+4. Tried fixing webhook options in Meta. (Done)
+5. Confirmed WA is published and working. (Done)
+6. Requested notification click to navigate to chat. (Done)
+7. Requested the Bone Broth bot flow. (Done)
+8. Provided new Modo Humano Avanzado prompt for Bone Broth and asked to correct spelling. (Done)
+9. Requested campaigns to be editable and support image uploads. (Done)
+10. **Reported that campaign messages arrive as text URLs instead of actual images. (Pending - P0 Issue)**.
 
-**Project Health Check**:
-- Broken: None locally. Deployment state pending verification.
+**Project Health Check:**
+- Broken: WhatsApp Campaign Image Sending (sends text instead of media).
 - Mocked: None.
 
-**3rd Party Integrations**:
+**3rd Party Integrations** 
 - OpenAI GPT-5.2 — uses Emergent LLM Key
 - WhatsApp Cloud API — requires User API Key
 
-**Testing status**:
-- Testing agent used after significant changes: YES (Iterations 16 & 17 passed 100%)
+**Testing status**
+- Testing agent used after significant changes: YES (iteration 18)
 - Troubleshoot agent used after agent stuck in loop: NO
 - Test files created: None
-- Known regressions: None locally.
+- Known regressions: Campaign broadcasts send image URLs as text.
 
-**Credentials to test flow**:
+**Credentials to test flow:**
 - Admin:  / 
 
-**What agent forgot to execute**:
-Nothing was forgotten. The agent is waiting on the user to confirm if the Node 20 Dockerfile fix resolved the Railway deployment issue, and is also waiting for the user to provide the sales scripts for the remaining 4 products.</analysis>
+**What agent forgot to execute**
+The agent was in the middle of diagnosing why campaigns were sending images as plain text when the context cut off. Fix this immediately as the first action item.</analysis>

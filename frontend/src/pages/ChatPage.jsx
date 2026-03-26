@@ -566,7 +566,23 @@ export default function ChatPage() {
                       <div className="relative max-w-[80%]">
                         <div className={`px-4 py-2.5 text-sm ${isUser ? "chat-bubble-user" : "chat-bubble-bot"} ${isCrmAgent ? "!border-l-2 !border-l-blue-500" : ""}`} data-testid={`chat-msg-${i}`}>
                           {isCrmAgent && <p className="text-[10px] text-blue-500 font-medium mb-1">Agente CRM</p>}
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <div className="whitespace-pre-wrap">
+                            {msg.content && msg.content.includes("[Imagen:") ? (
+                              <>
+                                <p>{msg.content.replace(/\n?\[Imagen:.*?\]/g, "")}</p>
+                                {(() => {
+                                  const match = msg.content.match(/\[Imagen:\s*(.*?)\]/);
+                                  if (match && match[1]) {
+                                    const src = match[1].startsWith("/api/") ? `${process.env.REACT_APP_BACKEND_URL}${match[1]}` : match[1];
+                                    return <img src={src} alt="Campaña" className="mt-2 rounded-lg max-w-full max-h-48 object-cover cursor-pointer" onClick={() => window.open(src, "_blank")} />;
+                                  }
+                                  return null;
+                                })()}
+                              </>
+                            ) : (
+                              <p>{msg.content}</p>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-1">
                             <p className="text-[10px] text-muted-foreground">
                               {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }) : ""}
