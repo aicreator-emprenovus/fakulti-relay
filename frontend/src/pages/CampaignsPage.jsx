@@ -181,11 +181,11 @@ export default function CampaignsPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Nombre *</Label>
+              <Label className="text-xs text-muted-foreground">Nombre * <span className="text-muted-foreground/60 italic">(No se muestra en la conversación)</span></Label>
               <Input data-testid="campaign-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bg-muted border-input text-foreground" placeholder="Ej: Promo Enero" />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Descripción</Label>
+              <Label className="text-xs text-muted-foreground">Descripción <span className="text-muted-foreground/60 italic">(No se muestra en la conversación)</span></Label>
               <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-muted border-input text-foreground" placeholder="Breve descripción" />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -211,7 +211,7 @@ export default function CampaignsPage() {
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Mensaje *</Label>
+              <Label className="text-xs text-muted-foreground">Mensaje * <span className="text-emerald-500 italic">(Se muestra en la conversación de WhatsApp)</span></Label>
               <Textarea data-testid="campaign-message" value={form.message_template} onChange={e => setForm(f => ({ ...f, message_template: e.target.value }))} className="bg-muted border-input text-foreground text-sm min-h-[80px]" placeholder="Hola {nombre}, tenemos una promo especial..." />
               <p className="text-[10px] text-muted-foreground mt-1">Usa {"{nombre}"} para personalizar</p>
             </div>

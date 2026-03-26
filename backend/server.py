@@ -2798,8 +2798,8 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
             else:
                 session_id = meta["session_id"]
             
-            # 2. Record the campaign message in chat history
-            content = f"[Campaña: {campaign['name']}]\n{msg}"
+            # 2. Record the campaign message in chat history (only message + image)
+            content = msg
             if image_url:
                 content += f"\n[Imagen: {image_url}]"
             chat_msg = {
