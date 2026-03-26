@@ -14,8 +14,9 @@ Todos los 13 bloques del roadmap implementados y testeados.
 
 ## Cambios Recientes
 ### 26/03/2026
-- **P0 FIX: Imágenes en campañas WhatsApp**: Corregida la resolución de URLs de imágenes locales. Se usa `PUBLIC_URL` env var en vez de dominio hardcodeado. `send_whatsapp_image` envía payload multimedia correcto a Meta API (`"type": "image"` con `"link"` y `"caption"`)
-- **Chat: Renderizado de imágenes inline**: ChatPage.jsx ahora detecta `[Imagen: url]` en contenido de mensajes y renderiza la imagen inline con click para abrir en nueva pestaña
+- **P0 FIX: Imágenes en campañas WhatsApp**: Corregida la resolución de URLs de imágenes locales. Se usa `PUBLIC_URL` env var en vez de dominio hardcodeado. `send_whatsapp_image` envía payload multimedia correcto a Meta API
+- **Chat: Renderizado de imágenes inline**: ChatPage.jsx detecta `[Imagen: url]` y renderiza imagen inline
+- **Vista previa WhatsApp en campañas**: CampaignsPage.jsx muestra simulación tipo WhatsApp con imagen + texto + hora antes de enviar
 
 ### 25/03/2026
 - Chat adaptativo, Leads mejorados, Asignar Asesor, Normalización de teléfonos

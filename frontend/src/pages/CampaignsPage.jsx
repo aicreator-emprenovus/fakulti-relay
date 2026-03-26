@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, Megaphone, Edit, ImagePlus, Link, X } from "lucide-react";
+import { Plus, Send, Trash2, Megaphone, Edit, ImagePlus, Link, X, Eye, Smartphone } from "lucide-react";
 
 const STAGES = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "recompra", "perdido"];
 
@@ -222,13 +222,62 @@ export default function CampaignsPage() {
               </div>
               {form.image_url && (
                 <div className="mt-2 relative inline-block">
-                  <img src={form.image_url} alt="Preview" className="h-24 rounded-lg border border-border object-cover" onError={e => e.target.style.display = "none"} />
+                  <img src={form.image_url} alt="Preview" className="h-20 rounded-lg border border-border object-cover" onError={e => e.target.style.display = "none"} />
                   <button onClick={() => setForm(f => ({ ...f, image_url: "" }))} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs">
                     <X size={10} />
                   </button>
                 </div>
               )}
             </div>
+
+            {/* WhatsApp Preview */}
+            {(form.message_template || form.image_url) && (
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
+                  <Smartphone size={12} /> Vista previa WhatsApp
+                </Label>
+                <div className="rounded-xl border border-border overflow-hidden" style={{ background: "linear-gradient(135deg, #0b1412 0%, #0d1b16 100%)" }}>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-[#1f2c34]">
+                    <div className="w-6 h-6 rounded-full bg-emerald-600/30 flex items-center justify-center">
+                      <span className="text-[9px] text-emerald-400 font-bold">F</span>
+                    </div>
+                    <span className="text-xs text-gray-300 font-medium">Fakulti</span>
+                  </div>
+                  <div className="p-3" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}>
+                    <div className="max-w-[85%] ml-auto">
+                      <div className="bg-[#005c4b] rounded-lg overflow-hidden shadow-lg">
+                        {form.image_url && (
+                          <div className="w-full">
+                            <img
+                              src={form.image_url}
+                              alt="Vista previa"
+                              className="w-full max-h-40 object-cover"
+                              data-testid="campaign-preview-image"
+                              onError={e => { e.target.style.display = "none"; }}
+                            />
+                          </div>
+                        )}
+                        {form.message_template && (
+                          <div className="px-2.5 py-1.5">
+                            <p className="text-[11px] text-gray-100 whitespace-pre-wrap leading-relaxed">
+                              {form.message_template.replace("{nombre}", "Juan Pérez")}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex justify-end px-2 pb-1">
+                          <span className="text-[9px] text-gray-400">
+                            {new Date().toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+                  Así se verá el mensaje en WhatsApp del lead (nombre de ejemplo: Juan Pérez)
+                </p>
+              </div>
+            )}
 
             <Button data-testid="save-campaign-btn" onClick={handleSave} className="w-full bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
               {editingId ? "Guardar Cambios" : "Crear Campaña"}
