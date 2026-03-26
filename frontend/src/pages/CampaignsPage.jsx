@@ -12,7 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Send, Trash2, Megaphone, Edit, ImagePlus, Link, X, Eye, Smartphone } from "lucide-react";
 
-const STAGES = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "recompra", "perdido"];
+const STAGE_CONFIG = {
+  nuevo: { label: "Contacto inicial", color: "#3B82F6" },
+  interesado: { label: "Chat", color: "#8B5CF6" },
+  en_negociacion: { label: "En Negociación", color: "#F59E0B" },
+  cliente_nuevo: { label: "Leads ganados", color: "#10B981" },
+  cliente_activo: { label: "Cartera activa", color: "#059669" },
+  perdido: { label: "Perdido", color: "#EF4444" },
+};
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
@@ -137,7 +144,7 @@ export default function CampaignsPage() {
               {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
               <p className="text-xs text-muted-foreground line-clamp-2 italic">"{c.message_template}"</p>
               <div className="flex flex-wrap gap-1">
-                {c.target_stage && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-500">{c.target_stage}</span>}
+                {c.target_stage && <span className="text-[10px] px-1.5 py-0 rounded bg-blue-500/15 text-blue-500">{STAGE_CONFIG[c.target_stage]?.label || c.target_stage}</span>}
                 {c.target_product && <span className="text-[10px] px-1.5 py-0 rounded bg-amber-500/15 text-amber-500">{c.target_product}</span>}
                 {c.target_channel && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/15 text-violet-400">{c.target_channel}</span>}
               </div>
@@ -188,7 +195,7 @@ export default function CampaignsPage() {
                   <SelectTrigger className="bg-muted border-input text-foreground"><SelectValue placeholder="Todas" /></SelectTrigger>
                   <SelectContent className="bg-card border-input">
                     <SelectItem value="all">Todas</SelectItem>
-                    {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {Object.entries(STAGE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
