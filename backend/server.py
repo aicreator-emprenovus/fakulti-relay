@@ -2803,7 +2803,7 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
     
     leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).to_list(500)
     
-    wa_config = await db.system_config.find_one({"id": "whatsapp_config"}, {"_id": 0})
+    wa_config = await get_whatsapp_config()
     sent = 0
     failed = 0
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -2935,7 +2935,7 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
     batch = reminder.get("batch_size", 10)
     leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).limit(batch).to_list(batch)
     
-    wa_config = await db.system_config.find_one({"id": "whatsapp_config"}, {"_id": 0})
+    wa_config = await get_whatsapp_config()
     sent = 0
     for lead in leads:
         try:
