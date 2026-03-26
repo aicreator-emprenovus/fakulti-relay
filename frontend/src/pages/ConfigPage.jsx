@@ -20,7 +20,7 @@ const TRIGGER_TYPES = {
   intencion_ia: "Intención IA",
   analisis_conversacion: "Análisis conversación",
   compra_realizada: "Compra realizada",
-  dias_post_compra: "Dias post-compra",
+  dias_post_compra: "Días post-compra",
 };
 const ACTION_TYPES = {
   enviar_mensaje: "Enviar mensaje",
@@ -234,7 +234,7 @@ export default function ConfigPage() {
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">Usa esta URL y token de verificacion al configurar el webhook en Meta for Developers.</p>
+              <p className="text-[11px] text-muted-foreground">Usa esta URL y token de verificación al configurar el webhook en Meta for Developers.</p>
 
               <div className="border-t border-border pt-4 space-y-3">
                 <div>

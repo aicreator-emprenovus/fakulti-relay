@@ -136,7 +136,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-[10px]">Beneficios clave</Label>
-                    <Textarea value={botForm.key_benefits} onChange={e => setBotForm(f => ({ ...f, key_benefits: e.target.value }))} className="bg-muted border-input text-foreground text-xs" rows={2} placeholder="Mejora digestion, soporte articular..." />
+                    <Textarea value={botForm.key_benefits} onChange={e => setBotForm(f => ({ ...f, key_benefits: e.target.value }))} className="bg-muted border-input text-foreground text-xs" rows={2} placeholder="Mejora digestión, soporte articular..." />
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-[10px]">Cómo se usa</Label>

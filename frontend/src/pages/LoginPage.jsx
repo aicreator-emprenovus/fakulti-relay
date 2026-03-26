@@ -70,7 +70,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="Ingresa tu contrasena"
+                  placeholder="Ingresa tu contraseña"
                   className="pl-10 bg-muted/50 border-input focus:border-primary/50 text-foreground h-12 rounded-lg"
                   required
                 />

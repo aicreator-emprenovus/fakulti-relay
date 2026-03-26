@@ -1137,12 +1137,12 @@ IMPORTANTE - REGISTRO DE LEAD:
                 missing_fields.append("que producto le interesa")
             missing_instruction = ""
             if missing_fields:
-                missing_instruction = f"\nDATOS FALTANTES DEL CLIENTE: Necesitas preguntarle su {', '.join(missing_fields)}. Hazlo de forma natural durante la conversacion."
+                missing_instruction = f"\nDATOS FALTANTES DEL CLIENTE: Necesitas preguntarle su {', '.join(missing_fields)}. Hazlo de forma natural durante la conversación."
                 missing_instruction += "\nCuando el cliente proporcione datos, incluye al final: [UPDATE_LEAD:campo=valor] donde campo puede ser: whatsapp, city, product_interest"
-            name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversacion.{missing_instruction}"
+            name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversación.{missing_instruction}"
 
         system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Faculty).
-Tu funcion: Atender leads, calificar, cotizar y cerrar venta.
+Tu función: Atender leads, calificar, cotizar y cerrar venta.
 {name_instruction}
 {pending_quote}
 
@@ -1150,26 +1150,26 @@ PRODUCTOS DISPONIBLES:
 {product_info}
 
 REGLAS:
-- Nunca sonar robot. Se amigable y profesional.
-- Nunca hacer promesas medicas.
+- Nunca sonar robot. Sé amigable y profesional.
+- Nunca hacer promesas médicas.
 - Nunca afirmar que cura enfermedades.
-- Nunca recomendar reemplazar tratamiento medico.
-- Bombro es Bone Broth Hidrolizado, producto unico en Ecuador.
-- Responde siempre en espanol.
-- Se conciso pero util.
+- Nunca recomendar reemplazar tratamiento médico.
+- Bombro es Bone Broth Hidrolizado, producto único en Ecuador.
+- Responde siempre en español.
+- Sé conciso pero útil.
 - Si el usuario pide precio, proporciona la información.
 - Si pide comprar, indica los pasos.
 
-DETECCION DE PRODUCTO:
-Cuando identifiques que producto le interesa al cliente, incluye: [UPDATE_LEAD:product_interest=NombreProducto]
+DETECCIÓN DE PRODUCTO:
+Cuando identifiques qué producto le interesa al cliente, incluye: [UPDATE_LEAD:product_interest=NombreProducto]
 
-CLASIFICACION AUTOMATICA:
-Al final de CADA respuesta, incluye en una linea separada la etapa del lead:
-[STAGE:nuevo] - Primer contacto, aun no muestra interes especifico
+CLASIFICACIÓN AUTOMÁTICA:
+Al final de CADA respuesta, incluye en una línea separada la etapa del lead:
+[STAGE:nuevo] - Primer contacto, aún no muestra interés específico
 [STAGE:interesado] - Pregunta por productos, precios o beneficios
-[STAGE:en_negociacion] - Solicita cotización, forma de pago, envio o stock
+[STAGE:en_negociacion] - Solicita cotización, forma de pago, envío o stock
 [STAGE:cliente_nuevo] - Confirma compra
-[STAGE:perdido] - Dice que no le interesa o rechaza explicitamente
+[STAGE:perdido] - Dice que no le interesa o rechaza explícitamente
 
 Incluye SIEMPRE el tag [STAGE:] al final."""
 
@@ -1822,7 +1822,7 @@ async def bulk_download(
 
 WHATSAPP_API_URL = "https://graph.facebook.com/v22.0"
 
-HANDOVER_KEYWORDS = ["agente", "humano", "persona real", "hablar con alguien", "asesor real", "no quiero bot", "operador", "representante", "persona de verdad", "quiero hablar con una persona", "atencion humana"]
+HANDOVER_KEYWORDS = ["agente", "humano", "persona real", "hablar con alguien", "asesor real", "no quiero bot", "operador", "representante", "persona de verdad", "quiero hablar con una persona", "atención humana"]
 
 # Timeout for bot to resolve (seconds) - if bot interaction exceeds this without progress, trigger alert
 BOT_TIMEOUT_SECONDS = 60
@@ -1922,7 +1922,7 @@ Precio oferta: ${target['price']}
 REGLA CRITICA - PRODUCTO UNICO
 Solo puedes hablar sobre {target['name']}. NO mezcles informacion de otros productos.
 Si el cliente pregunta por otro producto, responde:
-"Claro, tambien tenemos otros productos. Te puedo conectar con informacion de ese producto."
+"Claro, también tenemos otros productos. Te puedo conectar con información de ese producto."
 Y lista brevemente:
 {other_products_text}
 Luego vuelve a tu producto principal.
@@ -1930,24 +1930,24 @@ Luego vuelve a tu producto principal.
 RESTRICCIONES GENERALES
 {restrictions}
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano y emojis.
-- Si piden hablar con un humano, responde que un asesor se comunicara pronto.
-- Respuestas CORTAS y CLARAS (maximo 4-6 lineas por mensaje). NO envies bloques largos.
-- Siempre lleva la conversacion hacia el cierre de venta.
-- Prioriza beneficios + resultado sobre informacion tecnica.
+- Si piden hablar con un humano, responde que un asesor se comunicará pronto.
+- Respuestas CORTAS y CLARAS (máximo 4-6 líneas por mensaje). NO envíes bloques largos.
+- Siempre lleva la conversación hacia el cierre de venta.
+- Prioriza beneficios + resultado sobre información técnica.
 
-EXTRACCION AUTOMATICA DE DATOS
-Al final de CADA respuesta, incluye en lineas separadas:
+EXTRACCIÓN AUTOMÁTICA DE DATOS
+Al final de CADA respuesta, incluye en líneas separadas:
 - Si detectas nombre: [LEAD_NAME:Nombre Apellido]
 - Si detectas ciudad: [UPDATE_LEAD:city=Ciudad]
 - Si detectas email: [UPDATE_LEAD:email=correo@ejemplo.com]
 - Si detectas CI/RUC: [UPDATE_LEAD:ci_ruc=valor]
-- Si detectas direccion: [UPDATE_LEAD:address=direccion completa]
+- Si detectas dirección: [UPDATE_LEAD:address=dirección completa]
 - Clasifica la etapa:
   [STAGE:nuevo] - Primer contacto
   [STAGE:interesado] - Pregunta por producto, precios o beneficios
-  [STAGE:en_negociacion] - Solicita compra, pago, envio, pide info de precio
-  [STAGE:cliente_nuevo] - Confirma compra, da datos de facturacion
-  [STAGE:perdido] - Rechaza explicitamente
+  [STAGE:en_negociacion] - Solicita compra, pago, envío, pide info de precio
+  [STAGE:cliente_nuevo] - Confirma compra, da datos de facturación
+  [STAGE:perdido] - Rechaza explícitamente
 Incluye SIEMPRE [STAGE:] al final."""
     
     # Fallback: original simple prompt for products without sales_flow
@@ -1955,24 +1955,24 @@ Incluye SIEMPRE [STAGE:] al final."""
 Eres el asesor virtual especializado en {target['name']} de la marca Faculty por WhatsApp.
 Personalidad: {personality}
 Tu estilo: natural, cercano, humano, profesional, claro, breve.
-Habla como persona real, no como robot. Frases cortas. Maximo 1-2 emojis por mensaje.
+Habla como persona real, no como robot. Frases cortas. Máximo 1-2 emojis por mensaje.
 {first_contact}
 {data_context}
 {missing_instruction}
 
 TU PRODUCTO: {target['name']}
-Codigo: {target.get('code', '')}
+Código: {target.get('code', '')}
 Precio: ${target['price']}
 {f"Precio original: ${target.get('original_price', '')}" if target.get('original_price') else ""}
-Descripcion: {target.get('description', '')}
+Descripción: {target.get('description', '')}
 Beneficios clave: {key_benefits}
-Como se usa: {usage_info}
+Cómo se usa: {usage_info}
 {f"Preguntas frecuentes: {faqs}" if faqs else ""}
 
-REGLA CRITICA - PRODUCTO UNICO
-Solo puedes hablar sobre {target['name']}. NO mezcles informacion de otros productos.
+REGLA CRÍTICA - PRODUCTO ÚNICO
+Solo puedes hablar sobre {target['name']}. NO mezcles información de otros productos.
 Si el cliente pregunta por otro producto, responde:
-"Claro, tambien tenemos otros productos. Te puedo conectar con informacion de ese producto. Quieres que te cuente sobre alguno de estos?"
+"Claro, también tenemos otros productos. Te puedo conectar con información de ese producto. ¿Quieres que te cuente sobre alguno de estos?"
 Y lista brevemente los otros productos disponibles:
 {other_products_text}
 
@@ -1980,26 +1980,26 @@ Luego vuelve a tu producto principal: {target['name']}.
 
 FLUJO
 1. Si no tienes nombre, saluda y pregunta nombre.
-2. Con nombre: "Hola [nombre], me alegra que te interese {target['name']}. Cuentame, ya conocias este producto?"
-3. Adapta la explicacion segun las dudas del cliente.
-4. Guia hacia compra sin presionar.
+2. Con nombre: "Hola [nombre], me alegra que te interese {target['name']}. Cuéntame, ¿ya conocías este producto?"
+3. Adapta la explicación según las dudas del cliente.
+4. Guía hacia compra sin presionar.
 
 RESTRICCIONES
 {restrictions}
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
-- Si piden hablar con un humano, responde que un asesor se comunicara pronto.
+- Si piden hablar con un humano, responde que un asesor se comunicará pronto.
 
-EXTRACCION AUTOMATICA DE DATOS
-Al final de CADA respuesta, incluye en lineas separadas:
+EXTRACCIÓN AUTOMÁTICA DE DATOS
+Al final de CADA respuesta, incluye en líneas separadas:
 - Si detectas nombre: [LEAD_NAME:Nombre Apellido]
 - Si detectas ciudad: [UPDATE_LEAD:city=Ciudad]
 - Si detectas email: [UPDATE_LEAD:email=correo@ejemplo.com]
 - Clasifica la etapa:
   [STAGE:nuevo] - Primer contacto
   [STAGE:interesado] - Pregunta por producto, precios o beneficios
-  [STAGE:en_negociacion] - Solicita compra, pago, envio
+  [STAGE:en_negociacion] - Solicita compra, pago, envío
   [STAGE:cliente_nuevo] - Confirma compra
-  [STAGE:perdido] - Rechaza explicitamente
+  [STAGE:perdido] - Rechaza explícitamente
 Incluye SIEMPRE [STAGE:] al final."""
 
 
@@ -2114,7 +2114,7 @@ Puedes usar algunos emojis de forma natural (1-2 por mensaje maximo).
 
 PRODUCTO PRINCIPAL
 Bone Broth Hidrolizado (Bombro).
-Suplemento nutricional a base de caldo de hueso hidrolizado de alta absorcion.
+Suplemento nutricional a base de caldo de hueso hidrolizado de alta absorción.
 
 TODOS LOS PRODUCTOS:
 {product_info}
@@ -2140,7 +2140,7 @@ RESPUESTAS CORTAS: entre 1 y 4 lineas.
 PROHIBIDO
 - No prometer curas.
 - No decir que cura enfermedades.
-- No afirmar que reemplaza tratamientos medicos.
+- No afirmar que reemplaza tratamientos médicos.
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
 - Si piden hablar con un humano, responde que un asesor se comunicara pronto.
 
@@ -2179,7 +2179,7 @@ Incluye SIEMPRE [STAGE:] al final."""
         reply = response if isinstance(response, str) else str(response)
     except Exception as e:
         logger.error(f"WhatsApp GPT error: {e}")
-        reply = "Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. En que puedo ayudarte?"
+        reply = "¡Hola! Bienvenido a Fakulti Laboratorios. Soy tu asesor virtual. ¿En qué puedo ayudarte?"
     
     # Parse lead name
     name_match = re.search(r'\[LEAD_NAME:([^\]]+)\]', reply)
@@ -3065,11 +3065,11 @@ async def startup():
     product_count = await db.products.count_documents({})
     if product_count == 0:
         products = [
-            {"id": str(uuid.uuid4()), "name": "Bombro - Bone Broth Hidrolizado", "code": "BOMBRO", "description": "Bone Broth Hidrolizado premium. Producto unico en Ecuador. Rico en colageno y nutrientes esenciales.", "price": 55.95, "original_price": 59.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2023/02/EDIT_BONE-BROTH-POWDER-200G_FAKULTI_2024.png", "stock": 150, "category": "nutricion", "active": True, "bot_config": {"personality": "Experto en nutricion y caldo de hueso hidrolizado. Apasionado por ayudar a las personas a mejorar su salud de forma natural.", "key_benefits": "Colageno de alta absorcion, mejora digestion, soporte articular, fuente de proteina, facil de preparar como sopa caliente o fria", "usage_info": "Un sachet al dia. Se puede tomar en el desayuno como sopa caliente o en la noche. Diluir en agua caliente y mezclar.", "restrictions": "No prometer curas. No decir que cura enfermedades. No afirmar que reemplaza tratamientos medicos. Nunca usar lenguaje medico complejo.", "faqs": "Se toma un sachet al dia. Sabe como una sopa de hueso suave. Es apto para toda la familia. No contiene gluten."}},
-            {"id": str(uuid.uuid4()), "name": "Gomitas Melatonina", "code": "GUMMELAT", "description": "Gomitas de melatonina para un descanso natural y reparador.", "price": 13.25, "original_price": 15.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 200, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de bienestar y descanso. Empatico con las personas que tienen problemas de sueno.", "key_benefits": "Ayuda a conciliar el sueno de forma natural, sabor agradable, facil de tomar, sin dependencia", "usage_info": "Tomar 1-2 gomitas 30 minutos antes de dormir. No exceder la dosis recomendada.", "restrictions": "No prometer que cura insomnio. No reemplaza tratamiento medico. No combinar con otros sedantes sin consultar medico.", "faqs": "Son gomitas con sabor frutal. Se toman antes de dormir. No generan dependencia. Aptas para adultos."}},
-            {"id": str(uuid.uuid4()), "name": "CBD Colageno Hidrolizado", "code": "CBD-COL", "description": "Colageno hidrolizado con CBD para soporte articular y bienestar integral.", "price": 52.36, "original_price": 57.45, "image_url": "https://fakultisupplements.com/wp-content/uploads/2025/08/sachets-17.png", "stock": 100, "category": "cbd", "active": True, "bot_config": {"personality": "Especialista en bienestar integral y productos con CBD. Informado y objetivo sobre los beneficios del CBD.", "key_benefits": "Soporte articular, bienestar integral, colageno para piel y articulaciones, CBD para relajacion natural", "usage_info": "Un sachet al dia diluido en agua. Preferiblemente en la manana o antes de dormir.", "restrictions": "No prometer curas. CBD no es medicina. No reemplaza tratamientos medicos. Informar que el CBD es legal en Ecuador como suplemento.", "faqs": "El CBD es legal en Ecuador como suplemento. No produce efectos psicoactivos. Contiene colageno hidrolizado mas CBD."}},
-            {"id": str(uuid.uuid4()), "name": "Pitch Up", "code": "PITCHUP", "description": "Suplemento energetico natural para rendimiento fisico y mental.", "price": 21.84, "original_price": 24.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-EXIT-FAT.png", "stock": 120, "category": "energia", "active": True, "bot_config": {"personality": "Coach de energia y rendimiento. Motivador y practico.", "key_benefits": "Energia natural sin crash, mejora rendimiento fisico y mental, ideal para deportistas y profesionales activos", "usage_info": "Tomar un sachet al dia, preferiblemente en la manana o antes de actividad fisica. Mezclar con agua.", "restrictions": "No prometer resultados deportivos especificos. No es un estimulante. No reemplaza una dieta balanceada.", "faqs": "No contiene cafeina artificial. Es energia natural. Se puede tomar todos los dias."}},
-            {"id": str(uuid.uuid4()), "name": "Magnesio Citrato", "code": "MAGCIT", "description": "Magnesio citrato de alta absorcion para soporte muscular, nervioso y cardiovascular.", "price": 18.50, "original_price": 22.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 180, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de salud preventiva. Conocedor de los beneficios del magnesio para el bienestar diario.", "key_benefits": "Soporte muscular y nervioso, ayuda a relajacion, contribuye al funcionamiento cardiovascular, alta absorcion", "usage_info": "Un sachet al dia diluido en agua. Se puede tomar en cualquier momento del dia.", "restrictions": "No prometer curas. No reemplaza tratamientos medicos. Consultar con medico si toma otros medicamentos.", "faqs": "El magnesio citrato tiene mejor absorcion que otras formas. Ayuda con calambres musculares. Seguro para uso diario."}},
+            {"id": str(uuid.uuid4()), "name": "Bombro - Bone Broth Hidrolizado", "code": "BOMBRO", "description": "Bone Broth Hidrolizado premium. Producto único en Ecuador. Rico en colágeno y nutrientes esenciales.", "price": 55.95, "original_price": 59.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2023/02/EDIT_BONE-BROTH-POWDER-200G_FAKULTI_2024.png", "stock": 150, "category": "nutrición", "active": True, "bot_config": {"personality": "Experto en nutrición y caldo de hueso hidrolizado. Apasionado por ayudar a las personas a mejorar su salud de forma natural.", "key_benefits": "Colágeno de alta absorción, mejora digestión, soporte articular, fuente de proteína, fácil de preparar como sopa caliente o fría", "usage_info": "Un sachet al día. Se puede tomar en el desayuno como sopa caliente o en la noche. Diluir en agua caliente y mezclar.", "restrictions": "No prometer curas. No decir que cura enfermedades. No afirmar que reemplaza tratamientos médicos. Nunca usar lenguaje médico complejo.", "faqs": "Se toma un sachet al día. Sabe como una sopa de hueso suave. Es apto para toda la familia. No contiene gluten."}},
+            {"id": str(uuid.uuid4()), "name": "Gomitas Melatonina", "code": "GUMMELAT", "description": "Gomitas de melatonina para un descanso natural y reparador.", "price": 13.25, "original_price": 15.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 200, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de bienestar y descanso. Empático con las personas que tienen problemas de sueño.", "key_benefits": "Ayuda a conciliar el sueño de forma natural, sabor agradable, fácil de tomar, sin dependencia", "usage_info": "Tomar 1-2 gomitas 30 minutos antes de dormir. No exceder la dosis recomendada.", "restrictions": "No prometer que cura insomnio. No reemplaza tratamiento médico. No combinar con otros sedantes sin consultar médico.", "faqs": "Son gomitas con sabor frutal. Se toman antes de dormir. No generan dependencia. Aptas para adultos."}},
+            {"id": str(uuid.uuid4()), "name": "CBD Colágeno Hidrolizado", "code": "CBD-COL", "description": "Colágeno hidrolizado con CBD para soporte articular y bienestar integral.", "price": 52.36, "original_price": 57.45, "image_url": "https://fakultisupplements.com/wp-content/uploads/2025/08/sachets-17.png", "stock": 100, "category": "cbd", "active": True, "bot_config": {"personality": "Especialista en bienestar integral y productos con CBD. Informado y objetivo sobre los beneficios del CBD.", "key_benefits": "Soporte articular, bienestar integral, colágeno para piel y articulaciones, CBD para relajación natural", "usage_info": "Un sachet al día diluido en agua. Preferiblemente en la mañana o antes de dormir.", "restrictions": "No prometer curas. CBD no es medicina. No reemplaza tratamientos médicos. Informar que el CBD es legal en Ecuador como suplemento.", "faqs": "El CBD es legal en Ecuador como suplemento. No produce efectos psicoactivos. Contiene colágeno hidrolizado más CBD."}},
+            {"id": str(uuid.uuid4()), "name": "Pitch Up", "code": "PITCHUP", "description": "Suplemento energético natural para rendimiento físico y mental.", "price": 21.84, "original_price": 24.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-EXIT-FAT.png", "stock": 120, "category": "energía", "active": True, "bot_config": {"personality": "Coach de energía y rendimiento. Motivador y práctico.", "key_benefits": "Energía natural sin crash, mejora rendimiento físico y mental, ideal para deportistas y profesionales activos", "usage_info": "Tomar un sachet al día, preferiblemente en la mañana o antes de actividad física. Mezclar con agua.", "restrictions": "No prometer resultados deportivos específicos. No es un estimulante. No reemplaza una dieta balanceada.", "faqs": "No contiene cafeína artificial. Es energía natural. Se puede tomar todos los días."}},
+            {"id": str(uuid.uuid4()), "name": "Magnesio Citrato", "code": "MAGCIT", "description": "Magnesio citrato de alta absorción para soporte muscular, nervioso y cardiovascular.", "price": 18.50, "original_price": 22.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 180, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de salud preventiva. Conocedor de los beneficios del magnesio para el bienestar diario.", "key_benefits": "Soporte muscular y nervioso, ayuda a relajación, contribuye al funcionamiento cardiovascular, alta absorción", "usage_info": "Un sachet al día diluido en agua. Se puede tomar en cualquier momento del día.", "restrictions": "No prometer curas. No reemplaza tratamientos médicos. Consultar con médico si toma otros medicamentos.", "faqs": "El magnesio citrato tiene mejor absorción que otras formas. Ayuda con calambres musculares. Seguro para uso diario."}},
         ]
         for p in products:
             p["created_at"] = datetime.now(timezone.utc).isoformat()
