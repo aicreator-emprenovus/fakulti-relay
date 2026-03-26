@@ -929,81 +929,88 @@ async def process_loyalty_messages(user=Depends(get_current_user)):
 
 @api_router.get("/loyalty/metrics")
 async def get_loyalty_metrics(user=Depends(get_current_user)):
-    """Dashboard de metricas de fidelizacion: recompra, retencion, efectividad de secuencias."""
-    # 1. Clients with purchases
-    clients_pipeline = [
-        {"$match": {"purchase_history": {"$exists": True, "$ne": []}}},
-        {"$project": {
-            "_id": 0, "id": 1, "name": 1, "funnel_stage": 1,
-            "purchase_count": {"$size": "$purchase_history"},
-            "total_spent": {"$sum": "$purchase_history.price"},
-            "first_purchase": {"$arrayElemAt": ["$purchase_history.date", 0]},
-            "last_purchase": {"$arrayElemAt": ["$purchase_history.date", -1]},
-            "purchase_history": 1
-        }}
-    ]
-    clients = await db.leads.aggregate(clients_pipeline).to_list(1000)
+    """Dashboard de métricas de fidelización basado en datos reales del CRM."""
     
-    total_clients = len(clients)
-    repeat_buyers = [c for c in clients if c.get("purchase_count", 0) > 1]
-    repeat_rate = round((len(repeat_buyers) / total_clients * 100) if total_clients > 0 else 0, 1)
+    # 1. Lead stats
+    all_leads = await db.leads.find({}, {"_id": 0, "id": 1, "name": 1, "funnel_stage": 1, "product_interest": 1, "channel": 1, "source": 1, "created_at": 1, "last_interaction": 1, "purchase_history": 1}).to_list(1000)
+    total_leads = len(all_leads)
     
-    total_revenue = sum(c.get("total_spent", 0) for c in clients)
-    repeat_revenue = sum(c.get("total_spent", 0) for c in repeat_buyers)
-    avg_order_value = round(total_revenue / sum(c.get("purchase_count", 0) for c in clients), 2) if clients else 0
-    avg_purchases_per_client = round(sum(c.get("purchase_count", 0) for c in clients) / total_clients, 1) if total_clients > 0 else 0
+    # Funnel distribution
+    stage_map = {"nuevo": "Contacto inicial", "interesado": "Chat", "en_negociacion": "En Negociación", "cliente_nuevo": "Leads ganados", "cliente_activo": "Cartera activa", "perdido": "Perdido"}
+    funnel_data = {}
+    for lead in all_leads:
+        stage = lead.get("funnel_stage", "nuevo")
+        label = stage_map.get(stage, stage)
+        funnel_data[label] = funnel_data.get(label, 0) + 1
+    funnel_distribution = [{"stage": k, "count": v} for k, v in funnel_data.items()]
     
-    # 2. Revenue by product from purchases
-    product_revenue_pipeline = [
-        {"$unwind": "$purchase_history"},
-        {"$group": {
-            "_id": "$purchase_history.product_name",
-            "revenue": {"$sum": "$purchase_history.price"},
-            "orders": {"$sum": 1},
-            "unique_buyers": {"$addToSet": "$id"}
-        }},
-        {"$project": {
-            "_id": 0, "product": "$_id",
-            "revenue": {"$round": ["$revenue", 2]},
-            "orders": 1,
-            "buyer_count": {"$size": "$unique_buyers"}
-        }},
-        {"$sort": {"revenue": -1}}
-    ]
-    product_revenue = await db.leads.aggregate(product_revenue_pipeline).to_list(50)
+    # Product interest distribution
+    product_interest = {}
+    for lead in all_leads:
+        p = lead.get("product_interest", "")
+        if p:
+            product_interest[p] = product_interest.get(p, 0) + 1
+    product_interest_data = [{"product": k, "leads": v} for k, v in sorted(product_interest.items(), key=lambda x: x[1], reverse=True)]
     
-    # Repeat purchase rate per product
-    product_repeat_pipeline = [
-        {"$unwind": "$purchase_history"},
-        {"$group": {
-            "_id": {"lead": "$id", "product": "$purchase_history.product_name"},
-            "count": {"$sum": 1}
-        }},
-        {"$group": {
-            "_id": "$_id.product",
-            "total_buyers": {"$sum": 1},
-            "repeat_buyers": {"$sum": {"$cond": [{"$gt": ["$count", 1]}, 1, 0]}}
-        }},
-        {"$project": {
-            "_id": 0, "product": "$_id",
-            "total_buyers": 1, "repeat_buyers": 1,
-            "repeat_rate": {"$round": [{"$multiply": [{"$cond": [{"$gt": ["$total_buyers", 0]}, {"$divide": ["$repeat_buyers", "$total_buyers"]}, 0]}, 100]}, 1]}
-        }}
-    ]
-    product_repeat = await db.leads.aggregate(product_repeat_pipeline).to_list(50)
+    # Source distribution
+    source_data = {}
+    for lead in all_leads:
+        s = lead.get("source", "") or "Sin fuente"
+        source_data[s] = source_data.get(s, 0) + 1
+    source_distribution = [{"source": k, "count": v} for k, v in source_data.items()]
     
-    # 3. Loyalty sequence effectiveness
+    # 2. Conversation stats
+    total_sessions = await db.chat_sessions_meta.count_documents({})
+    total_messages = await db.chat_messages.count_documents({})
+    bot_messages = await db.chat_messages.count_documents({"role": "assistant"})
+    user_messages = await db.chat_messages.count_documents({"role": "user"})
+    campaign_messages = await db.chat_messages.count_documents({"source": "campaign"})
+    
+    # Active leads (with recent interaction)
+    converted = len([l for l in all_leads if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]])
+    in_progress = len([l for l in all_leads if l.get("funnel_stage") in ["interesado", "en_negociacion"]])
+    lost = len([l for l in all_leads if l.get("funnel_stage") == "perdido"])
+    conversion_rate = round((converted / total_leads * 100) if total_leads > 0 else 0, 1)
+    
+    # 3. Campaign stats
+    campaigns = await db.campaigns.find({}, {"_id": 0, "name": 1, "sent_count": 1, "failed_count": 1, "status": 1, "target_count": 1}).to_list(50)
+    total_campaign_sends = sum(c.get("sent_count", 0) for c in campaigns)
+    total_campaign_fails = sum(c.get("failed_count", 0) for c in campaigns)
+    
+    # 4. Purchase-based metrics (when purchase_history exists)
+    clients_with_purchases = [l for l in all_leads if l.get("purchase_history") and len(l["purchase_history"]) > 0]
+    total_clients = len(clients_with_purchases)
+    repeat_buyers = [c for c in clients_with_purchases if len(c.get("purchase_history", [])) > 1]
+    total_revenue = sum(sum(p.get("price", 0) for p in c.get("purchase_history", [])) for c in clients_with_purchases)
+    total_purchases = sum(len(c.get("purchase_history", [])) for c in clients_with_purchases)
+    avg_order_value = round(total_revenue / total_purchases, 2) if total_purchases > 0 else 0
+    
+    # Product revenue from purchases
+    product_revenue = {}
+    for lead in clients_with_purchases:
+        for purchase in lead.get("purchase_history", []):
+            pname = purchase.get("product_name", "Desconocido")
+            product_revenue[pname] = product_revenue.get(pname, 0) + purchase.get("price", 0)
+    product_revenue_data = [{"product": k, "revenue": round(v, 2)} for k, v in sorted(product_revenue.items(), key=lambda x: x[1], reverse=True)]
+    
+    # Top buyers
+    top_buyers_list = []
+    for b in sorted(clients_with_purchases, key=lambda c: sum(p.get("price", 0) for p in c.get("purchase_history", [])), reverse=True)[:10]:
+        top_buyers_list.append({
+            "name": b.get("name", ""),
+            "purchases": len(b.get("purchase_history", [])),
+            "total_spent": round(sum(p.get("price", 0) for p in b.get("purchase_history", [])), 2),
+            "stage": stage_map.get(b.get("funnel_stage", ""), b.get("funnel_stage", ""))
+        })
+    
+    # 5. Loyalty sequence stats
     all_enrollments = await db.loyalty_enrollments.find({}, {"_id": 0}).to_list(500)
     total_enrollments = len(all_enrollments)
     active_enrollments = len([e for e in all_enrollments if e.get("status") == "activo"])
     completed_enrollments = len([e for e in all_enrollments if e.get("status") == "completado"])
+    total_seq_msgs = sum(len(e.get("messages", [])) for e in all_enrollments)
+    sent_seq_msgs = sum(len([m for m in e.get("messages", []) if m.get("status") == "enviado"]) for e in all_enrollments)
     
-    total_msgs = sum(len(e.get("messages", [])) for e in all_enrollments)
-    sent_msgs = sum(len([m for m in e.get("messages", []) if m.get("status") == "enviado"]) for e in all_enrollments)
-    pending_msgs = total_msgs - sent_msgs
-    delivery_rate = round((sent_msgs / total_msgs * 100) if total_msgs > 0 else 0, 1)
-    
-    # Per-sequence stats
     seq_stats = {}
     for e in all_enrollments:
         sid = e.get("sequence_name", "Desconocida")
@@ -1022,41 +1029,41 @@ async def get_loyalty_metrics(user=Depends(get_current_user)):
         s["delivery_rate"] = round((s["msgs_sent"] / s["msgs_total"] * 100) if s["msgs_total"] > 0 else 0, 1)
         sequence_effectiveness.append(s)
     
-    # 4. Client retention: active clients (with purchases) who are still active vs lost
-    active_clients = len([c for c in clients if c.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]])
-    lost_clients = len([c for c in clients if c.get("funnel_stage") == "perdido"])
-    retention_rate = round((active_clients / total_clients * 100) if total_clients > 0 else 0, 1)
-    
-    # 5. Top repeat buyers
-    top_buyers = sorted(clients, key=lambda c: c.get("total_spent", 0), reverse=True)[:10]
-    top_buyers_list = [{"name": b.get("name", ""), "purchases": b.get("purchase_count", 0), "total_spent": round(b.get("total_spent", 0), 2), "stage": b.get("funnel_stage", "")} for b in top_buyers]
-    
     return {
         "summary": {
+            "total_leads": total_leads,
+            "converted": converted,
+            "in_progress": in_progress,
+            "lost": lost,
+            "conversion_rate": conversion_rate,
+            "total_sessions": total_sessions,
+            "total_messages": total_messages,
+            "bot_messages": bot_messages,
+            "user_messages": user_messages,
+            "campaign_messages": campaign_messages,
+            "total_campaign_sends": total_campaign_sends,
             "total_clients": total_clients,
             "repeat_buyers": len(repeat_buyers),
-            "repeat_rate": repeat_rate,
-            "retention_rate": retention_rate,
             "total_revenue": round(total_revenue, 2),
-            "repeat_revenue": round(repeat_revenue, 2),
             "avg_order_value": avg_order_value,
-            "avg_purchases_per_client": avg_purchases_per_client,
-            "active_clients": active_clients,
-            "lost_clients": lost_clients
+            "active_clients": len([l for l in all_leads if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]]),
+            "lost_clients": lost
         },
+        "funnel_distribution": funnel_distribution,
+        "product_interest": product_interest_data,
+        "source_distribution": source_distribution,
+        "product_revenue": product_revenue_data,
+        "top_buyers": top_buyers_list,
         "loyalty": {
             "total_enrollments": total_enrollments,
             "active_enrollments": active_enrollments,
             "completed_enrollments": completed_enrollments,
-            "total_messages": total_msgs,
-            "sent_messages": sent_msgs,
-            "pending_messages": pending_msgs,
-            "delivery_rate": delivery_rate
+            "total_messages": total_seq_msgs,
+            "sent_messages": sent_seq_msgs,
+            "delivery_rate": round((sent_seq_msgs / total_seq_msgs * 100) if total_seq_msgs > 0 else 0, 1)
         },
-        "product_revenue": product_revenue,
-        "product_repeat": product_repeat,
         "sequence_effectiveness": sequence_effectiveness,
-        "top_buyers": top_buyers_list
+        "campaigns": [{"name": c.get("name", ""), "sent": c.get("sent_count", 0), "failed": c.get("failed_count", 0), "status": c.get("status", "")} for c in campaigns]
     }
 
 # ========== CHAT ROUTES ==========
