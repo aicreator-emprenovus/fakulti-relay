@@ -293,7 +293,7 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
         {"$group": {"_id": "$source", "count": {"$sum": 1}}}
     ]).to_list(100)
     
-    recent_leads = await db.leads.find({}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    recent_leads = await db.leads.find({}, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1, "funnel_stage": 1, "product_interest": 1, "created_at": 1, "last_interaction": 1}).sort("created_at", -1).limit(10).to_list(10)
     
     return {
         "total_leads": total_leads,
