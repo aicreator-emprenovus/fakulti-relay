@@ -2229,27 +2229,114 @@ Incluye SIEMPRE [STAGE:] al final."""
         {"session_id": session_id}, {"_id": 0}
     ).sort("timestamp", 1).to_list(50)
     
-    # Build conversation summary of data already mentioned by the user
-    user_messages_text = " | ".join([m["content"] for m in history if m.get("role") == "user"])
-    collected_summary = []
+    # ===== BUILD CONVERSATION DATA SUMMARY =====
+    # Scan ACTUAL conversation messages for data already provided (regardless of DB state)
+    all_user_text = "\n".join([m["content"] for m in history if m.get("role") == "user"])
+    all_bot_text = "\n".join([m["content"] for m in history if m.get("role") == "assistant"])
+    
+    conversation_data = []
+    # Data from lead record
     if existing_lead.get("name"):
-        collected_summary.append(f"Nombre: {existing_lead['name']}")
-    if existing_lead.get("whatsapp"):
-        collected_summary.append(f"WhatsApp: {existing_lead['whatsapp']}")
+        conversation_data.append(f"Nombre: {existing_lead['name']}")
     if existing_lead.get("city"):
-        collected_summary.append(f"Ciudad: {existing_lead['city']}")
+        conversation_data.append(f"Ciudad: {existing_lead['city']}")
     if existing_lead.get("email"):
-        collected_summary.append(f"Email: {existing_lead['email']}")
+        conversation_data.append(f"Email: {existing_lead['email']}")
     if existing_lead.get("product_interest"):
-        collected_summary.append(f"Producto de interés: {existing_lead['product_interest']}")
-    if existing_lead.get("ci_ruc"):
-        collected_summary.append(f"CI/RUC: {existing_lead['ci_ruc']}")
-    if existing_lead.get("address"):
-        collected_summary.append(f"Dirección: {existing_lead['address']}")
+        conversation_data.append(f"Producto de interés: {existing_lead['product_interest']}")
+    conversation_data.append(f"WhatsApp: {phone}")
+    
+    # Scan user messages for data patterns NOT yet in the lead record
+    import re as _re
+    # CI/RUC patterns
+    ci_matches = _re.findall(r'(?:cedula|ci|ruc|cédula)[:\s]*(\d{10,13})', all_user_text, _re.IGNORECASE)
+    if not ci_matches:
+        ci_matches = _re.findall(r'\b(\d{10})\b', all_user_text)
+    if ci_matches:
+        ci_val = ci_matches[-1]
+        conversation_data.append(f"CI/RUC mencionado en conversación: {ci_val}")
+        if not existing_lead.get("ci_ruc"):
+            await db.leads.update_one({"id": lead_id}, {"$set": {"ci_ruc": ci_val}})
+    
+    # Phone patterns from user messages
+    phone_matches = _re.findall(r'(?:telefono|número|celular|contacto|cel)[:\s]*(09\d{8}|593\d{9})', all_user_text, _re.IGNORECASE)
+    if not phone_matches:
+        phone_matches = _re.findall(r'\b(09\d{8})\b', all_user_text)
+    if phone_matches:
+        phone_val = phone_matches[-1]
+        conversation_data.append(f"Teléfono de contacto mencionado: {phone_val}")
+        if not existing_lead.get("whatsapp"):
+            await db.leads.update_one({"id": lead_id}, {"$set": {"whatsapp": phone_val}})
+    
+    # Address patterns
+    addr_matches = _re.findall(r'(?:dirección|direccion|domicilio|entrega)[:\s]*(.{10,80})', all_user_text, _re.IGNORECASE)
+    if addr_matches:
+        conversation_data.append(f"Dirección mencionada: {addr_matches[-1].strip()}")
+        if not existing_lead.get("address"):
+            await db.leads.update_one({"id": lead_id}, {"$set": {"address": addr_matches[-1].strip()}})
+    # Also check for numbered list format (1. Sauces 2 y calle h...)
+    list_addr = _re.findall(r'1\.\s*(.+(?:sauces|cdla|ciudadela|calle|mz|villa|manzana).+)', all_user_text, _re.IGNORECASE)
+    if list_addr and not addr_matches:
+        conversation_data.append(f"Dirección mencionada: {list_addr[-1].strip()}")
+        if not existing_lead.get("address"):
+            await db.leads.update_one({"id": lead_id}, {"$set": {"address": list_addr[-1].strip()}})
+    
+    # Build last 5 exchanges as explicit conversation summary
+    recent_exchanges = []
+    recent_msgs = history[-10:] if len(history) > 10 else history
+    for msg in recent_msgs:
+        role_label = "CLIENTE" if msg["role"] == "user" else "BOT"
+        recent_exchanges.append(f"{role_label}: {msg['content'][:200]}")
+    conversation_summary = "\n".join(recent_exchanges)
     
     collected_data_text = ""
-    if collected_summary:
-        collected_data_text = "\nDATOS YA RECOPILADOS DEL CLIENTE (NO volver a preguntar estos datos):\n" + "\n".join(f"- {d}" for d in collected_summary)
+    if conversation_data:
+        collected_data_text = "\n\nDATOS YA PROPORCIONADOS POR EL CLIENTE (PROHIBIDO volver a solicitar):\n" + "\n".join(f"- {d}" for d in conversation_data)
+    
+    collected_data_text += f"\n\nRESUMEN DE ULTIMOS MENSAJES DE LA CONVERSACION (lee esto para no repetir preguntas):\n{conversation_summary}"
+    
+    # ===== REPETITION DETECTION & ADVISOR ESCALATION =====
+    # Check if bot has asked similar questions multiple times
+    bot_messages = [m["content"] for m in history if m.get("role") == "assistant"]
+    repetition_keywords = ["dirección", "direccion", "cédula", "cedula", "contacto", "teléfono", "telefono", "número", "numero", "nombre completo"]
+    ask_counts = {}
+    for bm in bot_messages[-6:]:
+        bm_lower = bm.lower()
+        for kw in repetition_keywords:
+            if kw in bm_lower and "?" in bm:
+                ask_counts[kw] = ask_counts.get(kw, 0) + 1
+    
+    repeated_topics = [kw for kw, count in ask_counts.items() if count >= 2]
+    escalation_needed = len(repeated_topics) > 0
+    
+    if escalation_needed:
+        # Create alert for assigned advisor
+        advisor_id = existing_lead.get("assigned_advisor", "")
+        alert_doc = {
+            "id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "lead_id": lead_id,
+            "lead_name": existing_lead.get("name", phone),
+            "type": "bot_confused",
+            "message": f"El bot está repitiendo preguntas sobre: {', '.join(repeated_topics)}. El cliente ya proporcionó estos datos. Se requiere intervención humana.",
+            "resolved": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.chat_alerts.insert_one(alert_doc)
+        if advisor_id:
+            await db.advisor_notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "advisor_id": advisor_id,
+                "type": "bot_escalation",
+                "title": f"Bot necesita ayuda con {existing_lead.get('name', phone)}",
+                "message": f"El bot repite preguntas sobre {', '.join(repeated_topics)}. Por favor toma la conversación.",
+                "lead_id": lead_id,
+                "session_id": session_id,
+                "read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        logger.warning(f"Bot escalation: repetition detected for lead {lead_id} on topics: {repeated_topics}")
+        collected_data_text += f"\n\nALERTA: El cliente YA proporcionó datos sobre {', '.join(repeated_topics)} en mensajes anteriores. NO los pidas de nuevo bajo ninguna circunstancia. Si no puedes continuar, responde: 'Permíteme un momento, voy a transferirte con un asesor para darte una mejor atención.'"
     
     # Pass collected data context to product bot prompt
     existing_lead["_collected_data_text"] = collected_data_text
