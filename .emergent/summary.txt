@@ -1,72 +1,79 @@
 <analysis>**original_problem_statement**: 
-The user is building a comprehensive CRM and sales funnel automation platform for Fakulti brand. The system integrates a live WhatsApp connection powered by GPT-5.2, role-based access, QR campaign tracking, specialized AI bots per product, gamification, and lead management. 
+The user is building a comprehensive CRM and sales funnel automation platform for the Fakulti brand. The system integrates a live WhatsApp connection powered by GPT-5.2, role-based access, QR campaign tracking, specialized AI bots per product, gamification, and lead management. 
 
-**User's preferred language**: Spanish (INSTRUCT NEXT AGENT to respond in Spanish ONLY)
+**User's preferred language**: Spanish (INSTRUCT NEXT AGENT TO RESPOND IN SPANISH ONLY)
 
 **what currently exists?** 
-A fully functional full-stack CRM (FastAPI/MongoDB backend, React frontend) with a live, bi-directional WhatsApp integration. It features lead management, an advanced Human Mode AI sales bot, editable bulk campaigns with image upload support, notifications that route directly to active chats, and normalized phone numbers for perfect synchronization between WhatsApp and the CRM. The Railway deployment task was explicitly suspended by the user to focus on functional enhancements.
+A fully functional full-stack CRM (FastAPI/MongoDB backend, React frontend) with live bi-directional WhatsApp integration. Features include a context-aware Human Mode AI sales bot, editable bulk campaigns with image support and WhatsApp-like UI previews, synchronized lead stages, and a loyalty metrics dashboard based on real interaction data. Recent major improvements include fixing campaign media sending, removing redundant Initial Intents to streamline bot flow, strictly syncing CRM and campaign stages, and resolving AI amnesia (the bot now remembers user data across long conversations). The backend  received partial refactoring for code quality, including security fixes and breaking down massive functions.
 
 **Last working item**: 
-- **Last item agent was working**: Fixing the campaign broadcast feature so that uploaded images are sent as actual media messages via WhatsApp, rather than sending the image URL as plain text. 
-- **Status**: IN PROGRESS
-- **Agent Testing Done**: N (Agent was just about to investigate the  campaign send function)
-- **Which testing method agent to use?**: backend testing agent or manual testing via curl / WhatsApp API simulation
-- **User Testing Done**: N
+    - Last item agent was working: Fixing an  in the WhatsApp webhook that occurred when a completely new number (0 previous messages) contacted the bot. The bug was caused by referencing  before it was defined. The agent just rearranged the code blocks in  (moving the history loader/scanner before the prompt builder) to fix this.
+    - Status: USER VERIFICATION PENDING (The code was edited correctly, but context cut off before the agent could test it via curl or call the finish tool).
+    - Agent Testing Done: N
+    - Which testing method agent to use?: backend manual testing by curl (simulate an incoming webhook from a new phone number to ensure  doesn't throw a 500 error).
+    - User Testing Done: N
 
-**All Pending/In progress Issue list**:
-  - Issue 1: **Campaign images sent as plain text URLs instead of media** (P0)
-     - **Attempted fixes**: Agent successfully added image upload () and UI for campaigns. However, when the broadcast loops over leads, it seems to append the URL to the text body instead of formatting a proper WhatsApp media payload.
-     - **Next debug checklist**: Check  around line 2779 () or . Ensure that if an  is present, the Meta Cloud API payload uses  and  instead of .
-     - **Why fix this issue and what will be achieved with the fix?**: The user explicitly requested promotional campaigns to include images to improve conversion.
-     - **Status**: IN PROGRESS
-     - **Is recurring issue?**: N
-     - **Should Test frontend/backend/both after fix?**: backend
-     - **Blocked on other issue**: None
+**All Pending/In progress Issue list**:  
+  Issue 1: Verify Webhook behavior for New Numbers (P0)
+  Issue 2: Railway Deployment (P2)
 
-  - Issue 2: **Railway Deployment** (P2 - SUSPENDED BY USER)
-     - **Attempted fixes**: Updated Dockerfile to Node 20. Verified local builds.
-     - **Next debug checklist**: Await user instructions to resume. 
-     - **Why fix this issue and what will be achieved with the fix?**: Production deployment.
-     - **Status**: BLOCKED (User explicitly ordered: quiero que suspendas las tareas con railway)
-     - **Is recurring issue?**: Y
-     - **Should Test frontend/backend/both after fix?**: both
-     - **Blocked on other issue**: User instruction to resume.
+  Issues Detail:
+  - Issue 1: 
+     - Attempted fixes: The agent just applied a  in  to move the conversation history and data extraction logic *above* the prompt compilation so that  is defined for new leads.
+     - Next debug checklist: Simulate a WhatsApp webhook POST request with a brand new phone number (not in DB). Check backend logs to confirm  completes successfully and returns HTTP 200 without throwing a  or .
+     - Why fix this issue and what will be achieved with the fix?: Critical for acquiring new leads. If broken, new customers cannot interact with the WhatsApp bot.
+     - Status: TESTING PENDING
+     - Is recurring issue?: N
+     - Should Test frontend/backend/both after fix?: backend
+     - Blocked on other issue: None
+  - Issue 2: 
+     - Attempted fixes: None recently.
+     - Next debug checklist: Await user instructions to resume.
+     - Why fix this issue and what will be achieved with the fix?: Production deployment.
+     - Status: BLOCKED (User explicitly ordered to suspend Railway tasks previously).
+     - Is recurring issue?: Y
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: User instruction to resume.
 
 **In progress Task List**:
-  - Task 1: **Configure AI Sales Flows for remaining 3 products** (P1)
-     - **Where to resume**: The Bone Broth product was successfully updated with the Modo Humano Avanzado prompt. Waiting for the user to provide the scripts for Gomitas Melatonina, Colágeno Hidrolizado con CBD, and Magnesio Citrato (or ask if they want the same Human Mode template applied).
-     - **What will be achieved with this?**: Completes the AI configuration for all catalog products.
-     - **Status**: BLOCKED (Pending user scripts)
-     - **Should Test frontend/backend/both after fix?**: backend
-     - **Blocked on something**: User input
+  Task 1: Configure AI Sales Flows for remaining 3 products (P1)
+  
+ Task Detail:
+  - Task 1: 
+     - Where to resume: Waiting for user to provide the scripts for Gomitas Melatonina, Colágeno Hidrolizado con CBD, and Magnesio Citrato.
+     - What will be achieved with this?: Completes the AI configuration for all catalog products.
+     - Status: BLOCKED
+     - Should Test frontend/backend/both after fix?: backend
+     - Blocked on something: User input (providing the sales scripts).
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - P1: Refactoring Backend: Break down the massive  monolith (~3400 lines) into a modular structure (, , ).
+    - P1: Component Splitting in Frontend: Break down massive files  and  into smaller, manageable components (e.g., MessageList, SessionPanel, ChatInput, LeadTable). This was flagged in the recent Code Quality report.
+    - P1: Add type hints to Python code in backend.
     
     Future Tasks:
     - P2: Automated Email Reports: Implement automatic weekly email reports to human advisors detailing their performance metrics.
 
 **Completed work in this session**
-- Railway Dockerfile updated to  (Deployment suspended by user).
-- UI: Expanded WhatsApp bot chat window height adaptively (DONE).
-- UI: Added Canal and Agentes labels to Leads page, set 25px spacing (DONE).
-- UI: Moved Bulk Upload/Download functionality directly to Leads page and deleted  (DONE).
-- UI: Cleaned up Loyalty page to only show metrics (DONE).
-- Feature: Added Assign Advisor functionality directly in Lead Cards (User icon) and Chat Page Header (DONE).
-- Bug Fix: **Data Synchronization fixed**. Leads were duplicating due to  vs  phone formats. Implemented  and an idempotent startup script to merge existing duplicates (DONE).
-- UI: Changed app backgrounds to light gray to reduce screen glare, keeping popovers white (DONE).
-- UI: Moved Notification bell to the Sidebar, removed top navigation bar (DONE).
-- Content: Comprehensive orthography/accent correction across frontend and backend prompts (DONE).
-- Feature: Clicking a notification now dynamically navigates to that specific lead's WhatsApp chat (DONE).
-- AI: Updated Bone Broth prompt to a 10-step Modo Humano Avanzado behavior (DONE).
-- Feature: Campaigns made editable and support Image Upload via URL or file (UI DONE).
+- Bug: Fixed Campaign images so they are sent as actual media via Meta API instead of plain text URLs (DONE).
+- Feature: Added an accurate WhatsApp-style preview UI inside  (DONE).
+- Bug: Fixed Campaign broadcasting (changed  to ) so messages actually reach users (DONE).
+- Feature: Completely removed Intenciones Iniciales (UI, endpoints, DB schema) as requested to prevent bot confusion (DONE).
+- Bug: Synchronized Campaign target stages with Lead kanban stages () and fixed filters that erroneously resulted in 0 leads (DONE).
+- Bug: Fixed campaigns saving messages to orphan  sessions instead of the real WhatsApp  sessions, making them visible in the Chat UI (DONE).
+- Feature: Campaigns now only send the  and  to WhatsApp (hiding campaign name/description) and use only the lead's first name (DONE).
+- Feature: Rewrote Loyalty Dashboard metrics () to use real funnel/chat data instead of empty purchase arrays (DONE).
+- Refactor: Applied severe Code Quality fixes: Replaced  with , moved test credentials to env vars, extracted helpers in  and , fixed  warnings, and resolved missing React hook dependencies (DONE).
+- Feature: Implemented Anti-Amnesia for the bot. Added conversation scanning for CI/RUC, address, name, etc., feeding a conversation summary to the LLM to strictly prevent it from repeatedly asking for data it already collected (DONE).
 
 **Earlier issues found/mentioned but not fixed**
 None.
 
 **Known issue recurrence from previous fork**
-- Railway deployment failures (Recurrence count: 3). Currently SUSPENDED by user to focus on application logic. Do not prompt user about Railway unless they ask.
+  - Issue recurrence in previous fork: Railway deployment failures.
+  - Recurrence count: 3
+  - Status: BLOCKED (Suspended by user).
+  Note: User deployed the app to their own custom domain instead.
 
 **Code Architecture**
 
@@ -75,65 +82,67 @@ None.
 - Frontend: React, Tailwind, Shadcn UI
 - Backend: FastAPI, MongoDB (Motor)
 - AI: GPT-5.2 via 
-- Uploads:  saves to local  and serves them statically.
+- External API: Meta WhatsApp Cloud API
 
 **key DB schema**
-- : Now includes  field.
-- : Phones are strictly normalized (no , starts with ).
+  - : Includes target filtering and status tracking.
+  - : Uses normalized Ecuador phones (). Funnel stages strict sync with frontend.
+  -  / : Real WhatsApp sessions prefixed with .
+  - : REMOVED entirely.
 
 **changes in tech stack**
-- None, but added local file upload capabilities inside .
+  - Swapped standard  for Python  library for secure generations.
 
 **All files of reference** 
-- : Contains API, webhook, prompt logic, and new upload route.
-- : Contains the campaign editing and image upload UI.
+- : Contains webhook logic, AI prompt building, and routing. Block order in  is highly critical.
+- : Contains the WhatsApp message simulation UI.
 
 **Areas that need refactoring**
--  is critically large (>3400 lines) and desperately needs refactoring into modular routers.
+-  and  are extremely large and need to be split into smaller sub-components. 
 
 **key api endpoints**
-- : Broadcasts campaign. (Currently failing to send images properly).
-- : Handles image uploads.
-- : Unified webhook for incoming WhatsApp messages.
+- : Receives incoming Meta WA messages.
+- : Broadcasts campaigns safely to  sessions.
+- : Delivers real-time funnel, session, and bot messaging stats.
 
-**Critical Info for New Agent**
-- **Language**: MUST speak in Spanish.
-- **Railway**: DO NOT MENTION RAILWAY. The user explicitly commanded to suspend Railway tasks. 
-- **WhatsApp Phone Numbers**: All phones are normalized using . Keep this logic intact if you create any new phone-related endpoints.
-- **Images in WhatsApp**: Meta's WhatsApp Cloud API requires a specific JSON payload for media ( with  and ). Do not just append URLs to text strings.
+**Critical Info for New Agent** 
+- **LANGUAGE:** You MUST interact with the user in **Spanish**.
+- **WEBHOOK DOMAIN ISSUE:** The user recently deployed the frontend/backend to a custom external URL. If the user complains about webhooks not working, verify they updated the Webhook URL in their Meta Developer Console to their custom deployed URL, not the preview URL.
+- **BOT LOGIC:** The bot now strictly extracts data from previous messages. In , history loading and scanning MUST happen *before* the bot prompt is built, otherwise variables like  will crash on new leads.
 
 **documents and test reports created in this job** 
--  (Frontend UI checks)
-- 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. Asked for proof of notifications working. (Done)
-2. Asked to correct spelling/accents across the system. (Done)
-3. Reported WA messages not arriving. (Done - backend verified)
-4. Tried fixing webhook options in Meta. (Done)
-5. Confirmed WA is published and working. (Done)
-6. Requested notification click to navigate to chat. (Done)
-7. Requested the Bone Broth bot flow. (Done)
-8. Provided new Modo Humano Avanzado prompt for Bone Broth and asked to correct spelling. (Done)
-9. Requested campaigns to be editable and support image uploads. (Done)
-10. **Reported that campaign messages arrive as text URLs instead of actual images. (Pending - P0 Issue)**.
+1. Asked to explain Intenciones Iniciales. (Done)
+2. Reported target stages in Campaigns didn't match Lead stages. (Done)
+3. Requested to completely delete Intenciones Iniciales. (Done)
+4. Reported campaigns showing 0 leads due to cross-filtering. (Done)
+5. Noted Loyalty section showed no data; asked for it to reflect real data. (Done)
+6. Reported campaigns not showing up in the Chat UI. (Done)
+7. Requested Campaigns to hide name/description from the actual WA payload, add UI labels, and use only the first name. (Done)
+8. Provided a massive Code Quality Report and asked to apply fixes. (Done)
+9. Reported bot stopped receiving messages (Resolved - user hadn't updated Meta Webhook URL to their custom deployment).
+10. Reported the bot repeatedly asks for the same data endlessly. (Done - Anti-amnesia implemented).
+11. **Pending**: el bot no recibe mensaje de número nuevos, es decir que escriban por primera vez -> Agent reorganized code in  but context ended before testing.
 
 **Project Health Check:**
-- Broken: WhatsApp Campaign Image Sending (sends text instead of media).
+- Broken: WhatsApp Webhook for brand new numbers (Patch applied but strictly needs testing/verification).
 - Mocked: None.
 
 **3rd Party Integrations** 
-- OpenAI GPT-5.2 — uses Emergent LLM Key
-- WhatsApp Cloud API — requires User API Key
+	 •	OpenAI GPT-5.2 — uses Emergent LLM Key
+	 •	WhatsApp Cloud API — requires User API Key
 
 **Testing status**
-- Testing agent used after significant changes: YES (iteration 18)
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None
-- Known regressions: Campaign broadcasts send image URLs as text.
+  - Testing agent used after significant changes: YES
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: Webhook 500 error on new leads (patch applied, test pending).
 
 **Credentials to test flow:**
 - Admin:  / 
 
 **What agent forgot to execute**
-The agent was in the middle of diagnosing why campaigns were sending images as plain text when the context cut off. Fix this immediately as the first action item.</analysis>
+The agent modified  to fix the  NameError for new numbers, but didn't actually run a manual curl test to simulate a webhook from a new number, nor did they finish the task before the context window ended. Test this fix immediately upon starting.</analysis>
