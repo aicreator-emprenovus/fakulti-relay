@@ -1,0 +1,69 @@
+{
+  "summary": "Completed comprehensive backend testing of WhatsApp bidirectional flow for CRM Fakulti. All 20 tests PASSED. Verified: Meta webhook for text/image/audio/sticker messages, status updates silently ignored, legacy webhook conversation flow, CRM agent reply endpoint, chat history storage, session management, lead auto-creation, data extraction, and stage progression.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_whatsapp_bidirectional.py",
+    "/app/test_reports/pytest/pytest_whatsapp_bidirectional.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Code review confirms all fixes from main agent are correctly implemented:",
+    "1. Meta Graph API v25.0 is used in WHATSAPP_API_URL constant",
+    "2. Non-text messages (image, audio, video, document, sticker, location, contacts) are handled correctly in whatsapp_incoming webhook",
+    "3. Status updates (delivery receipts) are silently ignored with 'if value.get(\"statuses\"): continue'",
+    "4. Session meta stores resolved lead_name instead of empty string",
+    "5. Legacy webhook endpoint stores messages and session meta correctly",
+    "6. send_whatsapp_message accepts both 200 AND 201 status codes"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "N/A (backend only testing requested)"
+  },
+  "test_credentials": {
+    "email": "admin@fakulti.com",
+    "password": "admin123"
+  },
+  "seed_data_creation": "Test leads created and cleaned up during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "WhatsApp bidirectional flow fully tested and working. Key verified features: 1) POST /api/webhook/whatsapp handles Meta format with text/image/audio/sticker/location/contacts messages, 2) Status updates are silently ignored, 3) POST /api/whatsapp/webhook legacy endpoint works for full conversation flow, 4) Bot remembers context across turns (anti-amnesia), 5) Lead auto-creation with source=WhatsApp and funnel_stage=nuevo, 6) Data extraction (name, city, product_interest) works via AI, 7) Stage progression from nuevo to interesado works, 8) GET/PUT /api/config/whatsapp endpoints work, 9) POST /api/chat/whatsapp-reply requires auth and validates lead_id, 10) Chat history stored correctly for wa_ sessions, 11) Sessions list includes WhatsApp sessions with lead_name. WhatsApp Cloud API is NOT configured in preview environment so actual WA sends are skipped but all processing logic works correctly.",
+  "verified_features": {
+    "auth_login": "PASS - POST /api/auth/login with admin@fakulti.com / admin123",
+    "auth_invalid": "PASS - Invalid credentials return 401",
+    "whatsapp_config_get": "PASS - GET /api/config/whatsapp returns config",
+    "whatsapp_config_put": "PASS - PUT /api/config/whatsapp updates config",
+    "meta_webhook_text": "PASS - POST /api/webhook/whatsapp handles text messages from new numbers",
+    "meta_webhook_image": "PASS - POST /api/webhook/whatsapp handles image messages",
+    "meta_webhook_audio": "PASS - POST /api/webhook/whatsapp handles audio messages",
+    "meta_webhook_sticker": "PASS - POST /api/webhook/whatsapp handles sticker messages",
+    "meta_webhook_status": "PASS - POST /api/webhook/whatsapp silently ignores status updates",
+    "legacy_webhook_conversation": "PASS - POST /api/whatsapp/webhook full 3-message conversation flow",
+    "legacy_webhook_context": "PASS - Bot remembers name across 4+ turns",
+    "crm_reply_auth": "PASS - POST /api/chat/whatsapp-reply requires authentication",
+    "crm_reply_validation": "PASS - POST /api/chat/whatsapp-reply validates lead_id",
+    "crm_reply_send": "PASS - POST /api/chat/whatsapp-reply processes correctly (WA not configured)",
+    "chat_history": "PASS - GET /api/chat/history/{session_id} returns messages for wa_ sessions",
+    "chat_sessions": "PASS - GET /api/chat/sessions includes WhatsApp sessions with lead_name",
+    "lead_auto_creation": "PASS - New WhatsApp number creates lead with source=WhatsApp, funnel_stage=nuevo",
+    "name_extraction": "PASS - Bot extracts name from conversation",
+    "city_extraction": "PASS - Bot extracts city from conversation",
+    "product_interest_extraction": "PASS - Bot extracts product_interest from conversation",
+    "stage_progression": "PASS - funnel_stage updates based on conversation"
+  },
+  "ai_bot_verification": {
+    "model": "GPT-5.2 via emergentintegrations library",
+    "fluidity": "Bot responds naturally in Spanish with appropriate tone",
+    "intelligence": "Bot extracts data (name, city, product_interest) and classifies stages",
+    "anti_amnesia": "Bot maintains context across multiple turns without repeating questions",
+    "meta_api_version": "v25.0 (updated from v22.0)"
+  }
+}

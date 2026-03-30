@@ -1813,7 +1813,7 @@ async def bulk_download(
 
 # ========== WHATSAPP CLOUD API ==========
 
-WHATSAPP_API_URL = "https://graph.facebook.com/v22.0"
+WHATSAPP_API_URL = "https://graph.facebook.com/v25.0"
 
 HANDOVER_KEYWORDS = ["agente", "humano", "persona real", "hablar con alguien", "asesor real", "no quiero bot", "operador", "representante", "persona de verdad", "quiero hablar con una persona", "atención humana"]
 
@@ -1837,7 +1837,7 @@ async def send_whatsapp_message(to_phone: str, text: str):
     try:
         async with httpx.AsyncClient() as client_http:
             resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
-            if resp.status_code == 200:
+            if resp.status_code in (200, 201):
                 logger.info(f"WhatsApp message sent to {to_phone}")
                 return True
             else:
@@ -1863,7 +1863,7 @@ async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
     try:
         async with httpx.AsyncClient() as client_http:
             resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
-            if resp.status_code == 200:
+            if resp.status_code in (200, 201):
                 logger.info(f"WhatsApp image sent to {to_phone}")
                 return True
             else:
@@ -2017,6 +2017,7 @@ Habla como persona real, no como robot. Frases cortas. Máximo 1-2 emojis por me
 {first_contact}
 {data_context}
 {collected_data_text}
+{missing_instruction}
 
 REGLA CRITICA - NO REPETIR PREGUNTAS
 Lee TODA la conversación anterior. Si el cliente YA proporcionó un dato en CUALQUIER mensaje anterior, NO lo pidas de nuevo. Avanza al siguiente paso.
@@ -2262,6 +2263,7 @@ Puedes usar algunos emojis de forma natural (1-2 por mensaje maximo).
 {first_contact}
 {data_context}
 {collected_data_text}
+{missing_instruction}
 
 REGLA CRITICA - NO REPETIR PREGUNTAS
 Lee TODA la conversación anterior antes de responder. Si el cliente YA proporcionó un dato (nombre, teléfono, ciudad, dirección, cédula, etc.) en CUALQUIER mensaje anterior, NO lo pidas de nuevo. Usa la información que ya tienes. Si necesitas confirmar un dato, hazlo UNA sola vez.
@@ -2402,12 +2404,38 @@ async def whatsapp_incoming(request: Request):
         changes = entry.get("changes", [])
         for change in changes:
             value = change.get("value", {})
+            # Ignore status updates (delivery receipts, read receipts)
+            if value.get("statuses"):
+                continue
             messages = value.get("messages", [])
             for msg in messages:
-                if msg.get("type") == "text":
-                    phone = normalize_phone_ec(msg.get("from", ""))
+                phone = normalize_phone_ec(msg.get("from", ""))
+                msg_type = msg.get("type", "")
+                
+                # Extract text content based on message type
+                if msg_type == "text":
                     text = msg.get("text", {}).get("body", "")
-                    if phone and text:
+                elif msg_type == "image":
+                    text = msg.get("image", {}).get("caption", "") or "[El cliente envió una imagen]"
+                elif msg_type == "audio":
+                    text = "[El cliente envió un audio]"
+                elif msg_type == "video":
+                    text = msg.get("video", {}).get("caption", "") or "[El cliente envió un video]"
+                elif msg_type == "document":
+                    text = f"[El cliente envió un documento: {msg.get('document', {}).get('filename', 'archivo')}]"
+                elif msg_type == "sticker":
+                    text = "[El cliente envió un sticker]"
+                elif msg_type == "location":
+                    loc = msg.get("location", {})
+                    text = f"[Ubicación: {loc.get('latitude', '')}, {loc.get('longitude', '')}]"
+                elif msg_type == "contacts":
+                    text = "[El cliente compartió un contacto]"
+                elif msg_type == "reaction":
+                    continue  # Skip reactions silently
+                else:
+                    text = f"[Mensaje tipo: {msg_type}]"
+                
+                if phone and text:
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
                         start_time = datetime.now(timezone.utc)
                         reply, lead_id = await process_whatsapp_incoming(phone, text)
@@ -2416,11 +2444,14 @@ async def whatsapp_incoming(request: Request):
                         # Store in chat history
                         session_id = f"wa_{phone}"
                         now = datetime.now(timezone.utc).isoformat()
+                        # Get the updated lead name (may have been detected in this interaction)
+                        updated_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1}) if lead_id else None
+                        resolved_lead_name = (updated_lead.get("name", "") if updated_lead else "") or phone
                         await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": text, "timestamp": now, "source": "whatsapp"})
                         await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent})
                         await db.chat_sessions_meta.update_one(
                             {"session_id": session_id},
-                            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": "", "source": "whatsapp", "last_activity": now}},
+                            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
                             upsert=True
                         )
                         # Detect human handover request
@@ -2498,7 +2529,31 @@ class WhatsAppMessage(BaseModel):
 
 @api_router.post("/whatsapp/webhook")
 async def whatsapp_webhook_legacy(req: WhatsAppMessage):
-    reply, lead_id = await process_whatsapp_incoming(normalize_phone_ec(req.from_number.strip()), req.message)
+    phone = normalize_phone_ec(req.from_number.strip())
+    session_id = f"wa_{phone}"
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Store user message before processing (so AI sees the full history)
+    await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": None, "role": "user", "content": req.message, "timestamp": now, "source": "whatsapp"})
+    
+    reply, lead_id = await process_whatsapp_incoming(phone, req.message)
+    
+    # Store bot reply
+    await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp"})
+    
+    # Update session meta
+    updated_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1}) if lead_id else None
+    resolved_name = (updated_lead.get("name", "") if updated_lead else "") or phone
+    await db.chat_sessions_meta.update_one(
+        {"session_id": session_id},
+        {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_name, "source": "whatsapp", "last_activity": now}},
+        upsert=True
+    )
+    
+    # Update lead_id on the user message too
+    if lead_id:
+        await db.chat_messages.update_one({"session_id": session_id, "role": "user", "lead_id": None}, {"$set": {"lead_id": lead_id}})
+    
     return {"reply": reply, "lead_id": lead_id}
 
 # ========== AUTOMATION RULES ==========
@@ -3005,16 +3060,7 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
         try:
             msg = reminder["message_template"].replace("{nombre}", lead.get("name", ""))
             if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
-                phone = lead.get("whatsapp", "").replace("+", "")
-                if not phone.startswith("593"):
-                    phone = "593" + phone.lstrip("0")
-                async with httpx.AsyncClient() as client_http:
-                    await client_http.post(
-                        f"https://graph.facebook.com/v21.0/{wa_config['phone_number_id']}/messages",
-                        headers={"Authorization": f"Bearer {wa_config['access_token']}", "Content-Type": "application/json"},
-                        json={"messaging_product": "whatsapp", "to": phone, "type": "text", "text": {"body": msg}},
-                        timeout=10
-                    )
+                await send_whatsapp_message(lead.get("whatsapp", ""), msg)
             sent += 1
         except Exception:
             pass
