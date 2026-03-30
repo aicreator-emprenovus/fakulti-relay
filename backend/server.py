@@ -1921,6 +1921,7 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
     lead_name = lead_data.get("name", "")
     lead_city = lead_data.get("city", "")
     lead_email = lead_data.get("email", "")
+    collected_data_text = lead_data.get("_collected_data_text", "")
     
     # Build data context
     data_context = ""
@@ -1930,6 +1931,10 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
             data_context += f" Ciudad: {lead_city}."
         if lead_email:
             data_context += f" Email: {lead_email}."
+        if lead_data.get("ci_ruc"):
+            data_context += f" CI/RUC: {lead_data['ci_ruc']}."
+        if lead_data.get("address"):
+            data_context += f" Dirección: {lead_data['address']}."
     
     missing_fields = []
     if not lead_name:
@@ -1957,7 +1962,10 @@ Tu estilo: Cercano, experto, humano, confiable (no robotico). Ciencia + natural 
 Habla como persona real, NO como robot. Frases cortas. Emojis moderados (1-2 por mensaje).
 {first_contact}
 {data_context}
-{missing_instruction}
+{collected_data_text}
+
+REGLA CRITICA - NO REPETIR PREGUNTAS
+Lee TODA la conversación anterior. Si el cliente YA proporcionó un dato (nombre, teléfono, ciudad, dirección, cédula, cantidad, etc.) en CUALQUIER mensaje anterior, NO lo vuelvas a pedir. Usa la información de la conversación. Si un dato ya fue mencionado, simplemente avanza al siguiente paso del flujo.
 
 TU PRODUCTO: {target['name']}
 Codigo: {target.get('code', '')}
@@ -1983,6 +1991,7 @@ RESTRICCIONES GENERALES
 - Respuestas CORTAS y CLARAS (máximo 4-6 líneas por mensaje). NO envíes bloques largos.
 - Siempre lleva la conversación hacia el cierre de venta.
 - Prioriza beneficios + resultado sobre información técnica.
+- NUNCA repitas una pregunta que el cliente ya respondió en la conversación.
 
 EXTRACCIÓN AUTOMÁTICA DE DATOS
 Al final de CADA respuesta, incluye en líneas separadas:
@@ -2007,7 +2016,10 @@ Tu estilo: natural, cercano, humano, profesional, claro, breve.
 Habla como persona real, no como robot. Frases cortas. Máximo 1-2 emojis por mensaje.
 {first_contact}
 {data_context}
-{missing_instruction}
+{collected_data_text}
+
+REGLA CRITICA - NO REPETIR PREGUNTAS
+Lee TODA la conversación anterior. Si el cliente YA proporcionó un dato en CUALQUIER mensaje anterior, NO lo pidas de nuevo. Avanza al siguiente paso.
 
 TU PRODUCTO: {target['name']}
 Código: {target.get('code', '')}
@@ -2159,7 +2171,10 @@ Habla como persona real, no como robot. Frases cortas y faciles de entender.
 Puedes usar algunos emojis de forma natural (1-2 por mensaje maximo).
 {first_contact}
 {data_context}
-{missing_instruction}
+{collected_data_text}
+
+REGLA CRITICA - NO REPETIR PREGUNTAS
+Lee TODA la conversación anterior antes de responder. Si el cliente YA proporcionó un dato (nombre, teléfono, ciudad, dirección, cédula, etc.) en CUALQUIER mensaje anterior, NO lo pidas de nuevo. Usa la información que ya tienes. Si necesitas confirmar un dato, hazlo UNA sola vez.
 
 PRODUCTO PRINCIPAL
 Bone Broth Hidrolizado (Bombro).
@@ -2192,6 +2207,7 @@ PROHIBIDO
 - No afirmar que reemplaza tratamientos médicos.
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
 - Si piden hablar con un humano, responde que un asesor se comunicara pronto.
+- NUNCA repitas una pregunta que ya fue respondida en la conversación.
 
 EXTRACCION AUTOMATICA DE DATOS
 Al final de CADA respuesta, incluye en lineas separadas:
@@ -2207,11 +2223,36 @@ Al final de CADA respuesta, incluye en lineas separadas:
   [STAGE:perdido] - Rechaza explicitamente
 Incluye SIEMPRE [STAGE:] al final."""
 
-    # Load conversation history
+    # Load conversation history (enough context to avoid re-asking)
     session_id = f"wa_{phone}"
     history = await db.chat_messages.find(
         {"session_id": session_id}, {"_id": 0}
-    ).sort("timestamp", 1).limit(20).to_list(20)
+    ).sort("timestamp", 1).to_list(50)
+    
+    # Build conversation summary of data already mentioned by the user
+    user_messages_text = " | ".join([m["content"] for m in history if m.get("role") == "user"])
+    collected_summary = []
+    if existing_lead.get("name"):
+        collected_summary.append(f"Nombre: {existing_lead['name']}")
+    if existing_lead.get("whatsapp"):
+        collected_summary.append(f"WhatsApp: {existing_lead['whatsapp']}")
+    if existing_lead.get("city"):
+        collected_summary.append(f"Ciudad: {existing_lead['city']}")
+    if existing_lead.get("email"):
+        collected_summary.append(f"Email: {existing_lead['email']}")
+    if existing_lead.get("product_interest"):
+        collected_summary.append(f"Producto de interés: {existing_lead['product_interest']}")
+    if existing_lead.get("ci_ruc"):
+        collected_summary.append(f"CI/RUC: {existing_lead['ci_ruc']}")
+    if existing_lead.get("address"):
+        collected_summary.append(f"Dirección: {existing_lead['address']}")
+    
+    collected_data_text = ""
+    if collected_summary:
+        collected_data_text = "\nDATOS YA RECOPILADOS DEL CLIENTE (NO volver a preguntar estos datos):\n" + "\n".join(f"- {d}" for d in collected_summary)
+    
+    # Pass collected data context to product bot prompt
+    existing_lead["_collected_data_text"] = collected_data_text
     
     llm_key = os.environ.get('EMERGENT_LLM_KEY')
     chat = LlmChat(api_key=llm_key, session_id=session_id, system_message=system_msg)
