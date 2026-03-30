@@ -6,39 +6,44 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 ## Stack Técnico
 - **Frontend**: React, Tailwind, Shadcn UI
 - **Backend**: FastAPI, MongoDB (Motor)
-- **AI**: GPT-5.2 via emergentintegrations
-- **Deploy**: Docker multi-stage (Node 20 + Python 3.11) para Railway
+- **AI**: GPT-5.2 via emergentintegrations (v0.1.1)
+- **WhatsApp**: Meta Cloud API v25.0
+
+## Estado Actual - Flujo WhatsApp
+El flujo bidireccional de mensajes WhatsApp está **completamente funcional y probado (20/20 tests)**:
+- Webhook Meta procesa mensajes de texto, imagen, audio, video, documento, sticker, ubicación, contactos
+- Status updates (delivery receipts) se ignoran silenciosamente
+- Bot GPT-5.2 responde con fluidez natural en español
+- Anti-amnesia: el bot recuerda datos del cliente a lo largo de la conversación
+- Extracción automática de nombre, ciudad, email, producto de interés, CI/RUC, dirección
+- Progresión automática de funnel stages
+- Modo humano: agente puede tomar control y responder directamente por WhatsApp
+- Endpoint legacy para testing almacena mensajes y session meta correctamente
 
 ## Bloques Completados (1-13)
 Todos los 13 bloques del roadmap implementados y testeados.
 
 ## Cambios Recientes
-### 30/03/2026 - Code Quality Refactoring
-- **Security**: Reemplazado `random.choices` por `secrets.SystemRandom().choices` para generación segura
-- **Security**: Credenciales de test movidas a variables de entorno
-- **Security**: Catch blocks vacíos en NotificationBell ahora logean errores
-- **Refactoring**: `send_chat_message` (214 líneas) descompuesta en helpers: `_resolve_chat_lead`, `_parse_ai_response`
-- **Refactoring**: `get_loyalty_metrics` reescrito con métricas basadas en datos reales del CRM
-- **Code Quality**: Eliminadas variables ambiguas `l` → `lead` en todo bulk_download y métricas
-- **Code Quality**: Eliminadas variables no usadas (`accent_fill`, `wrap_align`)
-- **Code Quality**: Corregidos E701 (múltiples statements en una línea)
-- **Lint**: Backend server.py pasa 100% ruff check sin errores
-- **P0 FIX: Imágenes en campañas WhatsApp**: Corregida la resolución de URLs de imágenes locales. Se usa `PUBLIC_URL` env var en vez de dominio hardcodeado. `send_whatsapp_image` envía payload multimedia correcto a Meta API
-- **P0 FIX: Campañas no llegaban a WhatsApp real**: La función de envío de campañas leía la config de `db.system_config` (vacía) en vez de `db.whatsapp_config` (con credenciales reales). Corregido para usar `get_whatsapp_config()`. Mismo fix aplicado a recordatorios.
-- **Chat: Renderizado de imágenes inline**: ChatPage.jsx detecta `[Imagen: url]` y renderiza imagen inline
-- **Vista previa WhatsApp en campañas**: CampaignsPage.jsx muestra simulación tipo WhatsApp con imagen + texto + hora antes de enviar
+### 30/03/2026 - Flujo WhatsApp (Prioridad Máxima)
+- **Meta API v25.0**: Actualizada desde v22.0 (y corregido v21.0 hardcodeado en recordatorios)
+- **emergentintegrations v0.1.1**: Actualizada desde v0.1.0
+- **Webhook multi-tipo**: Ahora maneja imagen, audio, video, documento, sticker, ubicación, contactos (antes solo texto)
+- **Status updates**: Delivery receipts de Meta se ignoran silenciosamente (antes generaban logs innecesarios)
+- **Session meta**: lead_name ahora se resuelve correctamente (antes siempre vacío en webhook)
+- **Legacy endpoint mejorado**: Ahora almacena mensajes y session meta (antes solo procesaba sin guardar)
+- **send_whatsapp_message**: Acepta 200 y 201 (antes solo 200)
+- **Bug fix: missing_instruction**: Instrucciones de datos faltantes ahora incluidas en prompts del bot (antes se construían pero nunca se usaban)
+- **Recordatorios**: Reutilizan send_whatsapp_message en vez de código duplicado con versión API vieja
 
-### 25/03/2026
-- Chat adaptativo, Leads mejorados, Asignar Asesor, Normalización de teléfonos
-- Campañas editables con soporte de carga de imágenes
-- Notificaciones con navegación a chat, Modo Humano Avanzado para Bone Broth
-- Corrección ortográfica integral
+### 30/03/2026 - Anteriores
+- Code Quality Refactoring, Anti-Amnesia, Campañas WhatsApp, etc. (ver CHANGELOG)
 
-## Tareas Pendientes
-- **P1**: Flujos de venta IA para 3 productos restantes (Gomitas Melatonina, Colágeno CBD, Magnesio Citrato) - bloqueado: scripts del usuario
-- **P1**: Refactoring backend (server.py ~3470 líneas -> módulos routes/, models/, services/)
-- **P2**: Reportes automáticos por email semanal para asesores
-- **P2**: Deploy Railway (SUSPENDIDO por instrucción del usuario)
+## Tareas Canceladas (por instrucción del usuario)
+- ~~P1: Flujos de venta IA para 3 productos restantes~~
+- ~~P1: Refactoring Frontend (ChatPage.jsx, LeadsPage.jsx)~~
+- ~~P1: Type hints en Python~~
+- ~~P2: Reportes automáticos por email~~
+- ~~P2: Deploy Railway~~
 
 ## Credenciales de Prueba
 - Admin: admin@fakulti.com / admin123
