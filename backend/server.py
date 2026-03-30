@@ -1192,7 +1192,7 @@ IMPORTANTE - REGISTRO DE LEAD:
                 missing_instruction += "\nCuando el cliente proporcione datos, incluye al final: [UPDATE_LEAD:campo=valor] donde campo puede ser: whatsapp, city, product_interest"
             name_instruction = f"\nEl cliente se llama {lead_name}. Usa su nombre de forma natural en la conversación.{missing_instruction}"
 
-        system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Faculty).
+        system_msg = f"""Eres el Asesor Virtual Oficial de Fakulti Laboratorios (marca Fakulti).
 Tu función: Atender leads, calificar, cotizar y cerrar venta.
 {name_instruction}
 {pending_quote}
@@ -2012,7 +2012,7 @@ Incluye SIEMPRE [STAGE:] al final."""
     
     # Fallback: original simple prompt for products without sales_flow
     return f"""IDENTIDAD DEL AGENTE
-Eres el asesor virtual especializado en {target['name']} de la marca Faculty por WhatsApp.
+Eres el asesor virtual especializado en {target['name']} de la marca Fakulti por WhatsApp.
 Personalidad: {personality}
 Tu estilo: natural, cercano, humano, profesional, claro, breve.
 Habla como persona real, no como robot. Frases cortas. Máximo 1-2 emojis por mensaje.
@@ -2257,7 +2257,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         first_contact = "\nEste es un lead NUEVO. Tu primer mensaje debe ser un saludo corto y preguntar su nombre." if not lead_name else ""
         
         system_msg = f"""IDENTIDAD DEL AGENTE
-Eres el asesor virtual de la marca Faculty por WhatsApp.
+Eres el asesor virtual de la marca Fakulti por WhatsApp.
 Representas los productos desarrollados por Fakulti Laboratorios.
 Tu estilo: natural, cercano, humano, profesional, claro, breve.
 Habla como persona real, no como robot. Frases cortas y faciles de entender.
@@ -3044,8 +3044,8 @@ REMINDER_TEMPLATES_BY_STAGE = {
         "Hola {nombre}, seguimos con disponibilidad de {producto}. ¿Quieres que te cuente más sobre sus beneficios?",
     ],
     "nuevo": [
-        "Hola {nombre} 😊 Soy el asesor virtual de Faculty. ¿En qué puedo ayudarte hoy?",
-        "Hola {nombre}, ¿hay algún producto de Faculty que te interese? Con gusto te asesoro.",
+        "Hola {nombre} 😊 Soy el asesor virtual de Fakulti. ¿En qué puedo ayudarte hoy?",
+        "Hola {nombre}, ¿hay algún producto de Fakulti que te interese? Con gusto te asesoro.",
     ],
 }
 
@@ -3309,7 +3309,7 @@ async def startup():
             "id": str(uuid.uuid4()),
             "email": "admin@fakulti.com",
             "password_hash": pwd_context.hash("admin123"),
-            "name": "Admin Faculty",
+            "name": "Admin Fakulti",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -3336,7 +3336,7 @@ async def startup():
             {
                 "id": str(uuid.uuid4()),
                 "game_type": "roulette",
-                "name": "Ruleta Faculty",
+                "name": "Ruleta Fakulti",
                 "prizes": [
                     {"name": "10% Descuento", "probability": 30, "color": "#A3E635", "coupon": "RULETA10", "message": "Ganaste un 10% de descuento en tu proxima compra"},
                     {"name": "Envio Gratis", "probability": 20, "color": "#3B82F6", "coupon": "ENVIOGRATIS", "message": "Ganaste envio gratis en tu proxima compra"},
@@ -3352,7 +3352,7 @@ async def startup():
             {
                 "id": str(uuid.uuid4()),
                 "game_type": "slot_machine",
-                "name": "Tragamonedas Faculty",
+                "name": "Tragamonedas Fakulti",
                 "prizes": [
                     {"name": "20% Descuento", "probability": 10, "color": "#A3E635", "coupon": "SLOT20", "message": "Tres iguales! Ganaste un 20% de descuento"},
                     {"name": "15% Descuento", "probability": 15, "color": "#8B5CF6", "coupon": "SLOT15", "message": "Gran combinacion! 15% de descuento para ti"},
@@ -3367,7 +3367,7 @@ async def startup():
             {
                 "id": str(uuid.uuid4()),
                 "game_type": "scratch_card",
-                "name": "Raspadita Faculty",
+                "name": "Raspadita Fakulti",
                 "prizes": [
                     {"name": "Descuento 25%", "probability": 5, "color": "#A3E635", "coupon": "RASPA25", "message": "Descubriste un 25% de descuento!"},
                     {"name": "Descuento 15%", "probability": 15, "color": "#8B5CF6", "coupon": "RASPA15", "message": "Debajo de la capa dorada: 15% de descuento"},
@@ -3396,7 +3396,7 @@ async def startup():
         await db.games_config.insert_one({
             "id": str(uuid.uuid4()),
             "game_type": "slot_machine",
-            "name": "Tragamonedas Faculty",
+            "name": "Tragamonedas Fakulti",
             "prizes": [
                 {"name": "20% Descuento", "probability": 10, "color": "#A3E635", "coupon": "SLOT20", "message": "Tres iguales! Ganaste un 20% de descuento"},
                 {"name": "15% Descuento", "probability": 15, "color": "#8B5CF6", "coupon": "SLOT15", "message": "Gran combinacion! 15% de descuento para ti"},
@@ -3411,7 +3411,7 @@ async def startup():
         await db.games_config.insert_one({
             "id": str(uuid.uuid4()),
             "game_type": "scratch_card",
-            "name": "Raspadita Faculty",
+            "name": "Raspadita Fakulti",
             "prizes": [
                 {"name": "Descuento 25%", "probability": 5, "color": "#A3E635", "coupon": "RASPA25", "message": "Descubriste un 25% de descuento!"},
                 {"name": "Descuento 15%", "probability": 15, "color": "#8B5CF6", "coupon": "RASPA15", "message": "Debajo de la capa dorada: 15% de descuento"},
@@ -3636,7 +3636,7 @@ async def startup():
     if products_without_bot:
         logger.info(f"Added bot_config to {len(products_without_bot)} products")
     
-    logger.info("Faculty CRM Backend ready")
+    logger.info("Fakulti CRM Backend ready")
 
 
 @app.on_event("shutdown")

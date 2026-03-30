@@ -22,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      toast.success("Bienvenido al CRM Faculty");
+      toast.success("Bienvenido al CRM Fakulti");
       navigate("/");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Credenciales incorrectas");
@@ -40,7 +40,7 @@ export default function LoginPage() {
 
       <Card className="w-full max-w-md relative z-10 bg-card border-border rounded-2xl" data-testid="login-card">
         <CardHeader className="text-center pb-2">
-          <img src={LOGO_URL} alt="Faculty" className="h-16 mx-auto mb-4" />
+          <img src={LOGO_URL} alt="Fakulti" className="h-16 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-foreground font-heading">Panel CRM</h1>
           <p className="text-sm text-muted-foreground">La Ciencia de lo Natural</p>
         </CardHeader>

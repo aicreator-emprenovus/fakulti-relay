@@ -694,7 +694,7 @@ export default function GamePublicPage() {
 
       <div className="relative z-10 w-full max-w-md mx-auto flex-1 flex flex-col justify-center py-8">
         <div className="text-center mb-6">
-          <img src={LOGO_URL} alt="Faculty" className="h-10 mx-auto mb-3 drop-shadow-[0_0_10px_rgba(163,230,53,0.3)]" />
+          <img src={LOGO_URL} alt="Fakulti" className="h-10 mx-auto mb-3 drop-shadow-[0_0_10px_rgba(163,230,53,0.3)]" />
           <h1 className="text-3xl font-black text-white tracking-tight">{gameTitle}</h1>
           <p className="text-sm text-gray-400 mt-1">Juega y gana premios exclusivos</p>
         </div>
