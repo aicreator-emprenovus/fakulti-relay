@@ -14,7 +14,7 @@ import jwt
 from passlib.context import CryptContext
 import io
 import json
-import random
+import secrets
 import re
 
 import httpx
@@ -663,7 +663,7 @@ async def play_game(req: GamePlayRequest):
     weights = [p.get("probability", 1) for p in prizes]
     total_weight = sum(weights)
     normalized = [w / total_weight for w in weights]
-    selected_prize = random.choices(prizes, weights=normalized, k=1)[0]
+    selected_prize = secrets.SystemRandom().choices(prizes, weights=normalized, k=1)[0]
     
     play_doc = {
         "id": str(uuid.uuid4()),
@@ -967,18 +967,17 @@ async def get_loyalty_metrics(user=Depends(get_current_user)):
     campaign_messages = await db.chat_messages.count_documents({"source": "campaign"})
     
     # Active leads (with recent interaction)
-    converted = len([l for l in all_leads if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]])
-    in_progress = len([l for l in all_leads if l.get("funnel_stage") in ["interesado", "en_negociacion"]])
-    lost = len([l for l in all_leads if l.get("funnel_stage") == "perdido"])
+    converted = len([lead for lead in all_leads if lead.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]])
+    in_progress = len([lead for lead in all_leads if lead.get("funnel_stage") in ["interesado", "en_negociacion"]])
+    lost = len([lead for lead in all_leads if lead.get("funnel_stage") == "perdido"])
     conversion_rate = round((converted / total_leads * 100) if total_leads > 0 else 0, 1)
     
     # 3. Campaign stats
     campaigns = await db.campaigns.find({}, {"_id": 0, "name": 1, "sent_count": 1, "failed_count": 1, "status": 1, "target_count": 1}).to_list(50)
     total_campaign_sends = sum(c.get("sent_count", 0) for c in campaigns)
-    total_campaign_fails = sum(c.get("failed_count", 0) for c in campaigns)
     
     # 4. Purchase-based metrics (when purchase_history exists)
-    clients_with_purchases = [l for l in all_leads if l.get("purchase_history") and len(l["purchase_history"]) > 0]
+    clients_with_purchases = [lead for lead in all_leads if lead.get("purchase_history") and len(lead["purchase_history"]) > 0]
     total_clients = len(clients_with_purchases)
     repeat_buyers = [c for c in clients_with_purchases if len(c.get("purchase_history", [])) > 1]
     total_revenue = sum(sum(p.get("price", 0) for p in c.get("purchase_history", [])) for c in clients_with_purchases)
@@ -1046,7 +1045,7 @@ async def get_loyalty_metrics(user=Depends(get_current_user)):
             "repeat_buyers": len(repeat_buyers),
             "total_revenue": round(total_revenue, 2),
             "avg_order_value": avg_order_value,
-            "active_clients": len([l for l in all_leads if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]]),
+            "active_clients": converted,
             "lost_clients": lost
         },
         "funnel_distribution": funnel_distribution,
@@ -1066,6 +1065,80 @@ async def get_loyalty_metrics(user=Depends(get_current_user)):
         "campaigns": [{"name": c.get("name", ""), "sent": c.get("sent_count", 0), "failed": c.get("failed_count", 0), "status": c.get("status", "")} for c in campaigns]
     }
 
+# ========== CHAT HELPERS ==========
+
+async def _resolve_chat_lead(session_id: str, lead_id: str = None):
+    """Resolve lead from session metadata or lead_id."""
+    session_meta = await db.chat_sessions_meta.find_one({"session_id": session_id}, {"_id": 0})
+    lead = None
+    has_name = False
+    if session_meta and session_meta.get("lead_id"):
+        lead = await db.leads.find_one({"id": session_meta["lead_id"]}, {"_id": 0})
+        if lead:
+            has_name = True
+    elif lead_id:
+        lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+        if lead:
+            has_name = True
+            await db.chat_sessions_meta.update_one(
+                {"session_id": session_id},
+                {"$set": {"session_id": session_id, "lead_id": lead["id"], "lead_name": lead.get("name", "")}},
+                upsert=True
+            )
+    return lead, has_name
+
+
+async def _parse_ai_response(assistant_content: str, has_name: bool, lead_id_for_session, session_id: str):
+    """Parse AI response for lead creation, updates, and stage classification."""
+    name_match = re.search(r'\[LEAD_NAME:([^\]]+)\]', assistant_content)
+    if name_match and not has_name:
+        detected_name = name_match.group(1).strip()
+        assistant_content = re.sub(r'\[LEAD_NAME:[^\]]+\]', '', assistant_content).strip()
+        new_lead = {
+            "id": str(uuid.uuid4()), "name": detected_name, "whatsapp": "", "city": "", "email": "",
+            "product_interest": "", "source": "Chat IA", "game_used": None, "prize_obtained": None,
+            "funnel_stage": "nuevo", "status": "activo", "purchase_history": [], "coupon_used": None,
+            "recompra_date": None, "notes": "Registrado vía Chat IA",
+            "last_interaction": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.leads.insert_one(new_lead)
+        lead_id_for_session = new_lead["id"]
+        await db.chat_sessions_meta.update_one(
+            {"session_id": session_id},
+            {"$set": {"session_id": session_id, "lead_id": new_lead["id"], "lead_name": detected_name}},
+            upsert=True
+        )
+        await db.chat_messages.update_many(
+            {"session_id": session_id, "lead_id": None}, {"$set": {"lead_id": new_lead["id"]}}
+        )
+        logger.info(f"New lead created from chat: {detected_name} -> {new_lead['id']}")
+
+    update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', assistant_content)
+    if update_matches and lead_id_for_session:
+        update_fields = {}
+        for field, value in update_matches:
+            if field in {"whatsapp", "city", "product_interest", "email"}:
+                update_fields[field] = value.strip()
+        if update_fields:
+            update_fields["last_interaction"] = datetime.now(timezone.utc).isoformat()
+            await db.leads.update_one({"id": lead_id_for_session}, {"$set": update_fields})
+            logger.info(f"Lead {lead_id_for_session} updated via chat: {update_fields}")
+        assistant_content = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]+\]', '', assistant_content).strip()
+
+    stage_match = re.search(r'\[STAGE:(\w+)\]', assistant_content)
+    if stage_match:
+        new_stage = stage_match.group(1).strip()
+        assistant_content = re.sub(r'\[STAGE:\w+\]', '', assistant_content).strip()
+        if new_stage in FUNNEL_STAGES and lead_id_for_session:
+            await db.leads.update_one(
+                {"id": lead_id_for_session},
+                {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}}
+            )
+
+    return assistant_content, lead_id_for_session
+
+
 # ========== CHAT ROUTES ==========
 
 @api_router.post("/chat/message")
@@ -1075,27 +1148,8 @@ async def send_chat_message(req: ChatMessageRequest, user=Depends(get_current_us
     products = await db.products.find({}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
     
-    # Check session metadata for existing lead
-    session_meta = await db.chat_sessions_meta.find_one({"session_id": req.session_id}, {"_id": 0})
-    lead = None
-    lead_name = ""
-    has_name = False
-    
-    if session_meta and session_meta.get("lead_id"):
-        lead = await db.leads.find_one({"id": session_meta["lead_id"]}, {"_id": 0})
-        if lead:
-            lead_name = lead.get("name", "")
-            has_name = True
-    elif req.lead_id:
-        lead = await db.leads.find_one({"id": req.lead_id}, {"_id": 0})
-        if lead:
-            lead_name = lead.get("name", "")
-            has_name = True
-            await db.chat_sessions_meta.update_one(
-                {"session_id": req.session_id},
-                {"$set": {"session_id": req.session_id, "lead_id": lead["id"], "lead_name": lead_name}},
-                upsert=True
-            )
+    lead, has_name = await _resolve_chat_lead(req.session_id, req.lead_id)
+    lead_name = lead.get("name", "") if lead else ""
     
     # Check for pending quotation
     pending_quote = ""
@@ -1201,70 +1255,11 @@ Incluye SIEMPRE el tag [STAGE:] al final."""
         logger.error(f"Chat error: {e}")
         assistant_content = "Disculpa, tuve un problema tecnico. Puedes repetir tu consulta?"
     
-    # Parse lead name from response
+    # Parse AI response for lead management
     lead_id_for_session = req.lead_id or (lead["id"] if lead else None)
-    name_match = re.search(r'\[LEAD_NAME:([^\]]+)\]', assistant_content)
-    if name_match and not has_name:
-        detected_name = name_match.group(1).strip()
-        assistant_content = re.sub(r'\[LEAD_NAME:[^\]]+\]', '', assistant_content).strip()
-        # Create new lead
-        new_lead = {
-            "id": str(uuid.uuid4()),
-            "name": detected_name,
-            "whatsapp": "",
-            "city": "",
-            "email": "",
-            "product_interest": "",
-            "source": "Chat IA",
-            "game_used": None,
-            "prize_obtained": None,
-            "funnel_stage": "nuevo",
-            "status": "activo",
-            "purchase_history": [],
-            "coupon_used": None,
-            "recompra_date": None,
-            "notes": f"Registrado vía Chat IA",
-            "last_interaction": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.leads.insert_one(new_lead)
-        lead_id_for_session = new_lead["id"]
-        await db.chat_sessions_meta.update_one(
-            {"session_id": req.session_id},
-            {"$set": {"session_id": req.session_id, "lead_id": new_lead["id"], "lead_name": detected_name}},
-            upsert=True
-        )
-        # Update all messages in this session with the lead_id
-        await db.chat_messages.update_many(
-            {"session_id": req.session_id, "lead_id": None},
-            {"$set": {"lead_id": new_lead["id"]}}
-        )
-        logger.info(f"New lead created from chat: {detected_name} -> {new_lead['id']}")
-    
-    # Parse lead data updates from response
-    update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', assistant_content)
-    if update_matches and lead_id_for_session:
-        update_fields = {}
-        allowed_fields = {"whatsapp", "city", "product_interest", "email"}
-        for field, value in update_matches:
-            if field in allowed_fields:
-                update_fields[field] = value.strip()
-        if update_fields:
-            update_fields["last_interaction"] = datetime.now(timezone.utc).isoformat()
-            await db.leads.update_one({"id": lead_id_for_session}, {"$set": update_fields})
-            logger.info(f"Lead {lead_id_for_session} updated via chat: {update_fields}")
-        assistant_content = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]+\]', '', assistant_content).strip()
-    
-    # Parse stage classification
-    stage_match = re.search(r'\[STAGE:(\w+)\]', assistant_content)
-    if stage_match:
-        new_stage = stage_match.group(1).strip()
-        assistant_content = re.sub(r'\[STAGE:\w+\]', '', assistant_content).strip()
-        if new_stage in FUNNEL_STAGES and lead_id_for_session:
-            await db.leads.update_one(
-                {"id": lead_id_for_session},
-                {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}}
-            )
+    assistant_content, lead_id_for_session = await _parse_ai_response(
+        assistant_content, has_name, lead_id_for_session, req.session_id
+    )
     
     assistant_msg_doc = {
         "id": str(uuid.uuid4()),
@@ -1542,9 +1537,12 @@ async def bulk_upload(file: UploadFile = File(...), user=Depends(get_current_use
             existing = await find_lead_by_phone(whatsapp)
             if existing:
                 update_data = {"name": name, "whatsapp": whatsapp, "last_interaction": datetime.now(timezone.utc).isoformat()}
-                if city: update_data["city"] = city
-                if product: update_data["product_interest"] = product
-                if has_purchase: update_data["funnel_stage"] = stage
+                if city:
+                    update_data["city"] = city
+                if product:
+                    update_data["product_interest"] = product
+                if has_purchase:
+                    update_data["funnel_stage"] = stage
                 await db.leads.update_one({"id": existing["id"]}, {"$set": update_data})
                 updated += 1
             else:
@@ -1611,13 +1609,11 @@ async def bulk_download(
     header_fill = PatternFill(start_color="1A6B3C", end_color="1A6B3C", fill_type="solid")
     header_fill2 = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
     header_fill3 = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
-    accent_fill = PatternFill(start_color="F0FFF4", end_color="F0FFF4", fill_type="solid")
     thin_border = Border(
         left=Side(style="thin", color="D1D5DB"), right=Side(style="thin", color="D1D5DB"),
         top=Side(style="thin", color="D1D5DB"), bottom=Side(style="thin", color="D1D5DB")
     )
     center_align = Alignment(horizontal="center", vertical="center")
-    wrap_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
     
     def style_header(ws, row, fill):
         for cell in ws[row]:
@@ -1681,7 +1677,7 @@ async def bulk_download(
     stage_order = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "cliente_activo", "perdido"]
     total_leads = len(all_leads)
     for s in stage_order:
-        count = sum(1 for l in all_leads if l.get("funnel_stage") == s)
+        count = sum(1 for lead in all_leads if lead.get("funnel_stage") == s)
         pct = f"{(count/total_leads*100):.1f}%" if total_leads > 0 else "0%"
         conv = ""
         if s == "cliente_nuevo" or s == "cliente_activo":
@@ -1700,12 +1696,12 @@ async def bulk_download(
     style_header(ws3, 1, header_fill3)
     
     sources = {}
-    for l in all_leads:
-        src = l.get("source", "Desconocido") or "Desconocido"
+    for lead in all_leads:
+        src = lead.get("source", "Desconocido") or "Desconocido"
         if src not in sources:
             sources[src] = {"total": 0, "clientes": 0}
         sources[src]["total"] += 1
-        if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]:
+        if lead.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]:
             sources[src]["clientes"] += 1
     
     for src, data in sorted(sources.items(), key=lambda x: x[1]["total"], reverse=True):
@@ -1721,7 +1717,7 @@ async def bulk_download(
     style_header(ws4, 1, header_fill)
     
     for p in products_list:
-        interested = sum(1 for l in all_leads if p["name"].lower() in (l.get("product_interest", "") or "").lower())
+        interested = sum(1 for lead in all_leads if p["name"].lower() in (lead.get("product_interest", "") or "").lower())
         ws4.append([p["name"], p.get("code", ""), f"${p['price']}", f"${p.get('original_price', '')}", p.get("stock", ""), p.get("category", ""), interested])
     style_data(ws4, 2)
     auto_width(ws4)
@@ -1732,12 +1728,12 @@ async def bulk_download(
     style_header(ws5, 1, header_fill2)
     
     cities = {}
-    for l in all_leads:
-        city = l.get("city", "Sin ciudad") or "Sin ciudad"
+    for lead in all_leads:
+        city = lead.get("city", "Sin ciudad") or "Sin ciudad"
         if city not in cities:
             cities[city] = {"total": 0, "clientes": 0}
         cities[city]["total"] += 1
-        if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]:
+        if lead.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"]:
             cities[city]["clientes"] += 1
     
     for city, data in sorted(cities.items(), key=lambda x: x[1]["total"], reverse=True):
@@ -1752,13 +1748,13 @@ async def bulk_download(
     style_header(ws6, 1, header_fill3)
     
     months = {}
-    for l in all_leads:
-        created = l.get("created_at", "")
+    for lead in all_leads:
+        created = lead.get("created_at", "")
         if created:
             month_key = created[:7]
             if month_key not in months:
                 months[month_key] = {"nuevo": 0, "interesado": 0, "en_negociacion": 0, "cliente_nuevo": 0, "perdido": 0, "total": 0}
-            stage_val = l.get("funnel_stage", "nuevo")
+            stage_val = lead.get("funnel_stage", "nuevo")
             if stage_val in months[month_key]:
                 months[month_key][stage_val] += 1
             months[month_key]["total"] += 1
@@ -1788,10 +1784,10 @@ async def bulk_download(
     ws7["A4"].font = subtitle_font
     ws7["B4"].font = subtitle_font
     
-    clientes = sum(1 for l in all_leads if l.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"])
-    interesados = sum(1 for l in all_leads if l.get("funnel_stage") == "interesado")
-    negociacion = sum(1 for l in all_leads if l.get("funnel_stage") == "en_negociacion")
-    perdidos = sum(1 for l in all_leads if l.get("funnel_stage") == "perdido")
+    clientes = sum(1 for lead in all_leads if lead.get("funnel_stage") in ["cliente_nuevo", "cliente_activo"])
+    interesados = sum(1 for lead in all_leads if lead.get("funnel_stage") == "interesado")
+    negociacion = sum(1 for lead in all_leads if lead.get("funnel_stage") == "en_negociacion")
+    perdidos = sum(1 for lead in all_leads if lead.get("funnel_stage") == "perdido")
     
     kpis = [
         ("Total Leads", total_leads),
@@ -1930,13 +1926,18 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
     data_context = ""
     if lead_name:
         data_context = f"\nEl cliente se llama {lead_name}."
-        if lead_city: data_context += f" Ciudad: {lead_city}."
-        if lead_email: data_context += f" Email: {lead_email}."
+        if lead_city:
+            data_context += f" Ciudad: {lead_city}."
+        if lead_email:
+            data_context += f" Email: {lead_email}."
     
     missing_fields = []
-    if not lead_name: missing_fields.append("nombre y apellido")
-    if not lead_city: missing_fields.append("ciudad")
-    if not lead_email: missing_fields.append("email")
+    if not lead_name:
+        missing_fields.append("nombre y apellido")
+    if not lead_city:
+        missing_fields.append("ciudad")
+    if not lead_email:
+        missing_fields.append("email")
     missing_instruction = ""
     if missing_fields:
         missing_instruction = f"\nDATOS FALTANTES: Recopila de forma natural: {', '.join(missing_fields)}."
@@ -3282,10 +3283,10 @@ async def startup():
         else:
             # Multiple leads with the same normalized phone - merge them
             # Pick the primary lead (the one with most data: has name, has purchase_history, most recent interaction)
-            leads_group.sort(key=lambda l: (
-                bool(l.get("name", "").strip()),
-                len(l.get("purchase_history", [])),
-                l.get("last_interaction", ""),
+            leads_group.sort(key=lambda lead_item: (
+                bool(lead_item.get("name", "").strip()),
+                len(lead_item.get("purchase_history", [])),
+                lead_item.get("last_interaction", ""),
             ), reverse=True)
             primary = leads_group[0]
             primary_id = primary["id"]
@@ -3323,8 +3324,8 @@ async def startup():
             
             # Consolidate all session variants to normalized session ID
             all_variants = set()
-            for l in leads_group:
-                p = l.get("whatsapp", "")
+            for dup_lead in leads_group:
+                p = dup_lead.get("whatsapp", "")
                 all_variants.add(f"wa_{p}")
                 all_variants.add(f"wa_{normalize_phone_ec(p)}")
                 all_variants.add(f"wa_{phone_to_international(p)}")

@@ -33,7 +33,7 @@ export default function NotificationBell() {
       ]);
       setAlerts(alertRes.data.filter(a => a.status === "pending"));
       setNotifications(notifRes.data.filter(n => !n.read));
-    } catch {}
+    } catch (err) { /* fetch error ignored */ }
   }, []);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function NotificationBell() {
         }
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(() => {});
-      } catch {}
+      } catch (err) { console.error("Audio play error:", err); }
     }
     prevCountRef.current = totalCount;
   }, [totalCount, soundEnabled]);
@@ -68,14 +68,14 @@ export default function NotificationBell() {
       await axios.put(`${API}/chat/alerts/${alertId}/resolve`);
       fetchData();
       toast.success("Alerta resuelta");
-    } catch { toast.error("Error"); }
+    } catch (err) { toast.error("Error al resolver alerta"); }
   };
 
   const markRead = async (notifId) => {
     try {
       await axios.put(`${API}/advisors/notifications/${notifId}/read`);
       fetchData();
-    } catch {}
+    } catch (err) { console.error("Mark read error:", err); }
   };
 
   const markAllRead = async () => {
@@ -83,7 +83,7 @@ export default function NotificationBell() {
       await axios.put(`${API}/advisors/notifications/read-all`);
       fetchData();
       toast.success("Notificaciones leídas");
-    } catch {}
+    } catch (err) { console.error("Mark all read error:", err); }
   };
 
   const timeAgo = (ts) => {

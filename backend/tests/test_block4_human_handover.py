@@ -17,9 +17,9 @@ from datetime import datetime, timezone
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-TEST_EMAIL = "admin@fakulti.com"
-TEST_PASSWORD = "admin123"
+# Test credentials from environment
+TEST_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@fakulti.com")
+TEST_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
 
 class TestBlock4HumanHandover:
     """Human Agent Handover Feature Tests"""
