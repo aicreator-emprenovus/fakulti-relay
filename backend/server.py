@@ -551,7 +551,7 @@ async def assign_lead_to_advisor(lead_id: str, body: dict, user=Depends(get_curr
             raise HTTPException(status_code=404, detail="Asesor no encontrado")
     await db.leads.update_one(
         {"id": lead_id},
-        {"$set": {"assigned_advisor": advisor_id, "last_interaction": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"assigned_advisor": advisor_id, "needs_advisor": False, "last_interaction": datetime.now(timezone.utc).isoformat()}}
     )
     return {"message": f"Lead asignado a {advisor_id or 'sin asesor'}"}
 
@@ -1318,13 +1318,15 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         bot_paused = False
         has_alert = False
         assigned_advisor = ""
+        needs_advisor = False
         if source == "whatsapp" and s.get("lead_id"):
-            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1, "bot_paused": 1, "assigned_advisor": 1})
+            lead_doc = await db.leads.find_one({"id": s["lead_id"]}, {"_id": 0, "whatsapp": 1, "name": 1, "channel": 1, "bot_paused": 1, "assigned_advisor": 1, "needs_advisor": 1, "funnel_stage": 1})
             if lead_doc:
                 lead_phone = lead_doc.get("whatsapp", "")
                 lead_channel = lead_doc.get("channel", "")
                 bot_paused = lead_doc.get("bot_paused", False)
                 assigned_advisor = lead_doc.get("assigned_advisor", "")
+                needs_advisor = lead_doc.get("needs_advisor", False) and not assigned_advisor
                 if not lead_name:
                     lead_name = lead_doc.get("name", "")
             alert = await db.handover_alerts.find_one({"lead_id": s["lead_id"], "status": "pending"}, {"_id": 0})
@@ -1336,7 +1338,7 @@ async def get_chat_sessions(user=Depends(get_current_user)):
             "session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name,
             "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"],
             "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "bot_paused": bot_paused, "has_alert": has_alert,
-            "assigned_advisor": assigned_advisor
+            "assigned_advisor": assigned_advisor, "needs_advisor": needs_advisor
         })
     return result
 
@@ -2364,7 +2366,31 @@ Incluye SIEMPRE [STAGE:] al final."""
             current_priority = FUNNEL_STAGES.index(current_stage) if current_stage in FUNNEL_STAGES else 0
             new_priority = FUNNEL_STAGES.index(new_stage)
             if new_stage == "perdido" or new_priority > current_priority:
-                await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
+                update_data = {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}
+                # Hot-lead detection: mark as needs_advisor when reaching buying stages
+                if new_stage in ("en_negociacion", "cliente_nuevo") and not existing_lead.get("assigned_advisor"):
+                    update_data["needs_advisor"] = True
+                    # Create admin notification for hot lead
+                    existing_hot_notif = await db.advisor_notifications.find_one(
+                        {"lead_id": lead_id, "type": "hot_lead", "read": False}, {"_id": 0}
+                    )
+                    if not existing_hot_notif:
+                        lead_name_for_notif = existing_lead.get("name", phone)
+                        product_for_notif = existing_lead.get("product_interest", "")
+                        stage_label = "quiere comprar" if new_stage == "cliente_nuevo" else "en negociación"
+                        await db.advisor_notifications.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "advisor_id": "admin",
+                            "type": "hot_lead",
+                            "title": f"Lead caliente: {lead_name_for_notif} ({stage_label})",
+                            "message": f"{lead_name_for_notif} está listo para compra{f' de {product_for_notif}' if product_for_notif else ''}. Asigna un asesor para cerrar la venta.",
+                            "lead_id": lead_id,
+                            "session_id": session_id,
+                            "read": False,
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        })
+                        logger.info(f"Hot lead notification: {lead_name_for_notif} reached {new_stage}")
+                await db.leads.update_one({"id": lead_id}, {"$set": update_data})
     reply = re.sub(r'\[STAGE:\w+\]', '', reply).strip()
     
     # Update last interaction
@@ -2998,11 +3024,34 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
     })
     return {"message": f"Campaña enviada: {sent} exitosos, {failed} fallidos de {len(leads[:batch_size])} leads", "sent": sent, "failed": failed}
 
-# ========== BLOCK 11: REMINDERS ==========
+# ========== BLOCK 11: SMART REMINDERS ==========
+
+REMINDER_TEMPLATES_BY_STAGE = {
+    "cliente_nuevo": [
+        "Hola {nombre} 😊 Esperamos que estés disfrutando tu producto. Si necesitas algo adicional o tienes alguna consulta, estamos para ayudarte.",
+        "Hola {nombre}, queremos saber cómo te fue con tu pedido. ¿Necesitas algo más? Estamos a tu disposición.",
+    ],
+    "cliente_activo": [
+        "Hola {nombre} 😊 ¿Cómo te ha ido con tu producto? Si necesitas asesoría o reposición, aquí estamos para ti.",
+        "Hola {nombre}, esperamos que todo vaya bien. Si necesitas algo más, no dudes en escribirnos.",
+    ],
+    "en_negociacion": [
+        "Hola {nombre} 😊 Vimos que estabas interesado en {producto}. ¿Tienes alguna duda que podamos resolver para avanzar con tu pedido?",
+        "Hola {nombre}, solo queríamos saber si pudiste decidirte por {producto}. Estamos listos para ayudarte a concretar tu compra.",
+    ],
+    "interesado": [
+        "Hola {nombre} 😊 Notamos que te interesaba {producto}. ¿Te gustaría más información o tienes alguna pregunta?",
+        "Hola {nombre}, seguimos con disponibilidad de {producto}. ¿Quieres que te cuente más sobre sus beneficios?",
+    ],
+    "nuevo": [
+        "Hola {nombre} 😊 Soy el asesor virtual de Faculty. ¿En qué puedo ayudarte hoy?",
+        "Hola {nombre}, ¿hay algún producto de Faculty que te interese? Con gusto te asesoro.",
+    ],
+}
 
 class ReminderCreate(BaseModel):
     name: str
-    message_template: str
+    message_template: Optional[str] = ""
     target_stage: Optional[str] = ""
     target_product: Optional[str] = ""
     days_since_last_interaction: Optional[int] = 7
@@ -3036,6 +3085,20 @@ async def delete_reminder(reminder_id: str, user=Depends(get_current_user)):
     await db.reminders.delete_one({"id": reminder_id})
     return {"message": "Recordatorio eliminado"}
 
+def _build_smart_reminder_message(lead: dict, custom_template: str = "") -> str:
+    """Build a context-aware reminder message based on lead stage."""
+    name = lead.get("name", "").split()[0] if lead.get("name") else ""
+    stage = lead.get("funnel_stage", "nuevo")
+    product = lead.get("product_interest", "nuestros productos")
+
+    if custom_template:
+        return custom_template.replace("{nombre}", name).replace("{producto}", product)
+
+    templates = REMINDER_TEMPLATES_BY_STAGE.get(stage, REMINDER_TEMPLATES_BY_STAGE["nuevo"])
+    import random as _rnd
+    template = _rnd.choice(templates)
+    return template.replace("{nombre}", name).replace("{producto}", product)
+
 @api_router.post("/reminders/{reminder_id}/execute")
 async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
     if user.get("role") != "admin":
@@ -3045,22 +3108,37 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Recordatorio no encontrado")
     
     cutoff = (datetime.now(timezone.utc) - timedelta(days=reminder.get("days_since_last_interaction", 7))).isoformat()
-    query = {"last_interaction": {"$lte": cutoff}}
+    query = {"last_interaction": {"$lte": cutoff}, "whatsapp": {"$ne": ""}}
     if reminder.get("target_stage"):
         query["funnel_stage"] = reminder["target_stage"]
     if reminder.get("target_product"):
         query["product_interest"] = {"$regex": reminder["target_product"], "$options": "i"}
     
     batch = reminder.get("batch_size", 10)
-    leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).limit(batch).to_list(batch)
+    leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1, "funnel_stage": 1, "product_interest": 1}).limit(batch).to_list(batch)
     
     wa_config = await get_whatsapp_config()
     sent = 0
     for lead in leads:
         try:
-            msg = reminder["message_template"].replace("{nombre}", lead.get("name", ""))
+            msg = _build_smart_reminder_message(lead, reminder.get("message_template", ""))
             if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
                 await send_whatsapp_message(lead.get("whatsapp", ""), msg)
+            
+            # Store reminder in chat history
+            session_id = f"wa_{lead.get('whatsapp', '')}"
+            now = datetime.now(timezone.utc).isoformat()
+            await db.chat_messages.insert_one({
+                "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead.get("id"),
+                "role": "assistant", "content": msg, "timestamp": now,
+                "source": "reminder"
+            })
+            await db.chat_sessions_meta.update_one(
+                {"session_id": session_id},
+                {"$set": {"last_activity": now}},
+                upsert=True
+            )
+            await db.leads.update_one({"id": lead["id"]}, {"$set": {"last_interaction": now}})
             sent += 1
         except Exception:
             pass

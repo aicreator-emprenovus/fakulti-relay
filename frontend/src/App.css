@@ -168,3 +168,18 @@
 .animate-shimmer {
   animation: shimmer 3s ease-in-out infinite;
 }
+
+/* Hot lead bell - subtle pulsing animation */
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); opacity: 0.7; }
+  15% { transform: rotate(12deg); opacity: 1; }
+  30% { transform: rotate(-10deg); opacity: 1; }
+  45% { transform: rotate(6deg); opacity: 0.9; }
+  60% { transform: rotate(-4deg); opacity: 0.8; }
+  75% { transform: rotate(0deg); opacity: 0.7; }
+}
+.hot-lead-bell {
+  display: inline-flex;
+  animation: bell-ring 2.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.4));
+}

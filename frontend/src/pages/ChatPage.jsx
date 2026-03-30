@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
-  Pause, Play, UserCheck, Bot, Brain, Loader2
+  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -48,6 +48,11 @@ function SessionItem({ s, isActive, onClick }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="truncate font-medium text-foreground">{s.lead_name || "Sin nombre"}</span>
+            {s.needs_advisor && (
+              <span data-testid={`hot-bell-${s.session_id}`} className="flex-shrink-0 hot-lead-bell" title="Lead caliente - requiere asesor">
+                <Bell size={12} className="text-amber-500" />
+              </span>
+            )}
             {s.has_alert && <AlertTriangle size={11} className="text-red-500 flex-shrink-0" />}
             {s.bot_paused && <span className="text-[9px] px-1 py-0 rounded bg-amber-500/20 text-amber-500 flex-shrink-0">HUMANO</span>}
           </div>
@@ -220,7 +225,8 @@ export default function ChatPage() {
           whatsapp: lead.whatsapp, city: lead.city, email: lead.email,
           product_interest: lead.product_interest, source: lead.source,
           channel: lead.channel,
-          assigned_advisor_name: lead._advisor_name || ""
+          assigned_advisor_name: lead._advisor_name || "",
+          needs_advisor: lead.needs_advisor && !lead.assigned_advisor
         });
         setBotPaused(lead.bot_paused || false);
       }).catch(() => setLeadInfo({ name: session.lead_name, funnel_stage: null }));
@@ -317,8 +323,9 @@ export default function ChatPage() {
     try {
       await axios.put(`${API}/leads/${activeLeadId}/assign`, { advisor_id: advisorId });
       const advisorName = advisorId ? advisors.find(a => a.id === advisorId)?.name || "" : "";
-      setLeadInfo(prev => prev ? { ...prev, assigned_advisor_name: advisorName } : prev);
+      setLeadInfo(prev => prev ? { ...prev, assigned_advisor_name: advisorName, needs_advisor: advisorId ? false : prev.needs_advisor } : prev);
       setShowAssignAdvisor(false);
+      fetchSessions();
       toast.success(advisorId ? "Asesor asignado" : "Asesor removido");
     } catch { toast.error("Error al asignar asesor"); }
   };
@@ -396,6 +403,11 @@ export default function ChatPage() {
                       <span className="text-sm text-foreground font-medium">
                         {leadInfo?.name || "Selecciona una conversación"}
                       </span>
+                      {leadInfo?.needs_advisor && (
+                        <span data-testid="hot-lead-header-bell" className="hot-lead-bell" title="Lead caliente - asigna un asesor para cerrar la venta">
+                          <Bell size={14} className="text-amber-500" />
+                        </span>
+                      )}
                       {leadInfo?.funnel_stage && (
                         <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
                           {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
