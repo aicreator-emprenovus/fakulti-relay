@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Brain, BookOpen, Plus, Trash2, Edit, Save, TestTube, Send, Key, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { Brain, BookOpen, Plus, Trash2, Edit, Save, TestTube, Send, ChevronDown, ChevronUp } from "lucide-react";
 import { PasswordInput } from "@/components/PasswordInput";
 
 export default function DevPanelPage() {
@@ -26,7 +26,6 @@ export default function DevPanelPage() {
           { key: "training", icon: Brain, label: "Entrenamiento Bot" },
           { key: "knowledge", icon: BookOpen, label: "Base de Conocimiento" },
           { key: "test", icon: TestTube, label: "Consola de Pruebas" },
-          { key: "passwords", icon: Key, label: "Gestión de Accesos" },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`dev-tab-${t.key}`}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all ${tab === t.key ? "bg-card text-foreground shadow-sm border border-border" : "text-muted-foreground hover:text-foreground"}`}>
@@ -38,7 +37,6 @@ export default function DevPanelPage() {
       {tab === "training" && <BotTrainingTab />}
       {tab === "knowledge" && <KnowledgeBaseTab />}
       {tab === "test" && <TestConsoleTab />}
-      {tab === "passwords" && <PasswordManagementTab />}
     </div>
   );
 }
@@ -247,47 +245,3 @@ function TestConsoleTab() {
   );
 }
 
-function PasswordManagementTab() {
-  const [resetRequests, setResetRequests] = useState([]);
-
-  const fetchData = () => {
-    axios.get(`${API}/auth/password-reset-requests`).then(r => setResetRequests(r.data)).catch(() => {});
-  };
-  useEffect(() => { fetchData(); }, []);
-
-  const approveRequest = async (reqId, userName) => {
-    try {
-      await axios.post(`${API}/auth/approve-reset/${reqId}`);
-      toast.success(`Solicitud aprobada. ${userName} podrá crear su nueva contraseña desde el login.`);
-      fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || "Error al aprobar"); }
-  };
-
-  return (
-    <div className="space-y-4">
-      <Card className="bg-card border-border rounded-2xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><Key size={18} className="text-violet-500" /> Gestión de Accesos</CardTitle>
-          <p className="text-xs text-muted-foreground">Cuando un administrador olvida su contraseña, su solicitud aparece aquí. Al aprobarla, el administrador podrá crear una nueva contraseña desde la pantalla de login.</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {resetRequests.length > 0 ? resetRequests.map(req => (
-            <div key={req.id} className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{req.user_name}</p>
-                  <p className="text-xs text-muted-foreground">{req.user_email} | Solicitado: {new Date(req.created_at).toLocaleString()}</p>
-                </div>
-                <Button data-testid={`approve-reset-${req.id}`} onClick={() => approveRequest(req.id, req.user_name)} className="bg-emerald-600 text-white font-bold rounded-full hover:bg-emerald-700 text-xs">
-                  Aprobar Restablecimiento
-                </Button>
-              </div>
-            </div>
-          )) : (
-            <p className="text-center text-sm text-muted-foreground py-8">No hay solicitudes pendientes.</p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}

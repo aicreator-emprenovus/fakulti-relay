@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Code } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Code, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -19,6 +19,7 @@ const allNavItems = [
   { path: "/settings", icon: Settings, label: "Productos y Bots", roles: ["admin"] },
   { path: "/config", icon: Zap, label: "Configuración", roles: ["developer"] },
   { path: "/dev-panel", icon: Code, label: "Centro de Entrenamiento", roles: ["developer"] },
+  { path: "/dev-alerts", icon: Bell, label: "Panel de Alertas", roles: ["developer"] },
 ];
 
 export default function Sidebar({ currentPath }) {
