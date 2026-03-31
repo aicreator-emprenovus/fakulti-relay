@@ -86,10 +86,12 @@ export default function Sidebar({ currentPath }) {
 
       {/* Footer */}
       <div className={`border-t border-border ${collapsed ? "p-2 space-y-2" : "p-3 space-y-2"}`}>
-        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2.5 px-3"}`}>
-          <NotificationBell />
-          {!collapsed && <span className="text-sm text-muted-foreground">Notificaciones</span>}
-        </div>
+        {userRole !== "developer" && (
+          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2.5 px-3"}`}>
+            <NotificationBell />
+            {!collapsed && <span className="text-sm text-muted-foreground">Notificaciones</span>}
+          </div>
+        )}
         <button
           data-testid="theme-toggle-btn"
           onClick={toggleTheme}

@@ -1,34 +1,36 @@
 # Fakulti CRM - PRD
 
 ## Problema Original
-Plataforma CRM completa con automatización de ventas por WhatsApp para la marca "Fakulti". Incluye tracking de leads, bots de IA por producto, campañas masivas, gamificación y reportes.
+Plataforma CRM completa con automatización de ventas por WhatsApp para la marca "Fakulti". Incluye flujo de mensajes bidireccional, recordatorios inteligentes, alertas de leads calientes, roles segregados (Admin, Asesor, Desarrollador), y Centro de Entrenamiento de IA.
 
-## Stack Técnico
-- **Frontend**: React, Tailwind, Shadcn UI
-- **Backend**: FastAPI, MongoDB (Motor)
-- **AI**: GPT-5.2 via emergentintegrations (v0.1.1)
-- **WhatsApp**: Meta Cloud API v25.0
+## Arquitectura
+- Frontend: React + Tailwind + Shadcn UI
+- Backend: FastAPI + MongoDB (Motor)
+- AI: GPT-5.2 via emergentintegrations
+- External API: Meta WhatsApp Cloud API v25.0
 
-## Roles del Sistema
-1. **Desarrollador** (dev@fakulti.com): Acceso a Configuración + Centro de Entrenamiento. Puede resetear contraseñas de Admin.
-2. **Admin** (admin@fakulti.com): Dashboard, Chat, Leads, Asesores, Campañas, QR, Juegos, Fidelización, Productos y Bots. Puede resetear contraseñas de Asesores. NO tiene acceso a Configuración ni Centro de Entrenamiento.
-3. **Asesor**: Dashboard, Chat, Leads (solo asignados).
+## Funcionalidades Implementadas
+1. WhatsApp Bot bidireccional con Meta Cloud API v25.0
+2. AI Bot (GPT-5.2) con historial de conversación y Anti-Amnesia
+3. Smart Reminders contextuales por etapa de lead
+4. Alerta visual de Lead Caliente (campana pulsante)
+5. Roles: Admin, Asesor, Desarrollador
+6. Centro de Entrenamiento IA (DevPanelPage)
+7. Panel de Alertas para reseteo seguro de contraseñas (DevAlertsPage)
+8. Componente PasswordInput reutilizable (ojo toggle)
+9. Marca "Fakulti" actualizada globalmente
+10. NotificationBell oculto para rol Desarrollador (31 Mar 2026)
 
-## Centro de Entrenamiento del Bot (Developer)
-- **Personalidad Global**: Nombre del bot, marca, tono, estilo de saludo/despedida, frases prohibidas, instrucciones adicionales, max emojis, max líneas, idioma
-- **Base de Conocimiento / FAQ**: Preguntas y respuestas que el bot consulta automáticamente
-- **Consola de Pruebas**: Chat simulado para probar el bot con la configuración actual
-- **Gestión de Accesos**: Ver solicitudes de reset de contraseña, resetear passwords de admins
+## Backlog Priorizado
+### P1
+- Configurar flujos de venta IA para 3 productos restantes (BLOQUEADO - requiere input del usuario)
+- Dividir componentes grandes del frontend (ChatPage, LeadsPage, ConfigPage)
+- Refactorizar server.py (~3900 líneas) en routers modulares
 
-## Flujo "Olvidé mi Contraseña"
-- Admin → "La solicitud fue enviada al desarrollador del sistema" → Developer resuelve
-- Asesor → "La solicitud fue enviada al Administrador del sistema" → Admin resuelve
-- Admin también puede resetear contraseñas de asesores directamente desde la página Asesores
+### P2
+- Agregar type hints al backend Python
+- Reportes automáticos por email semanales para asesores
 
-## Flujo WhatsApp
-Bidireccional, completamente funcional con memoria anti-amnesia, recordatorios inteligentes por etapa, detección de hot leads con campana titilante.
-
-## Credenciales de Prueba
-- Developer: dev@fakulti.com / dev2026
+## Credenciales
 - Admin: admin@fakulti.com / admin123
-- Asesor: carlos@fakulti.com / advisor123
+- Developer: aicreator@emprenovus.com / Jlsb*1082
