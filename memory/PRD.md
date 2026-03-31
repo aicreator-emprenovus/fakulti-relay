@@ -20,6 +20,8 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 8. Componente PasswordInput reutilizable (ojo toggle)
 9. Marca "Fakulti" actualizada globalmente
 10. NotificationBell oculto para rol Desarrollador (31 Mar 2026)
+11. Fix: Campos de texto del Centro de Entrenamiento - ya permiten escritura fluida (31 Mar 2026)
+12. Fix: Consola de Pruebas aislada de DB real - mantiene historial de conversación sin repetir preguntas (31 Mar 2026)
 
 ## Backlog Priorizado
 ### P1

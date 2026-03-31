@@ -874,17 +874,117 @@ async def delete_knowledge_entry(entry_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/bot-training/test")
 async def test_bot_response(body: dict, user=Depends(get_current_user)):
-    """Test the bot with a simulated message. Developer only."""
+    """Test the bot with a simulated conversation. Developer only. Fully isolated from real DB."""
     if user.get("role") != "developer":
         raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+
     test_message = body.get("message", "Hola")
-    test_phone = "593000000000"
-    reply, _ = await process_whatsapp_incoming(test_phone, test_message)
-    # Clean up test data
-    await db.leads.delete_many({"whatsapp": "0000000000"})
-    await db.chat_messages.delete_many({"session_id": "wa_0000000000"})
-    await db.chat_sessions_meta.delete_many({"session_id": "wa_0000000000"})
-    return {"reply": reply}
+    conversation_history = body.get("history", [])
+
+    # Load products & global config for prompt building (read-only)
+    products = await db.products.find({}, {"_id": 0}).to_list(100)
+    product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
+
+    global_config = await db.bot_training.find_one({"id": "global"}, {"_id": 0}) or {}
+    bot_name = global_config.get("bot_name", "Asesor Virtual Fakulti")
+    brand_name = global_config.get("brand_name", "Fakulti")
+    tone = global_config.get("tone", "Cercano, experto, humano, confiable. Ciencia + natural = Biotecnología.")
+    greeting_style = global_config.get("greeting_style", "Saluda con un emoji y pregunta el nombre del cliente.")
+    farewell_style = global_config.get("farewell_style", "Despídete cordialmente y recuerda que estás disponible.")
+    prohibited = global_config.get("prohibited_phrases", "No prometer curas. No afirmar que reemplaza tratamientos médicos.")
+    general_inst = global_config.get("general_instructions", "")
+    max_emojis = global_config.get("max_emojis_per_message", 2)
+    max_lines = global_config.get("max_lines_per_message", 6)
+
+    kb_entries = await db.knowledge_base.find({"active": True}, {"_id": 0, "question": 1, "answer": 1}).to_list(50)
+    kb_text = ""
+    if kb_entries:
+        kb_text = "\nBASE DE CONOCIMIENTO:\n" + "\n".join([f"P: {e['question']}\nR: {e['answer']}" for e in kb_entries])
+
+    # Extract data from conversation history to avoid re-asking
+    collected = []
+    all_user_text = "\n".join([m["content"] for m in conversation_history if m.get("role") == "user"])
+    all_user_text += "\n" + test_message
+    import re as _re
+    name_tags = _re.findall(r'\[LEAD_NAME:([^\]]+)\]', "\n".join([m["content"] for m in conversation_history if m.get("role") == "assistant"]))
+    if name_tags:
+        collected.append(f"Nombre: {name_tags[-1].strip()}")
+    product_tags = _re.findall(r'\[UPDATE_LEAD:product_interest=([^\]]+)\]', "\n".join([m["content"] for m in conversation_history if m.get("role") == "assistant"]))
+    if product_tags:
+        collected.append(f"Producto de interés: {product_tags[-1].strip()}")
+    city_tags = _re.findall(r'\[UPDATE_LEAD:city=([^\]]+)\]', "\n".join([m["content"] for m in conversation_history if m.get("role") == "assistant"]))
+    if city_tags:
+        collected.append(f"Ciudad: {city_tags[-1].strip()}")
+
+    collected_text = ""
+    if collected:
+        collected_text = "\nDATOS YA PROPORCIONADOS POR EL CLIENTE (PROHIBIDO volver a solicitar):\n" + "\n".join(f"- {d}" for d in collected)
+
+    recent = conversation_history[-10:]
+    conv_summary = "\n".join([f"{'CLIENTE' if m['role']=='user' else 'BOT'}: {m['content'][:200]}" for m in recent])
+    if conv_summary:
+        collected_text += f"\n\nRESUMEN ULTIMOS MENSAJES:\n{conv_summary}"
+
+    system_msg = f"""IDENTIDAD DEL AGENTE
+Eres {bot_name}, el asesor virtual de la marca {brand_name} por WhatsApp.
+Tu tono y estilo: {tone}
+Habla como persona real, no como robot. Frases cortas y faciles de entender.
+Puedes usar emojis de forma natural (máximo {max_emojis} por mensaje).
+Despedida: {farewell_style}
+{collected_text}
+{f"INSTRUCCIONES ADICIONALES DEL DESARROLLADOR: {general_inst}" if general_inst else ""}
+
+REGLA CRITICA - NO REPETIR PREGUNTAS
+Lee TODA la conversación anterior antes de responder. Si el cliente YA proporcionó un dato en CUALQUIER mensaje anterior, NO lo pidas de nuevo.
+
+TODOS LOS PRODUCTOS:
+{product_info}
+
+FLUJO DE CONVERSACION
+1. Si no tienes el nombre, saluda y pregunta nombre.
+2. Una vez tengas el nombre, saluda "Hola [nombre], mucho gusto" y pregunta que producto le interesa.
+3. Cuando identifiques el producto de interes, incluye: [UPDATE_LEAD:product_interest=NombreProducto]
+
+RESPUESTAS CORTAS: entre 1 y {max_lines} lineas.
+
+PROHIBIDO
+{prohibited}
+- NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
+{kb_text}
+
+MODO TEST: Esta es una conversación de prueba del desarrollador. Responde normalmente como si fuera un cliente real.
+
+EXTRACCION AUTOMATICA DE DATOS
+Al final de CADA respuesta, incluye en lineas separadas si detectas datos nuevos:
+- [LEAD_NAME:Nombre Apellido]
+- [UPDATE_LEAD:city=Ciudad]
+- [UPDATE_LEAD:email=correo@ejemplo.com]
+- [UPDATE_LEAD:product_interest=NombreProducto]
+- [STAGE:nuevo|interesado|en_negociacion|cliente_nuevo|perdido]"""
+
+    llm_key = os.environ.get('EMERGENT_LLM_KEY')
+    session_id = f"test_dev_{uuid.uuid4().hex[:8]}"
+    chat = LlmChat(api_key=llm_key, session_id=session_id, system_message=system_msg)
+    chat.with_model("openai", "gpt-5.2")
+
+    # Feed previous conversation history
+    for msg in conversation_history:
+        chat.messages.append({"role": msg["role"], "content": msg["content"]})
+
+    try:
+        response = await chat.send_message(UserMessage(text=test_message))
+        reply = response if isinstance(response, str) else str(response)
+    except Exception as e:
+        logger.error(f"Test bot GPT error: {e}")
+        reply = "Error al obtener respuesta del bot. Verifica la configuración."
+
+    # Clean tags from display reply
+    clean_reply = re.sub(r'\[LEAD_NAME:[^\]]+\]', '', reply)
+    clean_reply = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]+\]', '', clean_reply)
+    clean_reply = re.sub(r'\[STAGE:\w+\]', '', clean_reply).strip()
+
+    return {"reply": clean_reply}
 
 @api_router.get("/bot-training/admins")
 async def get_admin_users_for_dev(user=Depends(get_current_user)):

@@ -41,6 +41,19 @@ export default function DevPanelPage() {
   );
 }
 
+function BotTrainingField({ label, field, textarea, type, config, setConfig }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground font-medium">{label}</Label>
+      {textarea ? (
+        <Textarea data-testid={`bot-${field}`} value={config[field] || ""} onChange={e => { const val = e.target.value; setConfig(c => ({ ...c, [field]: val })); }} className="bg-muted/50 border-input text-foreground min-h-[80px]" rows={3} />
+      ) : (
+        <Input data-testid={`bot-${field}`} type={type || "text"} value={config[field] || ""} onChange={e => { const val = e.target.value; setConfig(c => ({ ...c, [field]: type === "number" ? parseInt(val) || 0 : val })); }} className="bg-muted/50 border-input text-foreground" />
+      )}
+    </div>
+  );
+}
+
 function BotTrainingTab() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,17 +72,6 @@ function BotTrainingTab() {
 
   if (loading || !config) return <div className="text-muted-foreground text-center py-8">Cargando...</div>;
 
-  const Field = ({ label, field, textarea, type }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground font-medium">{label}</Label>
-      {textarea ? (
-        <Textarea data-testid={`bot-${field}`} value={config[field] || ""} onChange={e => setConfig(c => ({ ...c, [field]: e.target.value }))} className="bg-muted/50 border-input text-foreground min-h-[80px]" rows={3} />
-      ) : (
-        <Input data-testid={`bot-${field}`} type={type || "text"} value={config[field] || ""} onChange={e => setConfig(c => ({ ...c, [field]: type === "number" ? parseInt(e.target.value) || 0 : e.target.value }))} className="bg-muted/50 border-input text-foreground" />
-      )}
-    </div>
-  );
-
   return (
     <div className="space-y-4">
       <Card className="bg-card border-border rounded-2xl">
@@ -79,20 +81,20 @@ function BotTrainingTab() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Nombre del Bot" field="bot_name" />
-            <Field label="Nombre de la Marca" field="brand_name" />
+            <BotTrainingField label="Nombre del Bot" field="bot_name" config={config} setConfig={setConfig} />
+            <BotTrainingField label="Nombre de la Marca" field="brand_name" config={config} setConfig={setConfig} />
           </div>
-          <Field label="Tono y Estilo" field="tone" textarea />
+          <BotTrainingField label="Tono y Estilo" field="tone" textarea config={config} setConfig={setConfig} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Estilo de Saludo" field="greeting_style" textarea />
-            <Field label="Estilo de Despedida" field="farewell_style" textarea />
+            <BotTrainingField label="Estilo de Saludo" field="greeting_style" textarea config={config} setConfig={setConfig} />
+            <BotTrainingField label="Estilo de Despedida" field="farewell_style" textarea config={config} setConfig={setConfig} />
           </div>
-          <Field label="Frases Prohibidas" field="prohibited_phrases" textarea />
-          <Field label="Instrucciones Generales Adicionales" field="general_instructions" textarea />
+          <BotTrainingField label="Frases Prohibidas" field="prohibited_phrases" textarea config={config} setConfig={setConfig} />
+          <BotTrainingField label="Instrucciones Generales Adicionales" field="general_instructions" textarea config={config} setConfig={setConfig} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Max Emojis por Mensaje" field="max_emojis_per_message" type="number" />
-            <Field label="Max Líneas por Mensaje" field="max_lines_per_message" type="number" />
-            <Field label="Idioma de Respuesta" field="response_language" />
+            <BotTrainingField label="Max Emojis por Mensaje" field="max_emojis_per_message" type="number" config={config} setConfig={setConfig} />
+            <BotTrainingField label="Max Líneas por Mensaje" field="max_lines_per_message" type="number" config={config} setConfig={setConfig} />
+            <BotTrainingField label="Idioma de Respuesta" field="response_language" config={config} setConfig={setConfig} />
           </div>
           <Button data-testid="save-bot-config" onClick={save} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
             <Save size={14} className="mr-1.5" /> Guardar Configuración
@@ -197,11 +199,15 @@ function TestConsoleTab() {
   const sendTest = async () => {
     if (!message.trim()) return;
     const userMsg = message.trim();
-    setConversation(prev => [...prev, { role: "user", content: userMsg }]);
+    const updatedConv = [...conversation, { role: "user", content: userMsg }];
+    setConversation(updatedConv);
     setMessage("");
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/bot-training/test`, { message: userMsg });
+      const res = await axios.post(`${API}/bot-training/test`, {
+        message: userMsg,
+        history: conversation
+      });
       setConversation(prev => [...prev, { role: "assistant", content: res.data.reply }]);
     } catch {
       setConversation(prev => [...prev, { role: "assistant", content: "Error al obtener respuesta del bot" }]);
