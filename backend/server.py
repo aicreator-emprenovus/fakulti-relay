@@ -2783,6 +2783,78 @@ Incluye SIEMPRE [STAGE:] al final."""
                 await db.leads.update_one({"id": lead_id}, {"$set": update_data})
     reply = re.sub(r'\[STAGE:\w+\]', '', reply).strip()
     
+    # ===== ADVISOR HANDOVER DETECTION =====
+    # Detect if USER asked for an advisor
+    msg_lower = message_text.strip().lower()
+    user_wants_handover = any(kw in msg_lower for kw in HANDOVER_KEYWORDS)
+    
+    # Detect if BOT decided to transfer to an advisor
+    BOT_TRANSFER_PHRASES = [
+        "transfiero con un asesor", "te transfiero", "comunico con un asesor",
+        "asesor se comunicará", "asesor se comunicara", "asesor te contactará",
+        "asesor te contactara", "paso con un asesor", "derivo con un asesor",
+        "un asesor te atenderá", "un asesor te atendera", "contactar con un asesor",
+        "te paso con un humano", "te comunico con alguien",
+        "aviso a un asesor", "asesor te escriba", "asesor del equipo",
+        "te contactará un asesor", "te contactara un asesor",
+        "asesor se pondrá en contacto", "asesor se pondra en contacto",
+        "conecto con un asesor", "te conecto con", "conectar con un asesor",
+        "asesor humano"
+    ]
+    reply_lower = reply.lower()
+    bot_wants_handover = any(phrase in reply_lower for phrase in BOT_TRANSFER_PHRASES)
+    
+    needs_handover = user_wants_handover or bot_wants_handover
+    handover_reason = "solicitud_usuario" if user_wants_handover else ("bot_transfer" if bot_wants_handover else None)
+    
+    if needs_handover and lead_id:
+        # Mark lead as needing advisor
+        await db.leads.update_one(
+            {"id": lead_id},
+            {"$set": {"needs_advisor": True, "last_interaction": datetime.now(timezone.utc).isoformat()}}
+        )
+        # Create handover alert if none exists
+        existing_alert = await db.handover_alerts.find_one({"lead_id": lead_id, "status": "pending"}, {"_id": 0})
+        if not existing_alert:
+            lead_doc = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "whatsapp": 1, "product_interest": 1, "channel": 1, "funnel_stage": 1})
+            lead_name_alert = (lead_doc.get("name", "") if lead_doc else "") or phone
+            product_alert = (lead_doc.get("product_interest", "") if lead_doc else "")
+            alert_message = message_text[:150] if user_wants_handover else f"Bot transfirió: {reply[:120]}"
+            await db.handover_alerts.insert_one({
+                "id": str(uuid.uuid4()),
+                "lead_id": lead_id,
+                "lead_name": lead_name_alert,
+                "lead_phone": phone,
+                "message": alert_message,
+                "reason": handover_reason,
+                "product": product_alert,
+                "channel": (lead_doc.get("channel", "") if lead_doc else ""),
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+            logger.info(f"Handover alert created for {lead_name_alert} ({phone}) - reason: {handover_reason}")
+        # Create admin notification for immediate visibility
+        existing_notif = await db.advisor_notifications.find_one(
+            {"lead_id": lead_id, "type": "advisor_request", "read": False}, {"_id": 0}
+        )
+        if not existing_notif:
+            lead_doc_n = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "product_interest": 1})
+            lead_name_notif = (lead_doc_n.get("name", "") if lead_doc_n else "") or phone
+            product_notif = (lead_doc_n.get("product_interest", "") if lead_doc_n else "")
+            reason_label = "El cliente solicitó un asesor" if user_wants_handover else "El bot transfirió al cliente"
+            await db.advisor_notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "advisor_id": "admin",
+                "type": "advisor_request",
+                "title": f"Solicitud de asesor: {lead_name_notif}",
+                "message": f"{reason_label}{f' para {product_notif}' if product_notif else ''}. Requiere atención inmediata.",
+                "lead_id": lead_id,
+                "session_id": session_id,
+                "read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+            logger.info(f"Advisor request notification for {lead_name_notif} (reason: {handover_reason})")
+    
     # Update last interaction
     await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": datetime.now(timezone.utc).isoformat()}})
     
@@ -2870,21 +2942,14 @@ async def whatsapp_incoming(request: Request):
                             {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
                             upsert=True
                         )
-                        # Detect human handover request
-                        msg_lower = text.strip().lower()
-                        handover_reason = None
-                        if any(kw in msg_lower for kw in HANDOVER_KEYWORDS):
-                            handover_reason = "solicitud_usuario"
-                        
-                        # Check for bot timeout: if lead has been interacting for over 1 min without stage progress
-                        if not handover_reason and lead_id:
+                        # Detect bot timeout: if lead has been interacting for over 1 min without stage progress
+                        if lead_id:
                             session_id_check = f"wa_{phone}"
                             recent_msgs = await db.chat_messages.find(
                                 {"session_id": session_id_check, "role": "user"},
                                 {"_id": 0, "timestamp": 1}
                             ).sort("timestamp", -1).to_list(5)
                             if len(recent_msgs) >= 3:
-                                # Check if first user message was more than 1 minute ago
                                 first_msg_time = recent_msgs[-1].get("timestamp", "")
                                 if first_msg_time:
                                     try:
@@ -2894,27 +2959,25 @@ async def whatsapp_incoming(request: Request):
                                         if elapsed > BOT_TIMEOUT_SECONDS:
                                             lead_check = await db.leads.find_one({"id": lead_id}, {"_id": 0, "funnel_stage": 1})
                                             if lead_check and lead_check.get("funnel_stage") == "nuevo":
-                                                handover_reason = "timeout_bot"
+                                                existing_timeout_alert = await db.handover_alerts.find_one({"lead_id": lead_id, "status": "pending"}, {"_id": 0})
+                                                if not existing_timeout_alert:
+                                                    lead_doc_t = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "whatsapp": 1, "product_interest": 1, "channel": 1})
+                                                    await db.handover_alerts.insert_one({
+                                                        "id": str(uuid.uuid4()),
+                                                        "lead_id": lead_id,
+                                                        "lead_name": (lead_doc_t.get("name", "") if lead_doc_t else "") or phone,
+                                                        "lead_phone": phone,
+                                                        "message": text,
+                                                        "reason": "timeout_bot",
+                                                        "product": (lead_doc_t.get("product_interest", "") if lead_doc_t else ""),
+                                                        "channel": (lead_doc_t.get("channel", "") if lead_doc_t else ""),
+                                                        "status": "pending",
+                                                        "created_at": datetime.now(timezone.utc).isoformat()
+                                                    })
+                                                    await db.leads.update_one({"id": lead_id}, {"$set": {"needs_advisor": True}})
+                                                    logger.info(f"Timeout handover alert for {phone}")
                                     except Exception:
                                         pass
-                        
-                        if handover_reason:
-                            existing_alert = await db.handover_alerts.find_one({"lead_id": lead_id, "status": "pending"}, {"_id": 0})
-                            if not existing_alert:
-                                lead_doc = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1, "whatsapp": 1, "product_interest": 1, "channel": 1, "city": 1, "funnel_stage": 1})
-                                await db.handover_alerts.insert_one({
-                                    "id": str(uuid.uuid4()),
-                                    "lead_id": lead_id,
-                                    "lead_name": lead_doc.get("name", "") if lead_doc else "",
-                                    "lead_phone": phone,
-                                    "message": text,
-                                    "reason": handover_reason,
-                                    "product": lead_doc.get("product_interest", "") if lead_doc else "",
-                                    "channel": lead_doc.get("channel", "") if lead_doc else "",
-                                    "status": "pending",
-                                    "created_at": datetime.now(timezone.utc).isoformat()
-                                })
-                                logger.info(f"Handover alert created for {phone} - reason: {handover_reason}")
                         
                         # Notify assigned advisor when their lead writes
                         if lead_id:

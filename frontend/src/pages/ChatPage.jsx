@@ -28,6 +28,7 @@ const STAGE_CONFIG = {
 const REASON_LABELS = {
   solicitud_usuario: { label: "Solicitud del cliente", color: "bg-amber-500/20 text-amber-400" },
   timeout_bot: { label: "Timeout del bot", color: "bg-red-500/20 text-red-400" },
+  bot_transfer: { label: "Bot transfirió a asesor", color: "bg-orange-500/20 text-orange-400" },
   regla_operativa: { label: "Regla operativa", color: "bg-blue-500/20 text-blue-400" },
 };
 

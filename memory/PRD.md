@@ -20,14 +20,19 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 8. Componente PasswordInput reutilizable (ojo toggle)
 9. Marca "Fakulti" actualizada globalmente
 10. NotificationBell oculto para rol Desarrollador (31 Mar 2026)
-11. Fix: Campos de texto del Centro de Entrenamiento - ya permiten escritura fluida (31 Mar 2026)
-12. Fix: Consola de Pruebas aislada de DB real - mantiene historial de conversación sin repetir preguntas (31 Mar 2026)
+11. Fix: Campos de texto del Centro de Entrenamiento - escritura fluida (31 Mar 2026)
+12. Fix: Consola de Pruebas aislada de DB real con historial persistente (31 Mar 2026)
+13. Feature: Alerta inmediata cuando cliente solicita asesor - detecta tanto keywords del usuario como frases de transferencia del bot (31 Mar 2026)
+    - Crea handover_alert en chat con razón (solicitud_usuario / bot_transfer)
+    - Crea notificación advisor_request visible en NotificationBell
+    - Marca lead como needs_advisor para campanilla de lead caliente
+    - Centralizado en process_whatsapp_incoming (funciona en ambos webhooks)
 
 ## Backlog Priorizado
 ### P1
 - Configurar flujos de venta IA para 3 productos restantes (BLOQUEADO - requiere input del usuario)
 - Dividir componentes grandes del frontend (ChatPage, LeadsPage, ConfigPage)
-- Refactorizar server.py (~3900 líneas) en routers modulares
+- Refactorizar server.py (~4000 líneas) en routers modulares
 
 ### P2
 - Agregar type hints al backend Python

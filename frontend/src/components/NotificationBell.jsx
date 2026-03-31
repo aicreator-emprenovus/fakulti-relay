@@ -11,6 +11,7 @@ import { toast } from "sonner";
 const REASON_LABELS = {
   solicitud_usuario: "Solicitud del cliente",
   timeout_bot: "Timeout del bot",
+  bot_transfer: "Bot transfirió a asesor",
   regla_operativa: "Regla operativa",
   new_message: "Nuevo mensaje",
 };
@@ -146,18 +147,24 @@ export default function NotificationBell() {
                   </div>
                 ))}
                 {/* Advisor Notifications */}
-                {notifications.map(n => (
-                  <div key={n.id} className="p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-colors cursor-pointer" onClick={() => { markRead(n.id); setOpen(false); navigate(`/chat?lead_id=${n.lead_id}`); }}>
-                    <div className="flex items-start gap-2">
-                      <MessageCircle size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground">{n.lead_name || "Lead"}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">{n.message || "Nuevo mensaje"}</p>
-                        <span className="text-[10px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+                {notifications.map(n => {
+                  const isUrgent = n.type === "advisor_request" || n.type === "hot_lead";
+                  const Icon = isUrgent ? AlertTriangle : MessageCircle;
+                  const colorClass = isUrgent ? "text-orange-500" : "text-blue-500";
+                  const bgClass = isUrgent ? "bg-orange-500/5 border-orange-500/20 hover:bg-orange-500/10" : "bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10";
+                  return (
+                    <div key={n.id} className={`p-2.5 rounded-lg border ${bgClass} transition-colors cursor-pointer`} onClick={() => { markRead(n.id); setOpen(false); if (n.lead_id) navigate(`/chat?lead_id=${n.lead_id}`); }}>
+                      <div className="flex items-start gap-2">
+                        <Icon size={14} className={`${colorClass} mt-0.5 flex-shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground">{n.title || n.lead_name || "Lead"}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{n.message || "Nuevo mensaje"}</p>
+                          <span className="text-[10px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {totalCount === 0 && (
                   <div className="text-center py-6 text-muted-foreground">
                     <Bell size={24} className="mx-auto mb-2 opacity-30" />
