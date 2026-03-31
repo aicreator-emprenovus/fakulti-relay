@@ -1,8 +1,8 @@
 # Test Credentials
 
 ## Developer
-- Email: dev@fakulti.com
-- Password: dev2026
+- Email: aicreator@emprenovus.com
+- Password: Jlsb*1082
 
 ## Admin
 - Email: admin@fakulti.com

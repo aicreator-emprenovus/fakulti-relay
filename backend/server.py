@@ -3533,14 +3533,14 @@ async def startup():
     if not dev_exists:
         dev_doc = {
             "id": str(uuid.uuid4()),
-            "email": "dev@fakulti.com",
-            "password_hash": pwd_context.hash("dev2026"),
+            "email": "aicreator@emprenovus.com",
+            "password_hash": pwd_context.hash("Jlsb*1082"),
             "name": "Desarrollador",
             "role": "developer",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.admin_users.insert_one(dev_doc)
-        logger.info("Developer user seeded: dev@fakulti.com / dev2026")
+        logger.info("Developer user seeded: aicreator@emprenovus.com")
     
     admin_count = await db.admin_users.count_documents({"role": "admin"})
     if admin_count == 0:
