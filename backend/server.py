@@ -33,6 +33,22 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'faculty-crm-jwt-secret-2024')
 JWT_ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+def safe_hash_password(password: str) -> str:
+    """Hash password with fallback to direct bcrypt if passlib fails."""
+    try:
+        return pwd_context.hash(password)
+    except Exception:
+        import bcrypt as _bcrypt
+        return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+
+def safe_verify_password(plain: str, hashed: str) -> bool:
+    """Verify password with fallback to direct bcrypt if passlib fails."""
+    try:
+        return pwd_context.verify(plain, hashed)
+    except Exception:
+        import bcrypt as _bcrypt
+        return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -235,7 +251,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 @api_router.post("/auth/login")
 async def login(req: LoginRequest):
     user = await db.admin_users.find_one({"email": req.email}, {"_id": 0})
-    if not user or not pwd_context.verify(req.password, user["password_hash"]):
+    if not user or not safe_verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     token = create_token(user["id"], user["email"])
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin")}}
@@ -248,7 +264,7 @@ async def register(req: RegisterRequest):
     user_doc = {
         "id": str(uuid.uuid4()),
         "email": req.email,
-        "password_hash": pwd_context.hash(req.password),
+        "password_hash": safe_hash_password(req.password),
         "name": req.name,
         "role": "admin",
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -332,7 +348,7 @@ async def execute_password_reset(request_id: str, body: ResetPasswordAction, use
     # Reset the password
     await db.admin_users.update_one(
         {"id": reset_req["user_id"]},
-        {"$set": {"password_hash": pwd_context.hash(body.new_password)}}
+        {"$set": {"password_hash": safe_hash_password(body.new_password)}}
     )
     
     # Mark request as resolved
@@ -364,7 +380,7 @@ async def direct_password_reset(body: dict, user=Depends(get_current_user)):
     
     await db.admin_users.update_one(
         {"id": target_user_id},
-        {"$set": {"password_hash": pwd_context.hash(new_password)}}
+        {"$set": {"password_hash": safe_hash_password(new_password)}}
     )
     return {"message": f"Contraseña de {target['email']} restablecida exitosamente"}
 
@@ -592,7 +608,7 @@ async def create_advisor(req: AdvisorCreate, user=Depends(get_current_user)):
     advisor_doc = {
         "id": str(uuid.uuid4()),
         "email": req.email,
-        "password_hash": pwd_context.hash(req.password),
+        "password_hash": safe_hash_password(req.password),
         "name": req.name,
         "whatsapp": normalize_phone_ec(req.whatsapp) if req.whatsapp else "",
         "role": "advisor",
@@ -629,7 +645,7 @@ async def update_advisor_status(advisor_id: str, body: dict, user=Depends(get_cu
     if "specialization" in body:
         update["specialization"] = body["specialization"]
     if "password" in body and body["password"]:
-        update["password_hash"] = pwd_context.hash(body["password"])
+        update["password_hash"] = safe_hash_password(body["password"])
     if not update:
         raise HTTPException(status_code=400, detail="Sin campos para actualizar")
     await db.admin_users.update_one({"id": advisor_id, "role": "advisor"}, {"$set": update})
@@ -3531,29 +3547,35 @@ async def startup():
     # Seed developer account
     dev_exists = await db.admin_users.find_one({"role": "developer"})
     if not dev_exists:
-        dev_doc = {
-            "id": str(uuid.uuid4()),
-            "email": "aicreator@emprenovus.com",
-            "password_hash": pwd_context.hash("Jlsb*1082"),
-            "name": "Desarrollador",
-            "role": "developer",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.admin_users.insert_one(dev_doc)
-        logger.info("Developer user seeded: aicreator@emprenovus.com")
+        try:
+            dev_doc = {
+                "id": str(uuid.uuid4()),
+                "email": "aicreator@emprenovus.com",
+                "password_hash": safe_hash_password("Jlsb*1082"),
+                "name": "Desarrollador",
+                "role": "developer",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.admin_users.insert_one(dev_doc)
+            logger.info("Developer user seeded: aicreator@emprenovus.com")
+        except Exception as e:
+            logger.error(f"Failed to seed developer: {e}")
     
     admin_count = await db.admin_users.count_documents({"role": "admin"})
     if admin_count == 0:
-        admin_doc = {
-            "id": str(uuid.uuid4()),
-            "email": "admin@fakulti.com",
-            "password_hash": pwd_context.hash("admin123"),
-            "name": "Admin Fakulti",
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.admin_users.insert_one(admin_doc)
-        logger.info("Admin user seeded: admin@fakulti.com / admin123")
+        try:
+            admin_doc = {
+                "id": str(uuid.uuid4()),
+                "email": "admin@fakulti.com",
+                "password_hash": safe_hash_password("admin123"),
+                "name": "Admin Fakulti",
+                "role": "admin",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.admin_users.insert_one(admin_doc)
+            logger.info("Admin user seeded: admin@fakulti.com")
+        except Exception as e:
+            logger.error(f"Failed to seed admin: {e}")
     
     product_count = await db.products.count_documents({})
     if product_count == 0:
