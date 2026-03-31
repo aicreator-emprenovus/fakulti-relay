@@ -331,37 +331,88 @@ async def get_password_reset_requests(user=Depends(get_current_user)):
 class ResetPasswordAction(BaseModel):
     new_password: str
 
-@api_router.post("/auth/reset-password/{request_id}")
-async def execute_password_reset(request_id: str, body: ResetPasswordAction, user=Depends(get_current_user)):
-    """Execute a password reset. Developer resets admin, Admin resets advisor."""
+@api_router.post("/auth/approve-reset/{request_id}")
+async def approve_password_reset(request_id: str, user=Depends(get_current_user)):
+    """Approve a password reset request. Developer approves admin, Admin approves advisor. No password needed — the user sets it themselves."""
     role = user.get("role", "admin")
     reset_req = await db.password_reset_requests.find_one({"id": request_id, "status": "pending"}, {"_id": 0})
     if not reset_req:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    
-    # Verify authority
     if role == "developer" and reset_req["user_role"] != "admin":
         raise HTTPException(status_code=403, detail="Sin permisos")
     if role == "admin" and reset_req["user_role"] != "advisor":
         raise HTTPException(status_code=403, detail="Sin permisos")
     
-    # Reset the password
+    reset_token = secrets.token_urlsafe(32)
+    await db.password_reset_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": "approved", "reset_token": reset_token, "approved_by": user["id"], "approved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": f"Solicitud aprobada. {reset_req['user_name']} podrá crear su nueva contraseña desde el login."}
+
+@api_router.post("/auth/check-reset")
+async def check_reset_available(body: dict):
+    """Check if an approved reset exists for this email (no auth required)."""
+    email = body.get("email", "")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email requerido")
+    request = await db.password_reset_requests.find_one(
+        {"user_email": email, "status": "approved"},
+        {"_id": 0, "id": 1, "user_name": 1}
+    )
+    if request:
+        return {"has_approved_reset": True, "user_name": request.get("user_name", "")}
+    return {"has_approved_reset": False}
+
+@api_router.post("/auth/set-new-password")
+async def set_new_password(body: dict):
+    """User sets their own new password after reset was approved (no auth required)."""
+    email = body.get("email", "")
+    new_password = body.get("new_password", "")
+    if not email or not new_password:
+        raise HTTPException(status_code=400, detail="Email y nueva contraseña requeridos")
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    
+    request = await db.password_reset_requests.find_one(
+        {"user_email": email, "status": "approved"}, {"_id": 0}
+    )
+    if not request:
+        raise HTTPException(status_code=404, detail="No hay solicitud de restablecimiento aprobada para este email")
+    
+    await db.admin_users.update_one(
+        {"id": request["user_id"]},
+        {"$set": {"password_hash": safe_hash_password(new_password)}}
+    )
+    await db.password_reset_requests.update_one(
+        {"id": request["id"]},
+        {"$set": {"status": "resolved", "resolved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Contraseña actualizada exitosamente. Ya puedes iniciar sesión."}
+
+@api_router.post("/auth/reset-password/{request_id}")
+async def execute_password_reset(request_id: str, body: ResetPasswordAction, user=Depends(get_current_user)):
+    """Legacy: Execute a password reset with direct password (kept for admin resetting advisors)."""
+    role = user.get("role", "admin")
+    reset_req = await db.password_reset_requests.find_one({"id": request_id, "status": "pending"}, {"_id": 0})
+    if not reset_req:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if role == "admin" and reset_req["user_role"] != "advisor":
+        raise HTTPException(status_code=403, detail="Sin permisos")
+    
     await db.admin_users.update_one(
         {"id": reset_req["user_id"]},
         {"$set": {"password_hash": safe_hash_password(body.new_password)}}
     )
-    
-    # Mark request as resolved
     await db.password_reset_requests.update_one(
         {"id": request_id},
         {"$set": {"status": "resolved", "resolved_by": user["id"], "resolved_at": datetime.now(timezone.utc).isoformat()}}
     )
-    
     return {"message": f"Contraseña de {reset_req['user_email']} restablecida exitosamente"}
 
 @api_router.post("/auth/reset-password-direct")
 async def direct_password_reset(body: dict, user=Depends(get_current_user)):
-    """Direct password reset without a request. Developer resets admin, Admin resets advisor."""
+    """Direct password reset (Admin resets advisor only)."""
     role = user.get("role", "admin")
     target_user_id = body.get("user_id", "")
     new_password = body.get("new_password", "")
@@ -373,10 +424,8 @@ async def direct_password_reset(body: dict, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     target_role = target.get("role", "admin")
-    if role == "developer" and target_role not in ("admin",):
-        raise HTTPException(status_code=403, detail="El desarrollador solo puede resetear contraseñas de admins")
-    if role == "admin" and target_role != "advisor":
-        raise HTTPException(status_code=403, detail="El admin solo puede resetear contraseñas de asesores")
+    if role != "admin" or target_role != "advisor":
+        raise HTTPException(status_code=403, detail="Solo el admin puede resetear contraseñas de asesores")
     
     await db.admin_users.update_one(
         {"id": target_user_id},

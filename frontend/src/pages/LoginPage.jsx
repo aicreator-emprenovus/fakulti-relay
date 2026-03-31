@@ -17,9 +17,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
+  const [showSetPassword, setShowSetPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -43,10 +46,39 @@ export default function LoginPage() {
     setForgotLoading(true);
     setForgotMessage("");
     try {
+      // First check if there's an approved reset ready
+      const checkRes = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/auth/check-reset`, { email: forgotEmail });
+      if (checkRes.data.has_approved_reset) {
+        setShowSetPassword(true);
+        setForgotMessage("");
+        setForgotLoading(false);
+        return;
+      }
+      // Otherwise create a new request
       const res = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/auth/forgot-password`, { email: forgotEmail });
       setForgotMessage(res.data.message);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Error al enviar solicitud");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleSetNewPassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
+    if (newPassword !== confirmPassword) return toast.error("Las contraseñas no coinciden");
+    setForgotLoading(true);
+    try {
+      const res = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/auth/set-new-password`, { email: forgotEmail, new_password: newPassword });
+      toast.success(res.data.message);
+      setShowForgot(false);
+      setShowSetPassword(false);
+      setForgotEmail("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Error al establecer contraseña");
     } finally {
       setForgotLoading(false);
     }
@@ -112,6 +144,46 @@ export default function LoginPage() {
                 className="w-full text-center text-xs text-primary hover:underline mt-2"
               >
                 ¿Olvidaste tu contraseña?
+              </button>
+            </form>
+          ) : showSetPassword ? (
+            <form onSubmit={handleSetNewPassword} className="space-y-5">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                <p className="text-sm text-emerald-600 font-medium">Tu solicitud fue aprobada</p>
+                <p className="text-xs text-muted-foreground mt-1">Crea tu nueva contraseña para <strong>{forgotEmail}</strong></p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm">Nueva Contraseña</Label>
+                <PasswordInput
+                  data-testid="new-password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="bg-muted/50 border-input focus:border-primary/50 text-foreground h-12 rounded-lg"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm">Confirmar Contraseña</Label>
+                <PasswordInput
+                  data-testid="confirm-password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Repite tu contraseña"
+                  className="bg-muted/50 border-input focus:border-primary/50 text-foreground h-12 rounded-lg"
+                  required
+                />
+              </div>
+              <Button
+                data-testid="set-password-btn"
+                type="submit"
+                disabled={forgotLoading}
+                className="w-full bg-emerald-600 text-white font-bold rounded-full h-12 hover:bg-emerald-700 transition-all"
+              >
+                {forgotLoading ? "Guardando..." : "Establecer Nueva Contraseña"}
+              </Button>
+              <button type="button" onClick={() => { setShowForgot(false); setShowSetPassword(false); }} className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={12} /> Volver al inicio de sesión
               </button>
             </form>
           ) : (

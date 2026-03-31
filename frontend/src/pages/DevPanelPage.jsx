@@ -248,93 +248,44 @@ function TestConsoleTab() {
 }
 
 function PasswordManagementTab() {
-  const [admins, setAdmins] = useState([]);
   const [resetRequests, setResetRequests] = useState([]);
-  const [resetForm, setResetForm] = useState({ user_id: "", new_password: "" });
-  const [selectedAdmin, setSelectedAdmin] = useState(null);
 
   const fetchData = () => {
-    axios.get(`${API}/bot-training/admins`).then(r => setAdmins(r.data)).catch(() => {});
     axios.get(`${API}/auth/password-reset-requests`).then(r => setResetRequests(r.data)).catch(() => {});
   };
   useEffect(() => { fetchData(); }, []);
 
-  const resetDirect = async (userId) => {
-    if (!resetForm.new_password || resetForm.new_password.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
+  const approveRequest = async (reqId, userName) => {
     try {
-      await axios.post(`${API}/auth/reset-password-direct`, { user_id: userId, new_password: resetForm.new_password });
-      toast.success("Contraseña restablecida exitosamente");
-      setResetForm({ user_id: "", new_password: "" }); setSelectedAdmin(null);
-    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
-  };
-
-  const resolveRequest = async (reqId) => {
-    if (!resetForm.new_password || resetForm.new_password.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
-    try {
-      await axios.post(`${API}/auth/reset-password/${reqId}`, { new_password: resetForm.new_password });
-      toast.success("Contraseña restablecida exitosamente");
-      setResetForm({ user_id: "", new_password: "" }); fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+      await axios.post(`${API}/auth/approve-reset/${reqId}`);
+      toast.success(`Solicitud aprobada. ${userName} podrá crear su nueva contraseña desde el login.`);
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || "Error al aprobar"); }
   };
 
   return (
     <div className="space-y-4">
-      {resetRequests.length > 0 && (
-        <Card className="bg-card border-l-4 border-l-amber-500 rounded-2xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base text-amber-600"><Key size={18} /> Solicitudes de Restablecimiento Pendientes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {resetRequests.map(req => (
-              <div key={req.id} className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{req.user_name} ({req.user_email})</p>
-                    <p className="text-xs text-muted-foreground">Rol: {req.user_role} | Solicitado: {new Date(req.created_at).toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <Label className="text-xs text-muted-foreground">Nueva Contraseña</Label>
-                    <PasswordInput value={resetForm.new_password} onChange={e => setResetForm(f => ({ ...f, new_password: e.target.value }))} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground" />
-                  </div>
-                  <Button data-testid={`resolve-reset-${req.id}`} onClick={() => resolveRequest(req.id)} className="bg-amber-500 text-white font-bold rounded-full hover:bg-amber-600">Restablecer</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="bg-card border-border rounded-2xl">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><Users size={18} className="text-violet-500" /> Administradores del Sistema</CardTitle>
-          <p className="text-xs text-muted-foreground">Puedes restablecer la contraseña de cualquier administrador</p>
+          <CardTitle className="flex items-center gap-2 text-base"><Key size={18} className="text-violet-500" /> Gestión de Accesos</CardTitle>
+          <p className="text-xs text-muted-foreground">Cuando un administrador olvida su contraseña, su solicitud aparece aquí. Al aprobarla, el administrador podrá crear una nueva contraseña desde la pantalla de login.</p>
         </CardHeader>
         <CardContent className="space-y-3">
-          {admins.map(admin => (
-            <div key={admin.id} className="p-3 rounded-xl bg-muted/30 border border-border/50">
+          {resetRequests.length > 0 ? resetRequests.map(req => (
+            <div key={req.id} className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{admin.name}</p>
-                  <p className="text-xs text-muted-foreground">{admin.email}</p>
+                  <p className="text-sm font-medium text-foreground">{req.user_name}</p>
+                  <p className="text-xs text-muted-foreground">{req.user_email} | Solicitado: {new Date(req.created_at).toLocaleString()}</p>
                 </div>
-                <Button data-testid={`reset-admin-${admin.id}`} variant="outline" size="sm" onClick={() => setSelectedAdmin(selectedAdmin === admin.id ? null : admin.id)} className="rounded-full text-xs">
-                  <Key size={12} className="mr-1" /> {selectedAdmin === admin.id ? "Cancelar" : "Resetear Contraseña"}
+                <Button data-testid={`approve-reset-${req.id}`} onClick={() => approveRequest(req.id, req.user_name)} className="bg-emerald-600 text-white font-bold rounded-full hover:bg-emerald-700 text-xs">
+                  Aprobar Restablecimiento
                 </Button>
               </div>
-              {selectedAdmin === admin.id && (
-                <div className="mt-3 flex gap-2 items-end">
-                  <div className="flex-1">
-                    <Label className="text-xs text-muted-foreground">Nueva Contraseña</Label>
-                    <PasswordInput value={resetForm.new_password} onChange={e => setResetForm(f => ({ ...f, new_password: e.target.value }))} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground" />
-                  </div>
-                  <Button data-testid={`confirm-reset-${admin.id}`} onClick={() => resetDirect(admin.id)} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Confirmar</Button>
-                </div>
-              )}
             </div>
-          ))}
-          {admins.length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No hay administradores registrados</p>}
+          )) : (
+            <p className="text-center text-sm text-muted-foreground py-8">No hay solicitudes pendientes.</p>
+          )}
         </CardContent>
       </Card>
     </div>

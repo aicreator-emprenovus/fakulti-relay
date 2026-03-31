@@ -1,5 +1,5 @@
 """
-Faculty CRM Feature Tests - Iteration 4
+Fakulti CRM Feature Tests - Iteration 4
 Tests for:
 1. Login with admin@faculty.com / admin123
 2. Dashboard shows new stage names
