@@ -254,7 +254,14 @@ async def login(req: LoginRequest):
     if not user or not safe_verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     token = create_token(user["id"], user["email"])
-    return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin")}}
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"], "email": user["email"], "name": user["name"],
+            "role": user.get("role", "admin"),
+            "must_change_password": user.get("must_change_password", False)
+        }
+    }
 
 @api_router.post("/auth/register")
 async def register(req: RegisterRequest):
@@ -275,7 +282,89 @@ async def register(req: RegisterRequest):
 
 @api_router.get("/auth/me")
 async def get_me(user=Depends(get_current_user)):
-    return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin")}
+    return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin"), "must_change_password": user.get("must_change_password", False)}
+
+def validate_strong_password(password: str) -> str:
+    """Validate password meets high security requirements. Returns error message or empty string."""
+    if len(password) < 8:
+        return "La contraseña debe tener al menos 8 caracteres"
+    if not re.search(r'[A-Z]', password):
+        return "Debe contener al menos una letra mayúscula"
+    if not re.search(r'[a-z]', password):
+        return "Debe contener al menos una letra minúscula"
+    if not re.search(r'[0-9]', password):
+        return "Debe contener al menos un número"
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:\'",.<>?/\\|`~]', password):
+        return "Debe contener al menos un carácter especial (!@#$%&*...)"
+    return ""
+
+@api_router.post("/auth/change-password")
+async def change_password(body: dict, user=Depends(get_current_user)):
+    """Change own password. Used for forced password change and voluntary change."""
+    new_password = body.get("new_password", "")
+    current_password = body.get("current_password", "")
+    
+    # If not forced change, require current password
+    if not user.get("must_change_password", False):
+        if not current_password:
+            raise HTTPException(status_code=400, detail="Contraseña actual requerida")
+        if not safe_verify_password(current_password, user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+    
+    error = validate_strong_password(new_password)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    
+    await db.admin_users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": safe_hash_password(new_password), "must_change_password": False}}
+    )
+    return {"message": "Contraseña actualizada exitosamente"}
+
+@api_router.post("/auth/generate-provisional-password")
+async def generate_provisional_password(body: dict, user=Depends(get_current_user)):
+    """Generate a random provisional password for a user. Dev generates for Admin, Admin generates for Advisor."""
+    target_user_id = body.get("user_id", "")
+    if not target_user_id:
+        raise HTTPException(status_code=400, detail="user_id requerido")
+    
+    target = await db.admin_users.find_one({"id": target_user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    role = user.get("role", "admin")
+    target_role = target.get("role", "admin")
+    
+    if role == "developer" and target_role not in ("admin", "advisor"):
+        raise HTTPException(status_code=403, detail="Sin permisos")
+    if role == "admin" and target_role != "advisor":
+        raise HTTPException(status_code=403, detail="Solo puedes generar contraseñas para asesores")
+    if role == "advisor":
+        raise HTTPException(status_code=403, detail="Sin permisos")
+    
+    # Generate secure provisional password
+    chars_upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    chars_lower = "abcdefghjkmnpqrstuvwxyz"
+    chars_digits = "23456789"
+    chars_special = "!@#$%&*"
+    provisional = (
+        secrets.choice(chars_upper) +
+        secrets.choice(chars_lower) +
+        secrets.choice(chars_digits) +
+        secrets.choice(chars_special) +
+        ''.join(secrets.choice(chars_upper + chars_lower + chars_digits + chars_special) for _ in range(6))
+    )
+    # Shuffle
+    provisional_list = list(provisional)
+    secrets.SystemRandom().shuffle(provisional_list)
+    provisional = ''.join(provisional_list)
+    
+    await db.admin_users.update_one(
+        {"id": target_user_id},
+        {"$set": {"password_hash": safe_hash_password(provisional), "must_change_password": True}}
+    )
+    
+    return {"provisional_password": provisional, "user_name": target.get("name", ""), "user_email": target.get("email", "")}
 
 # ========== PASSWORD RESET REQUESTS ==========
 
@@ -294,10 +383,10 @@ async def forgot_password(req: PasswordResetRequest):
     # Determine who receives the notification
     if role == "admin":
         notify_role = "developer"
-        display_message = "La solicitud fue enviada al desarrollador del sistema"
+        display_message = "Solicitud enviada al Desarrollador del sistema. Contacta a tu desarrollador para que genere tu contraseña provisional."
     elif role == "advisor":
         notify_role = "admin"
-        display_message = "La solicitud fue enviada al Administrador del sistema"
+        display_message = "Solicitud enviada al Administrador. Contacta a tu administrador para que genere tu contraseña provisional."
     else:
         raise HTTPException(status_code=400, detail="Los desarrolladores no pueden solicitar reset por esta vía")
     
@@ -371,8 +460,9 @@ async def set_new_password(body: dict):
     new_password = body.get("new_password", "")
     if not email or not new_password:
         raise HTTPException(status_code=400, detail="Email y nueva contraseña requeridos")
-    if len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    error = validate_strong_password(new_password)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
     
     request = await db.password_reset_requests.find_one(
         {"user_email": email, "status": "approved"}, {"_id": 0}
@@ -382,7 +472,7 @@ async def set_new_password(body: dict):
     
     await db.admin_users.update_one(
         {"id": request["user_id"]},
-        {"$set": {"password_hash": safe_hash_password(new_password)}}
+        {"$set": {"password_hash": safe_hash_password(new_password), "must_change_password": False}}
     )
     await db.password_reset_requests.update_one(
         {"id": request["id"]},
@@ -402,13 +492,13 @@ async def execute_password_reset(request_id: str, body: ResetPasswordAction, use
     
     await db.admin_users.update_one(
         {"id": reset_req["user_id"]},
-        {"$set": {"password_hash": safe_hash_password(body.new_password)}}
+        {"$set": {"password_hash": safe_hash_password(body.new_password), "must_change_password": True}}
     )
     await db.password_reset_requests.update_one(
         {"id": request_id},
         {"$set": {"status": "resolved", "resolved_by": user["id"], "resolved_at": datetime.now(timezone.utc).isoformat()}}
     )
-    return {"message": f"Contraseña de {reset_req['user_email']} restablecida exitosamente"}
+    return {"message": f"Contraseña provisional de {reset_req['user_email']} establecida. Deberá cambiarla al iniciar sesión."}
 
 @api_router.post("/auth/reset-password-direct")
 async def direct_password_reset(body: dict, user=Depends(get_current_user)):
@@ -429,9 +519,9 @@ async def direct_password_reset(body: dict, user=Depends(get_current_user)):
     
     await db.admin_users.update_one(
         {"id": target_user_id},
-        {"$set": {"password_hash": safe_hash_password(new_password)}}
+        {"$set": {"password_hash": safe_hash_password(new_password), "must_change_password": True}}
     )
-    return {"message": f"Contraseña de {target['email']} restablecida exitosamente"}
+    return {"message": f"Contraseña provisional de {target['email']} establecida. Deberá cambiarla al iniciar sesión."}
 
 # ========== DASHBOARD ROUTES ==========
 
@@ -663,6 +753,7 @@ async def create_advisor(req: AdvisorCreate, user=Depends(get_current_user)):
         "role": "advisor",
         "status": req.status or "disponible",
         "specialization": req.specialization or "",
+        "must_change_password": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.admin_users.insert_one(advisor_doc)

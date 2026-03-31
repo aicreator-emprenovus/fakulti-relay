@@ -18,6 +18,7 @@ import CampaignsPage from "@/pages/CampaignsPage";
 import DevPanelPage from "@/pages/DevPanelPage";
 import DevAlertsPage from "@/pages/DevAlertsPage";
 import Sidebar from "@/components/Sidebar";
+import ForceChangePasswordModal from "@/components/ForceChangePassword";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -85,6 +86,17 @@ function AuthProvider({ children }) {
     return u;
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/auth/me`);
+      setUser(res.data);
+    } catch {
+      localStorage.removeItem("faculty_token");
+      setToken(null);
+      setUser(null);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem("faculty_token");
     delete axios.defaults.headers.common["Authorization"];
@@ -93,7 +105,7 @@ function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -115,9 +127,12 @@ function Footer() {
 }
 
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="text-primary text-lg">Cargando...</div></div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.must_change_password) {
+    return <ForceChangePasswordModal user={user} onComplete={refreshUser} />;
+  }
   return children;
 }
 

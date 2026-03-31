@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Lock, Mail, ArrowLeft } from "lucide-react";
 import axios from "axios";
 import { PasswordInput } from "@/components/PasswordInput";
+import { PasswordStrengthBar, PasswordGeneratorButton, CopyPasswordButton } from "@/components/ForceChangePassword";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png";
 
@@ -66,7 +67,10 @@ export default function LoginPage() {
 
   const handleSetNewPassword = async (e) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
+    if (!newPassword || newPassword.length < 8) return toast.error("La contraseña debe tener al menos 8 caracteres");
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[!@#$%^&*()_+\-=[\]{};:'",.<>?/\\|`~]/.test(newPassword)) {
+      return toast.error("Debe contener mayúscula, minúscula, número y carácter especial");
+    }
     if (newPassword !== confirmPassword) return toast.error("Las contraseñas no coinciden");
     setForgotLoading(true);
     try {
@@ -145,23 +149,38 @@ export default function LoginPage() {
               >
                 ¿Olvidaste tu contraseña?
               </button>
+              <div className="text-center space-y-1 mt-1">
+                <p className="text-[10px] text-muted-foreground">
+                  Administradores: contacta al <strong>Desarrollador</strong> del sistema
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Asesores: contacta al <strong>Administrador</strong> de tu cuenta
+                </p>
+              </div>
             </form>
           ) : showSetPassword ? (
             <form onSubmit={handleSetNewPassword} className="space-y-5">
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
                 <p className="text-sm text-emerald-600 font-medium">Tu solicitud fue aprobada</p>
-                <p className="text-xs text-muted-foreground mt-1">Crea tu nueva contraseña para <strong>{forgotEmail}</strong></p>
+                <p className="text-xs text-muted-foreground mt-1">Crea tu nueva contraseña segura para <strong>{forgotEmail}</strong></p>
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground text-sm">Nueva Contraseña</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground text-sm">Nueva Contraseña</Label>
+                  <div className="flex gap-1">
+                    <PasswordGeneratorButton onGenerate={pw => { setNewPassword(pw); setConfirmPassword(pw); }} />
+                    <CopyPasswordButton password={newPassword} />
+                  </div>
+                </div>
                 <PasswordInput
                   data-testid="new-password"
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Min 8 caracteres"
                   className="bg-muted/50 border-input focus:border-primary/50 text-foreground h-12 rounded-lg"
                   required
                 />
+                {newPassword && <PasswordStrengthBar password={newPassword} />}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-sm">Confirmar Contraseña</Label>
@@ -173,6 +192,9 @@ export default function LoginPage() {
                   className="bg-muted/50 border-input focus:border-primary/50 text-foreground h-12 rounded-lg"
                   required
                 />
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-[10px] text-red-500">Las contraseñas no coinciden</p>
+                )}
               </div>
               <Button
                 data-testid="set-password-btn"
