@@ -261,6 +261,113 @@ async def register(req: RegisterRequest):
 async def get_me(user=Depends(get_current_user)):
     return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user.get("role", "admin")}
 
+# ========== PASSWORD RESET REQUESTS ==========
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: PasswordResetRequest):
+    """Creates a password reset request. Shows a message that the request was sent to the appropriate authority."""
+    user = await db.admin_users.find_one({"email": req.email}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Email no encontrado en el sistema")
+    
+    role = user.get("role", "admin")
+    
+    # Determine who receives the notification
+    if role == "admin":
+        notify_role = "developer"
+        display_message = "La solicitud fue enviada al desarrollador del sistema"
+    elif role == "advisor":
+        notify_role = "admin"
+        display_message = "La solicitud fue enviada al Administrador del sistema"
+    else:
+        raise HTTPException(status_code=400, detail="Los desarrolladores no pueden solicitar reset por esta vía")
+    
+    # Store the reset request
+    await db.password_reset_requests.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_email": user["email"],
+        "user_name": user.get("name", ""),
+        "user_role": role,
+        "notify_role": notify_role,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": display_message}
+
+@api_router.get("/auth/password-reset-requests")
+async def get_password_reset_requests(user=Depends(get_current_user)):
+    """Get pending password reset requests. Developer sees admin requests, Admin sees advisor requests."""
+    role = user.get("role", "admin")
+    if role == "developer":
+        query = {"notify_role": "developer", "status": "pending"}
+    elif role == "admin":
+        query = {"notify_role": "admin", "status": "pending"}
+    else:
+        return []
+    requests = await db.password_reset_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return requests
+
+class ResetPasswordAction(BaseModel):
+    new_password: str
+
+@api_router.post("/auth/reset-password/{request_id}")
+async def execute_password_reset(request_id: str, body: ResetPasswordAction, user=Depends(get_current_user)):
+    """Execute a password reset. Developer resets admin, Admin resets advisor."""
+    role = user.get("role", "admin")
+    reset_req = await db.password_reset_requests.find_one({"id": request_id, "status": "pending"}, {"_id": 0})
+    if not reset_req:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    
+    # Verify authority
+    if role == "developer" and reset_req["user_role"] != "admin":
+        raise HTTPException(status_code=403, detail="Sin permisos")
+    if role == "admin" and reset_req["user_role"] != "advisor":
+        raise HTTPException(status_code=403, detail="Sin permisos")
+    
+    # Reset the password
+    await db.admin_users.update_one(
+        {"id": reset_req["user_id"]},
+        {"$set": {"password_hash": pwd_context.hash(body.new_password)}}
+    )
+    
+    # Mark request as resolved
+    await db.password_reset_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": "resolved", "resolved_by": user["id"], "resolved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": f"Contraseña de {reset_req['user_email']} restablecida exitosamente"}
+
+@api_router.post("/auth/reset-password-direct")
+async def direct_password_reset(body: dict, user=Depends(get_current_user)):
+    """Direct password reset without a request. Developer resets admin, Admin resets advisor."""
+    role = user.get("role", "admin")
+    target_user_id = body.get("user_id", "")
+    new_password = body.get("new_password", "")
+    if not target_user_id or not new_password:
+        raise HTTPException(status_code=400, detail="user_id y new_password requeridos")
+    
+    target = await db.admin_users.find_one({"id": target_user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    target_role = target.get("role", "admin")
+    if role == "developer" and target_role not in ("admin",):
+        raise HTTPException(status_code=403, detail="El desarrollador solo puede resetear contraseñas de admins")
+    if role == "admin" and target_role != "advisor":
+        raise HTTPException(status_code=403, detail="El admin solo puede resetear contraseñas de asesores")
+    
+    await db.admin_users.update_one(
+        {"id": target_user_id},
+        {"$set": {"password_hash": pwd_context.hash(new_password)}}
+    )
+    return {"message": f"Contraseña de {target['email']} restablecida exitosamente"}
+
 # ========== DASHBOARD ROUTES ==========
 
 @api_router.get("/dashboard/stats")
@@ -619,6 +726,108 @@ async def update_product_bot_config(product_id: str, config: dict, user=Depends(
     await db.products.update_one({"id": product_id}, {"$set": {"bot_config": clean}})
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     return product.get("bot_config", {})
+
+# ========== BOT TRAINING CENTER (Developer only) ==========
+
+@api_router.get("/bot-training/global-config")
+async def get_bot_global_config(user=Depends(get_current_user)):
+    """Get global bot configuration. Developer only."""
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    config = await db.bot_training.find_one({"id": "global"}, {"_id": 0})
+    defaults = {
+        "id": "global",
+        "bot_name": "Asesor Virtual Fakulti",
+        "brand_name": "Fakulti",
+        "tone": "Cercano, experto, humano, confiable. Ciencia + natural = Biotecnología.",
+        "greeting_style": "Saluda con un emoji y pregunta el nombre del cliente.",
+        "farewell_style": "Despídete cordialmente y recuerda que estás disponible.",
+        "prohibited_phrases": "No prometer curas. No afirmar que reemplaza tratamientos médicos. No usar lenguaje vulgar.",
+        "general_instructions": "",
+        "max_emojis_per_message": 2,
+        "max_lines_per_message": 6,
+        "response_language": "Español (Ecuador)"
+    }
+    return {**defaults, **(config or {})}
+
+@api_router.put("/bot-training/global-config")
+async def update_bot_global_config(config: dict, user=Depends(get_current_user)):
+    """Update global bot configuration. Developer only."""
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    allowed = {"bot_name", "brand_name", "tone", "greeting_style", "farewell_style", "prohibited_phrases", "general_instructions", "max_emojis_per_message", "max_lines_per_message", "response_language"}
+    clean = {k: v for k, v in config.items() if k in allowed}
+    clean["id"] = "global"
+    await db.bot_training.update_one({"id": "global"}, {"$set": clean}, upsert=True)
+    result = await db.bot_training.find_one({"id": "global"}, {"_id": 0})
+    return result
+
+@api_router.get("/bot-training/knowledge-base")
+async def get_knowledge_base(user=Depends(get_current_user)):
+    """Get FAQ/knowledge base entries. Developer only."""
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    entries = await db.knowledge_base.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return entries
+
+@api_router.post("/bot-training/knowledge-base")
+async def add_knowledge_entry(body: dict, user=Depends(get_current_user)):
+    """Add a knowledge base entry. Developer only."""
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    entry = {
+        "id": str(uuid.uuid4()),
+        "question": body.get("question", ""),
+        "answer": body.get("answer", ""),
+        "category": body.get("category", "general"),
+        "active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.knowledge_base.insert_one(entry)
+    entry.pop("_id", None)
+    return entry
+
+@api_router.put("/bot-training/knowledge-base/{entry_id}")
+async def update_knowledge_entry(entry_id: str, body: dict, user=Depends(get_current_user)):
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    update = {}
+    for k in ("question", "answer", "category", "active"):
+        if k in body:
+            update[k] = body[k]
+    if update:
+        await db.knowledge_base.update_one({"id": entry_id}, {"$set": update})
+    entry = await db.knowledge_base.find_one({"id": entry_id}, {"_id": 0})
+    return entry
+
+@api_router.delete("/bot-training/knowledge-base/{entry_id}")
+async def delete_knowledge_entry(entry_id: str, user=Depends(get_current_user)):
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    await db.knowledge_base.delete_one({"id": entry_id})
+    return {"message": "Entrada eliminada"}
+
+@api_router.post("/bot-training/test")
+async def test_bot_response(body: dict, user=Depends(get_current_user)):
+    """Test the bot with a simulated message. Developer only."""
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    test_message = body.get("message", "Hola")
+    test_phone = "593000000000"
+    reply, _ = await process_whatsapp_incoming(test_phone, test_message)
+    # Clean up test data
+    await db.leads.delete_many({"whatsapp": "0000000000"})
+    await db.chat_messages.delete_many({"session_id": "wa_0000000000"})
+    await db.chat_sessions_meta.delete_many({"session_id": "wa_0000000000"})
+    return {"reply": reply}
+
+@api_router.get("/bot-training/admins")
+async def get_admin_users_for_dev(user=Depends(get_current_user)):
+    """Get admin users list. Developer only (for password reset)."""
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo desarrolladores")
+    admins = await db.admin_users.find({"role": "admin"}, {"_id": 0, "password_hash": 0}).to_list(50)
+    return admins
 
 # ========== GAME ROUTES ==========
 
@@ -2228,7 +2437,26 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     if product_specific_prompt:
         system_msg = product_specific_prompt
     else:
-        # General router bot - helps identify product interest
+        # General router bot - uses global config from Bot Training Center
+        global_config = await db.bot_training.find_one({"id": "global"}, {"_id": 0}) or {}
+        bot_name = global_config.get("bot_name", "Asesor Virtual Fakulti")
+        brand_name = global_config.get("brand_name", "Fakulti")
+        tone = global_config.get("tone", "Cercano, experto, humano, confiable. Ciencia + natural = Biotecnología.")
+        greeting_style = global_config.get("greeting_style", "Saluda con un emoji y pregunta el nombre del cliente.")
+        farewell_style = global_config.get("farewell_style", "Despídete cordialmente y recuerda que estás disponible.")
+        prohibited = global_config.get("prohibited_phrases", "No prometer curas. No afirmar que reemplaza tratamientos médicos.")
+        general_inst = global_config.get("general_instructions", "")
+        max_emojis = global_config.get("max_emojis_per_message", 2)
+        max_lines = global_config.get("max_lines_per_message", 6)
+        
+        # Load knowledge base FAQs
+        kb_entries = await db.knowledge_base.find({"active": True}, {"_id": 0, "question": 1, "answer": 1}).to_list(50)
+        kb_text = ""
+        if kb_entries:
+            kb_text = "\n\nBASE DE CONOCIMIENTO (usa estas respuestas cuando aplique):\n" + "\n".join(
+                [f"P: {e['question']}\nR: {e['answer']}" for e in kb_entries]
+            )
+        
         # Build context about what data we already have and what's missing
         missing_fields = []
         if not lead_name:
@@ -2254,25 +2482,23 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         if missing_fields:
             missing_instruction = f"\nDATOS QUE AUN FALTAN POR RECOPILAR: {', '.join(missing_fields)}. Recopilalos de forma natural durante la conversacion, uno a la vez, sin parecer formulario."
         
-        first_contact = "\nEste es un lead NUEVO. Tu primer mensaje debe ser un saludo corto y preguntar su nombre." if not lead_name else ""
+        first_contact = f"\nEste es un lead NUEVO. {greeting_style}" if not lead_name else ""
         
         system_msg = f"""IDENTIDAD DEL AGENTE
-Eres el asesor virtual de la marca Fakulti por WhatsApp.
-Representas los productos desarrollados por Fakulti Laboratorios.
-Tu estilo: natural, cercano, humano, profesional, claro, breve.
+Eres {bot_name}, el asesor virtual de la marca {brand_name} por WhatsApp.
+Representas los productos desarrollados por {brand_name} Laboratorios.
+Tu tono y estilo: {tone}
 Habla como persona real, no como robot. Frases cortas y faciles de entender.
-Puedes usar algunos emojis de forma natural (1-2 por mensaje maximo).
+Puedes usar emojis de forma natural (máximo {max_emojis} por mensaje).
+Despedida: {farewell_style}
 {first_contact}
 {data_context}
 {collected_data_text}
 {missing_instruction}
+{f"INSTRUCCIONES ADICIONALES DEL DESARROLLADOR: {general_inst}" if general_inst else ""}
 
 REGLA CRITICA - NO REPETIR PREGUNTAS
 Lee TODA la conversación anterior antes de responder. Si el cliente YA proporcionó un dato (nombre, teléfono, ciudad, dirección, cédula, etc.) en CUALQUIER mensaje anterior, NO lo pidas de nuevo. Usa la información que ya tienes. Si necesitas confirmar un dato, hazlo UNA sola vez.
-
-PRODUCTO PRINCIPAL
-Bone Broth Hidrolizado (Bombro).
-Suplemento nutricional a base de caldo de hueso hidrolizado de alta absorción.
 
 TODOS LOS PRODUCTOS:
 {product_info}
@@ -2293,15 +2519,14 @@ COMO RESPONDER
 Evita: "Gracias por su consulta", "Procedo a brindarle la informacion"
 Usa: "Claro, te cuento", "Buena pregunta", "Mira, te explico rapido"
 
-RESPUESTAS CORTAS: entre 1 y 4 lineas.
+RESPUESTAS CORTAS: entre 1 y {max_lines} lineas.
 
 PROHIBIDO
-- No prometer curas.
-- No decir que cura enfermedades.
-- No afirmar que reemplaza tratamientos médicos.
+{prohibited}
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
 - Si piden hablar con un humano, responde que un asesor se comunicara pronto.
 - NUNCA repitas una pregunta que ya fue respondida en la conversación.
+{kb_text}
 
 EXTRACCION AUTOMATICA DE DATOS
 Al final de CADA respuesta, incluye en lineas separadas:
@@ -3303,7 +3528,21 @@ if _static_dir.is_dir() and (_static_dir / "index.html").is_file():
 
 @app.on_event("startup")
 async def startup():
-    admin_count = await db.admin_users.count_documents({})
+    # Seed developer account
+    dev_exists = await db.admin_users.find_one({"role": "developer"})
+    if not dev_exists:
+        dev_doc = {
+            "id": str(uuid.uuid4()),
+            "email": "dev@fakulti.com",
+            "password_hash": pwd_context.hash("dev2026"),
+            "name": "Desarrollador",
+            "role": "developer",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.admin_users.insert_one(dev_doc)
+        logger.info("Developer user seeded: dev@fakulti.com / dev2026")
+    
+    admin_count = await db.admin_users.count_documents({"role": "admin"})
     if admin_count == 0:
         admin_doc = {
             "id": str(uuid.uuid4()),

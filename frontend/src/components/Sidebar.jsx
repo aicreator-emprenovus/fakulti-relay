@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -16,8 +16,9 @@ const allNavItems = [
   { path: "/qr-campaigns", icon: QrCode, label: "QR y Canales", roles: ["admin"] },
   { path: "/games", icon: Gamepad2, label: "Juegos", roles: ["admin"] },
   { path: "/loyalty", icon: Heart, label: "Fidelización", roles: ["admin"] },
-  { path: "/config", icon: Zap, label: "Configuración", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "Productos y Bots", roles: ["admin"] },
+  { path: "/config", icon: Zap, label: "Configuración", roles: ["developer"] },
+  { path: "/dev-panel", icon: Code, label: "Centro de Entrenamiento", roles: ["developer"] },
 ];
 
 export default function Sidebar({ currentPath }) {
@@ -101,14 +102,14 @@ export default function Sidebar({ currentPath }) {
         {!collapsed && (
           <div className="flex items-center gap-2.5 px-1">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-              userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+              userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : userRole === "developer" ? "bg-violet-500/10 text-violet-500" : "bg-primary/10 text-primary"
             }`}>
               {user?.name?.[0] || "A"}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{user?.name || "Admin"}</p>
               <p className="text-[10px] text-muted-foreground truncate">
-                {userRole === "advisor" ? "Asesor" : "Administrador"} - {user?.email || ""}
+                {userRole === "advisor" ? "Asesor" : userRole === "developer" ? "Desarrollador" : "Administrador"} - {user?.email || ""}
               </p>
             </div>
           </div>
@@ -117,7 +118,7 @@ export default function Sidebar({ currentPath }) {
         {collapsed && (
           <div className="flex justify-center">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-              userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+              userRole === "advisor" ? "bg-amber-500/10 text-amber-500" : userRole === "developer" ? "bg-violet-500/10 text-violet-500" : "bg-primary/10 text-primary"
             }`} title={user?.name || "Admin"}>
               {user?.name?.[0] || "A"}
             </div>

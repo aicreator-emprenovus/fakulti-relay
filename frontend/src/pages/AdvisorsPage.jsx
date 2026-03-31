@@ -7,7 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { UserCheck, Plus, Pencil, Trash2, Phone, Users, MessageCircle } from "lucide-react";
+import { UserCheck, Plus, Pencil, Trash2, Phone, Users, MessageCircle, Key } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -24,6 +24,9 @@ export default function AdvisorsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", whatsapp: "", status: "disponible", specialization: "" });
+  const [resetTarget, setResetTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetRequests, setResetRequests] = useState([]);
 
   const fetchAdvisors = useCallback(async () => {
     setLoading(true);
@@ -35,6 +38,29 @@ export default function AdvisorsPage() {
   }, []);
 
   useEffect(() => { fetchAdvisors(); }, [fetchAdvisors]);
+
+  useEffect(() => {
+    axios.get(`${API}/auth/password-reset-requests`).then(r => setResetRequests(r.data)).catch(() => {});
+  }, []);
+
+  const resetAdvisorPassword = async (advisorId) => {
+    if (!newPassword || newPassword.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
+    try {
+      await axios.post(`${API}/auth/reset-password-direct`, { user_id: advisorId, new_password: newPassword });
+      toast.success("Contraseña restablecida exitosamente");
+      setResetTarget(null); setNewPassword("");
+    } catch (e) { toast.error(e.response?.data?.detail || "Error al restablecer"); }
+  };
+
+  const resolveRequest = async (reqId) => {
+    if (!newPassword || newPassword.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres");
+    try {
+      await axios.post(`${API}/auth/reset-password/${reqId}`, { new_password: newPassword });
+      toast.success("Contraseña restablecida");
+      setNewPassword("");
+      setResetRequests(prev => prev.filter(r => r.id !== reqId));
+    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+  };
 
   const openNew = () => {
     setEditing(null);
@@ -124,6 +150,27 @@ export default function AdvisorsPage() {
         </CardContent></Card>
       </div>
 
+      {/* Reset Requests */}
+      {resetRequests.filter(r => r.user_role === "advisor").length > 0 && (
+        <Card className="bg-card border-l-4 border-l-amber-500 rounded-2xl">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold text-amber-600 mb-3 flex items-center gap-1.5"><Key size={14} /> Solicitudes de Restablecimiento</h3>
+            {resetRequests.filter(r => r.user_role === "advisor").map(req => (
+              <div key={req.id} className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2 mb-2">
+                <p className="text-sm font-medium text-foreground">{req.user_name} ({req.user_email})</p>
+                <p className="text-xs text-muted-foreground">Solicitado: {new Date(req.created_at).toLocaleString()}</p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña (min 6)" className="bg-muted/50 border-input text-foreground h-8 text-xs" />
+                  </div>
+                  <Button data-testid={`resolve-advisor-reset-${req.id}`} size="sm" onClick={() => resolveRequest(req.id)} className="bg-amber-500 text-white text-xs h-8 rounded-full hover:bg-amber-600">Restablecer</Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Advisor Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {loading ? (
@@ -181,10 +228,22 @@ export default function AdvisorsPage() {
                     <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => openEdit(a)}>
                       <Pencil size={12} className="mr-1" /> Editar
                     </Button>
+                    <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-amber-400" onClick={() => setResetTarget(resetTarget === a.id ? null : a.id)}>
+                      <Key size={12} className="mr-1" /> Reset
+                    </Button>
                     <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-red-400" onClick={() => remove(a.id)}>
                       <Trash2 size={12} />
                     </Button>
                   </div>
+                  {resetTarget === a.id && (
+                    <div className="mt-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Label className="text-[10px] text-muted-foreground">Nueva Contraseña</Label>
+                        <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground h-8 text-xs" />
+                      </div>
+                      <Button data-testid={`confirm-reset-advisor-${a.id}`} size="sm" onClick={() => resetAdvisorPassword(a.id)} className="bg-amber-500 text-white text-xs h-8 rounded-full hover:bg-amber-600">Restablecer</Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

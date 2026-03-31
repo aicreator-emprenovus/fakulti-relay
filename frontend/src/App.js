@@ -15,6 +15,7 @@ import ConfigPage from "@/pages/ConfigPage";
 import QRCampaignsPage from "@/pages/QRCampaignsPage";
 import AdvisorsPage from "@/pages/AdvisorsPage";
 import CampaignsPage from "@/pages/CampaignsPage";
+import DevPanelPage from "@/pages/DevPanelPage";
 import Sidebar from "@/components/Sidebar";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -161,6 +162,7 @@ function AppContent() {
         <Route path="/campaigns" element={<ProtectedRoute><AdminLayout><CampaignsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/config" element={<ProtectedRoute><AdminLayout><ConfigPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><AdminLayout><SettingsPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/dev-panel" element={<ProtectedRoute><AdminLayout><DevPanelPage /></AdminLayout></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
