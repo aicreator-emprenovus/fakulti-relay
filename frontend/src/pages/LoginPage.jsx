@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Lock, Mail, ArrowLeft } from "lucide-react";
 import axios from "axios";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_59080748-b0e0-4800-8ad6-c0799fc3b737/artifacts/hs7em91m_image.png";
 
@@ -85,10 +86,9 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-sm">Contrasena</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground/60" />
-                  <Input
+                  <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground/60 z-10" />
+                  <PasswordInput
                     data-testid="login-password"
-                    type="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Ingresa tu contraseña"

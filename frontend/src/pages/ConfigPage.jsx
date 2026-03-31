@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Zap, MessageSquare, Bot, Plus, Trash2, Edit, Copy, CheckCircle, AlertTriangle, Wifi } from "lucide-react";
 
 const TRIGGER_TYPES = {
@@ -243,7 +243,7 @@ export default function ConfigPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Access Token</Label>
-                  <Input data-testid="access-token" value={waForm.access_token} onChange={e => setWaForm(f => ({ ...f, access_token: e.target.value }))} placeholder="Token de acceso de Meta" className="bg-muted/50 border-input text-foreground" type="password" />
+                  <PasswordInput data-testid="access-token" value={waForm.access_token} onChange={e => setWaForm(f => ({ ...f, access_token: e.target.value }))} placeholder="Token de acceso de Meta" className="bg-muted/50 border-input text-foreground" />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Nombre del Negocio</Label>

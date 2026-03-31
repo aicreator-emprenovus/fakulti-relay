@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Brain, BookOpen, Plus, Trash2, Edit, Save, TestTube, Send, Key, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export default function DevPanelPage() {
   const [tab, setTab] = useState("training");
@@ -295,7 +296,7 @@ function PasswordManagementTab() {
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
                     <Label className="text-xs text-muted-foreground">Nueva Contraseña</Label>
-                    <Input type="password" value={resetForm.new_password} onChange={e => setResetForm(f => ({ ...f, new_password: e.target.value }))} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground" />
+                    <PasswordInput value={resetForm.new_password} onChange={e => setResetForm(f => ({ ...f, new_password: e.target.value }))} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground" />
                   </div>
                   <Button data-testid={`resolve-reset-${req.id}`} onClick={() => resolveRequest(req.id)} className="bg-amber-500 text-white font-bold rounded-full hover:bg-amber-600">Restablecer</Button>
                 </div>
@@ -326,7 +327,7 @@ function PasswordManagementTab() {
                 <div className="mt-3 flex gap-2 items-end">
                   <div className="flex-1">
                     <Label className="text-xs text-muted-foreground">Nueva Contraseña</Label>
-                    <Input type="password" value={resetForm.new_password} onChange={e => setResetForm(f => ({ ...f, new_password: e.target.value }))} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground" />
+                    <PasswordInput value={resetForm.new_password} onChange={e => setResetForm(f => ({ ...f, new_password: e.target.value }))} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground" />
                   </div>
                   <Button data-testid={`confirm-reset-${admin.id}`} onClick={() => resetDirect(admin.id)} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Confirmar</Button>
                 </div>

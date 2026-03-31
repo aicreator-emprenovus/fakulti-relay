@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { UserCheck, Plus, Pencil, Trash2, Phone, Users, MessageCircle, Key } from "lucide-react";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -161,7 +162,7 @@ export default function AdvisorsPage() {
                 <p className="text-xs text-muted-foreground">Solicitado: {new Date(req.created_at).toLocaleString()}</p>
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
-                    <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña (min 6)" className="bg-muted/50 border-input text-foreground h-8 text-xs" />
+                    <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña (min 6)" className="bg-muted/50 border-input text-foreground h-8 text-xs" />
                   </div>
                   <Button data-testid={`resolve-advisor-reset-${req.id}`} size="sm" onClick={() => resolveRequest(req.id)} className="bg-amber-500 text-white text-xs h-8 rounded-full hover:bg-amber-600">Restablecer</Button>
                 </div>
@@ -239,7 +240,7 @@ export default function AdvisorsPage() {
                     <div className="mt-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex gap-2 items-end">
                       <div className="flex-1">
                         <Label className="text-[10px] text-muted-foreground">Nueva Contraseña</Label>
-                        <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground h-8 text-xs" />
+                        <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 caracteres" className="bg-muted/50 border-input text-foreground h-8 text-xs" />
                       </div>
                       <Button data-testid={`confirm-reset-advisor-${a.id}`} size="sm" onClick={() => resetAdvisorPassword(a.id)} className="bg-amber-500 text-white text-xs h-8 rounded-full hover:bg-amber-600">Restablecer</Button>
                     </div>
@@ -268,7 +269,7 @@ export default function AdvisorsPage() {
             </div>
             <div>
               <Label className="text-muted-foreground text-xs">{editing ? "Nueva contraseña (dejar vacío para no cambiar)" : "Contraseña *"}</Label>
-              <Input data-testid="advisor-password" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="bg-muted border-input" placeholder="********" />
+              <PasswordInput data-testid="advisor-password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="bg-muted border-input" placeholder="********" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
