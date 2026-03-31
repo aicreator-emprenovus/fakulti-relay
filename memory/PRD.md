@@ -9,36 +9,26 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 - **AI**: GPT-5.2 via emergentintegrations (v0.1.1)
 - **WhatsApp**: Meta Cloud API v25.0
 
-## Flujo WhatsApp (Prioridad Máxima)
-El flujo bidireccional de mensajes WhatsApp está **completamente funcional y probado**:
-- Webhook Meta procesa todos los tipos de mensaje (texto, imagen, audio, video, documento, sticker, ubicación, contactos)
-- Bot GPT-5.2 fluido, inteligente y con memoria anti-amnesia
-- Extracción automática de datos (nombre, ciudad, email, producto, CI/RUC, dirección)
-- Progresión automática de funnel stages
-- Modo humano: agente puede tomar control directo
+## Roles del Sistema
+1. **Desarrollador** (dev@fakulti.com): Acceso a Configuración + Centro de Entrenamiento. Puede resetear contraseñas de Admin.
+2. **Admin** (admin@fakulti.com): Dashboard, Chat, Leads, Asesores, Campañas, QR, Juegos, Fidelización, Productos y Bots. Puede resetear contraseñas de Asesores. NO tiene acceso a Configuración ni Centro de Entrenamiento.
+3. **Asesor**: Dashboard, Chat, Leads (solo asignados).
 
-## Recordatorios Inteligentes por Etapa (NUEVO)
-- **cliente_nuevo/cliente_activo**: Mensajes de soporte post-venta (NO mencionan productos para comprar)
-- **interesado/en_negociacion**: Re-engagement mencionando el producto específico del lead
-- **nuevo**: Saludo general e invitación a conversar
-- Mensajes almacenados en chat_messages con source="reminder"
+## Centro de Entrenamiento del Bot (Developer)
+- **Personalidad Global**: Nombre del bot, marca, tono, estilo de saludo/despedida, frases prohibidas, instrucciones adicionales, max emojis, max líneas, idioma
+- **Base de Conocimiento / FAQ**: Preguntas y respuestas que el bot consulta automáticamente
+- **Consola de Pruebas**: Chat simulado para probar el bot con la configuración actual
+- **Gestión de Accesos**: Ver solicitudes de reset de contraseña, resetear passwords de admins
 
-## Detección de Hot Leads + Campana (NUEVO)
-- Cuando un lead alcanza `en_negociacion` o `cliente_nuevo` sin asesor asignado: `needs_advisor=True`
-- Notificación automática para admin con tipo "hot_lead"
-- Campana titilante sutil (CSS animation) junto al nombre en la sidebar del Chat WhatsApp
-- Campana en el header cuando se ve la conversación del hot lead
-- La campana desaparece al asignar un asesor humano
+## Flujo "Olvidé mi Contraseña"
+- Admin → "La solicitud fue enviada al desarrollador del sistema" → Developer resuelve
+- Asesor → "La solicitud fue enviada al Administrador del sistema" → Admin resuelve
+- Admin también puede resetear contraseñas de asesores directamente desde la página Asesores
 
-## Bloques Completados
-Todos los 13 bloques del roadmap + mejoras de recordatorios y hot leads.
-
-## Tareas Canceladas (por instrucción del usuario)
-- ~~Flujos de venta IA para 3 productos restantes~~
-- ~~Refactoring Frontend~~
-- ~~Type hints en Python~~
-- ~~Reportes automáticos por email~~
-- ~~Deploy Railway~~
+## Flujo WhatsApp
+Bidireccional, completamente funcional con memoria anti-amnesia, recordatorios inteligentes por etapa, detección de hot leads con campana titilante.
 
 ## Credenciales de Prueba
+- Developer: dev@fakulti.com / dev2026
 - Admin: admin@fakulti.com / admin123
+- Asesor: carlos@fakulti.com / advisor123

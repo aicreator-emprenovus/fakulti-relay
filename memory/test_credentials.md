@@ -8,6 +8,6 @@
 - Email: admin@fakulti.com
 - Password: admin123
 
-## Advisor (Carlos Mendez)
+## Advisor (ejemplo)
 - Email: carlos@fakulti.com
-- Password: advisor123 (may have been reset during testing)
+- Password: advisor123
