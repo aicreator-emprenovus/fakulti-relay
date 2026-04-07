@@ -2305,13 +2305,13 @@ async def send_whatsapp_message(to_phone: str, text: str):
         async with httpx.AsyncClient() as client_http:
             resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
             if resp.status_code in (200, 201):
-                logger.info(f"WhatsApp message sent to {to_phone}")
+                logger.info(f"WhatsApp message sent to {international_phone}")
                 return True
             else:
-                logger.error(f"WhatsApp send error: {resp.status_code} {resp.text}")
+                logger.error(f"WhatsApp send error to {international_phone}: {resp.status_code} {resp.text[:300]}")
                 return False
     except Exception as e:
-        logger.error(f"WhatsApp send exception: {e}")
+        logger.error(f"WhatsApp send exception to {international_phone}: {e}")
         return False
 
 async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
@@ -2331,13 +2331,13 @@ async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
         async with httpx.AsyncClient() as client_http:
             resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
             if resp.status_code in (200, 201):
-                logger.info(f"WhatsApp image sent to {to_phone}")
+                logger.info(f"WhatsApp image sent to {international_phone}")
                 return True
             else:
-                logger.error(f"WhatsApp image send error: {resp.status_code} {resp.text}")
+                logger.error(f"WhatsApp image send error to {international_phone}: {resp.status_code} {resp.text[:300]}")
                 return False
     except Exception as e:
-        logger.error(f"WhatsApp image send exception: {e}")
+        logger.error(f"WhatsApp image send exception to {international_phone}: {e}")
         return False
 
 UPLOADS_DIR = Path(__file__).parent / "uploads"
@@ -3480,6 +3480,11 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaña no encontrada")
     
+    # Check WhatsApp config BEFORE sending — fail fast if not configured
+    wa_config = await get_whatsapp_config()
+    if not wa_config or not wa_config.get("phone_number_id") or not wa_config.get("access_token"):
+        raise HTTPException(status_code=400, detail="WhatsApp no está configurado. Ve a Configuración y agrega tu Phone Number ID y Access Token de Meta.")
+    
     batch_size = body.get("batch_size", 50)
     query = {}
     if campaign.get("target_stage"):
@@ -3491,32 +3496,60 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
     
     leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1}).to_list(500)
     
+    if not leads:
+        raise HTTPException(status_code=400, detail="No hay leads que coincidan con los filtros de esta campaña")
+    
     # Update target_count with real-time data
     await db.campaigns.update_one({"id": campaign_id}, {"$set": {"target_count": len(leads)}})
     
-    wa_config = await get_whatsapp_config()
     sent = 0
     failed = 0
+    errors = []
     now_iso = datetime.now(timezone.utc).isoformat()
     
+    # Resolve public URL for images (needed for WhatsApp to fetch them)
+    public_url = os.environ.get("PUBLIC_URL", "").rstrip("/")
+    if not public_url:
+        public_url = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+    
     for lead in leads[:batch_size]:
+        phone = lead.get("whatsapp", "")
+        if not phone:
+            failed += 1
+            errors.append(f"{lead.get('name', 'Sin nombre')}: sin número de WhatsApp")
+            continue
+        
         try:
             msg = campaign["message_template"].replace("{nombre}", lead.get("name", "").split()[0] if lead.get("name") else "")
             lead_id = lead["id"]
             image_url = campaign.get("image_url", "")
             
-            # 1. Find or create chat session for this lead (prefer wa_ session)
-            phone = lead.get("whatsapp", "")
-            wa_session_id = f"wa_{phone}" if phone else None
-            meta = None
-            if wa_session_id:
-                meta = await db.chat_sessions_meta.find_one({"session_id": wa_session_id}, {"_id": 0})
+            # 1. Send via WhatsApp API FIRST — only record in chat if successful
+            wa_success = False
+            if image_url:
+                full_image_url = image_url
+                if image_url.startswith("/api/") or image_url.startswith("/"):
+                    full_image_url = f"{public_url}{image_url}"
+                logger.info(f"Campaign image URL resolved: {full_image_url}")
+                wa_success = await send_whatsapp_image(phone, full_image_url, msg)
+            else:
+                wa_success = await send_whatsapp_message(phone, msg)
+            
+            if not wa_success:
+                failed += 1
+                errors.append(f"{lead.get('name', phone)}: WhatsApp API falló")
+                logger.warning(f"Campaign WA send failed for {phone}")
+                continue
+            
+            # 2. Only record in chat history AFTER successful WhatsApp delivery
+            wa_session_id = f"wa_{phone}"
+            meta = await db.chat_sessions_meta.find_one({"session_id": wa_session_id}, {"_id": 0})
             if not meta:
                 meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id, "source": "whatsapp"}, {"_id": 0})
             if not meta:
                 meta = await db.chat_sessions_meta.find_one({"lead_id": lead_id}, {"_id": 0})
             if not meta:
-                session_id = wa_session_id or f"lead_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
+                session_id = wa_session_id
                 await db.chat_sessions_meta.insert_one({
                     "session_id": session_id, "lead_id": lead_id,
                     "lead_name": lead.get("name", ""), "lead_phone": phone, "source": "whatsapp"
@@ -3524,7 +3557,6 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
             else:
                 session_id = meta["session_id"]
             
-            # 2. Record the campaign message in chat history (only message + image)
             content = msg
             if image_url:
                 content += f"\n[Imagen: {image_url}]"
@@ -3538,35 +3570,25 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
             }
             await db.chat_messages.insert_one(chat_msg)
             
-            # 3. Send via WhatsApp API if configured
-            if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
-                wa_phone = phone
-                
-                if image_url:
-                    # Send image with caption via WhatsApp media message
-                    full_image_url = image_url
-                    if image_url.startswith("/api/") or image_url.startswith("/"):
-                        public_url = os.environ.get("PUBLIC_URL", "").rstrip("/")
-                        full_image_url = f"{public_url}{image_url}"
-                    logger.info(f"Campaign image URL resolved: {full_image_url}")
-                    await send_whatsapp_image(wa_phone, full_image_url, msg)
-                else:
-                    # Send text only
-                    await send_whatsapp_message(wa_phone, msg)
-            
-            # 4. Update lead last_interaction
+            # 3. Update lead last_interaction
             await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": now_iso}})
             
             sent += 1
         except Exception as e:
             logger.error(f"Campaign send error for lead {lead.get('id')}: {e}")
             failed += 1
+            errors.append(f"{lead.get('name', phone)}: {str(e)[:80]}")
     
+    status = "sent" if sent > 0 else "failed"
     await db.campaigns.update_one({"id": campaign_id}, {
-        "$set": {"status": "sent", "sent_count": campaign.get("sent_count", 0) + sent, "failed_count": campaign.get("failed_count", 0) + failed,
+        "$set": {"status": status, "sent_count": campaign.get("sent_count", 0) + sent, "failed_count": campaign.get("failed_count", 0) + failed,
                  "last_sent_at": now_iso}
     })
-    return {"message": f"Campaña enviada: {sent} exitosos, {failed} fallidos de {len(leads[:batch_size])} leads", "sent": sent, "failed": failed}
+    
+    result = {"message": f"Campaña: {sent} enviados, {failed} fallidos de {len(leads[:batch_size])} leads", "sent": sent, "failed": failed}
+    if errors:
+        result["errors"] = errors[:10]
+    return result
 
 # ========== BLOCK 11: SMART REMINDERS ==========
 
@@ -3662,15 +3684,27 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
     leads = await db.leads.find(query, {"_id": 0, "id": 1, "name": 1, "whatsapp": 1, "funnel_stage": 1, "product_interest": 1}).limit(batch).to_list(batch)
     
     wa_config = await get_whatsapp_config()
+    if not wa_config or not wa_config.get("phone_number_id") or not wa_config.get("access_token"):
+        raise HTTPException(status_code=400, detail="WhatsApp no está configurado. Ve a Configuración y agrega tus credenciales de Meta.")
+    
     sent = 0
+    failed = 0
     for lead in leads:
+        phone = lead.get("whatsapp", "")
+        if not phone:
+            failed += 1
+            continue
         try:
             msg = _build_smart_reminder_message(lead, reminder.get("message_template", ""))
-            if wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token"):
-                await send_whatsapp_message(lead.get("whatsapp", ""), msg)
+            wa_success = await send_whatsapp_message(phone, msg)
             
-            # Store reminder in chat history
-            session_id = f"wa_{lead.get('whatsapp', '')}"
+            if not wa_success:
+                failed += 1
+                logger.warning(f"Reminder WA send failed for {phone}")
+                continue
+            
+            # Store reminder in chat history only after successful WA send
+            session_id = f"wa_{phone}"
             now = datetime.now(timezone.utc).isoformat()
             await db.chat_messages.insert_one({
                 "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead.get("id"),
@@ -3684,13 +3718,14 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
             )
             await db.leads.update_one({"id": lead["id"]}, {"$set": {"last_interaction": now}})
             sent += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Reminder send error for {phone}: {e}")
+            failed += 1
     
     await db.reminders.update_one({"id": reminder_id}, {
         "$set": {"last_run": datetime.now(timezone.utc).isoformat(), "total_sent": reminder.get("total_sent", 0) + sent}
     })
-    return {"message": f"Recordatorio ejecutado: {sent} mensajes enviados de {len(leads)} leads elegibles", "sent": sent}
+    return {"message": f"Recordatorio ejecutado: {sent} enviados, {failed} fallidos de {len(leads)} leads elegibles", "sent": sent, "failed": failed}
 
 # ========== BLOCK 12: ADMIN DASHBOARD BY ADVISOR ==========
 

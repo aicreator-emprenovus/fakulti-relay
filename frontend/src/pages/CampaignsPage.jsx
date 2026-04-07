@@ -85,13 +85,23 @@ export default function CampaignsPage() {
   };
 
   const handleSend = async (id) => {
-    if (!window.confirm("¿Enviar esta campaña a los leads seleccionados?")) return;
+    if (!window.confirm("¿Enviar esta campaña a los leads seleccionados por WhatsApp?")) return;
     setSending(s => ({ ...s, [id]: true }));
     try {
       const res = await axios.post(`${API}/campaigns/${id}/send`, { batch_size: 50 });
-      toast.success(res.data.message);
+      const data = res.data;
+      if (data.failed > 0 && data.sent > 0) {
+        toast.warning(`Campaña parcial: ${data.sent} enviados, ${data.failed} fallidos`);
+      } else if (data.failed > 0 && data.sent === 0) {
+        toast.error(`Campaña fallida: ningún mensaje fue entregado (${data.failed} errores)`);
+      } else {
+        toast.success(data.message);
+      }
+      if (data.errors && data.errors.length > 0) {
+        data.errors.slice(0, 3).forEach(e => toast.error(e, { duration: 6000 }));
+      }
       fetchCampaigns();
-    } catch (err) { toast.error(err.response?.data?.detail || "Error al enviar"); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Error al enviar campaña"); }
     setSending(s => ({ ...s, [id]: false }));
   };
 

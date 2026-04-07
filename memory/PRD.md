@@ -22,15 +22,14 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 10. NotificationBell oculto para rol Desarrollador
 11. Fix: Campos de texto del Centro de Entrenamiento - escritura fluida
 12. Fix: Consola de Pruebas aislada de DB real con historial persistente
-13. Feature: Alerta inmediata cuando cliente solicita asesor (user keywords + bot transfer detection)
-14. Feature: Flujo completo de contraseñas provisionales (31 Mar 2026)
-    - Admin crea usuarios con contraseña provisional → primer login fuerza cambio
-    - Dev genera provisional para Admin, Admin genera para Asesor
-    - Validación alta: 8+ chars, mayúscula, minúscula, número, carácter especial
-    - Generador de contraseñas seguras integrado
-    - Medidor de fortaleza visual (Débil/Media/Fuerte)
-    - Modal ForceChangePassword bloquea navegación hasta cambiar
-    - Mensajes claros: Admin→contacta Desarrollador, Asesor→contacta Admin
+13. Feature: Alerta inmediata cuando cliente solicita asesor
+14. Feature: Flujo completo de contraseñas provisionales
+15. Bugfix: Campañas y Recordatorios - envío real verificado (7 Apr 2026)
+    - Solo graba en historial DESPUÉS de confirmar entrega WhatsApp
+    - Verifica retorno de send_whatsapp_message/send_whatsapp_image
+    - Error claro si WhatsApp no está configurado
+    - Reporte detallado de errores por lead
+    - Misma corrección aplicada a Reminders
 
 ## Backlog Priorizado
 ### P1
@@ -45,4 +44,3 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 ## Credenciales
 - Admin: admin@fakulti.com / Admin123!
 - Developer: aicreator@emprenovus.com / Jlsb*1082
-- Advisor (ejemplo): carlos@fakulti.com / Advisor123!
