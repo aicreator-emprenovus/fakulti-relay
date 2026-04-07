@@ -26,7 +26,7 @@ export default function CampaignsPage() {
   const [products, setProducts] = useState([]);
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "", target_channel: "", message_template: "", image_url: "", scheduled_date: "" });
+  const [form, setForm] = useState({ name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "", target_channel: "", message_template: "", image_url: "", scheduled_date: "", wa_template_name: "", wa_template_language: "es" });
   const [sending, setSending] = useState({});
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
@@ -39,7 +39,7 @@ export default function CampaignsPage() {
   const fetchCampaigns = () => axios.get(`${API}/campaigns`).then(res => setCampaigns(res.data)).catch(() => {});
 
   const resetForm = () => {
-    setForm({ name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "", target_channel: "", message_template: "", image_url: "", scheduled_date: "" });
+    setForm({ name: "", description: "", campaign_type: "promo", target_stage: "", target_product: "", target_channel: "", message_template: "", image_url: "", scheduled_date: "", wa_template_name: "", wa_template_language: "es" });
     setEditingId(null);
   };
 
@@ -244,6 +244,41 @@ export default function CampaignsPage() {
                     <X size={10} />
                   </button>
                 </div>
+              )}
+            </div>
+
+            {/* WhatsApp Template Section */}
+            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+              <Label className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
+                <Send size={12} /> Plantilla de WhatsApp (Template)
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Para enviar campañas a clientes que NO te escribieron en las últimas 24h, necesitas una plantilla aprobada por Meta.
+                Si la dejas vacía, se enviará como mensaje normal (solo funciona dentro de la ventana de 24h).
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Nombre del Template (de Meta)</Label>
+                  <Input data-testid="wa-template-name" value={form.wa_template_name} onChange={e => setForm(f => ({ ...f, wa_template_name: e.target.value }))} className="bg-muted border-input text-foreground text-xs h-8" placeholder="ej: promo_fakulti" />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Idioma</Label>
+                  <Select value={form.wa_template_language || "es"} onValueChange={v => setForm(f => ({ ...f, wa_template_language: v }))}>
+                    <SelectTrigger className="bg-muted border-input text-foreground h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-input">
+                      <SelectItem value="es">Español (es)</SelectItem>
+                      <SelectItem value="es_MX">Español MX (es_MX)</SelectItem>
+                      <SelectItem value="es_ES">Español ES (es_ES)</SelectItem>
+                      <SelectItem value="es_AR">Español AR (es_AR)</SelectItem>
+                      <SelectItem value="en_US">English (en_US)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {form.wa_template_name && (
+                <p className="text-[10px] text-emerald-500">
+                  Se usará el template "{form.wa_template_name}" con parámetro {"{{1}}"} = nombre del lead
+                </p>
               )}
             </div>
 

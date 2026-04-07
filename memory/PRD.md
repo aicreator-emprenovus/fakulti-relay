@@ -24,12 +24,12 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 12. Fix: Consola de Pruebas aislada de DB real con historial persistente
 13. Feature: Alerta inmediata cuando cliente solicita asesor
 14. Feature: Flujo completo de contraseñas provisionales
-15. Bugfix: Campañas y Recordatorios - envío real verificado (7 Apr 2026)
-    - Solo graba en historial DESPUÉS de confirmar entrega WhatsApp
-    - Verifica retorno de send_whatsapp_message/send_whatsapp_image
+15. Bugfix: Campañas/Recordatorios - envío real verificado (7 Apr 2026)
+16. Feature: Soporte de Message Templates de Meta para campañas (7 Apr 2026)
+    - Nueva función send_whatsapp_template() para envíos fuera de ventana 24h
+    - Campos wa_template_name y wa_template_language en campañas
     - Error claro si WhatsApp no está configurado
     - Reporte detallado de errores por lead
-    - Misma corrección aplicada a Reminders
 
 ## Backlog Priorizado
 ### P1

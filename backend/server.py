@@ -2340,6 +2340,52 @@ async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
         logger.error(f"WhatsApp image send exception to {international_phone}: {e}")
         return False
 
+
+async def send_whatsapp_template(to_phone: str, template_name: str, language: str = "es", parameters: list = None, image_url: str = None):
+    """Send a pre-approved template message via WhatsApp Cloud API. Works outside 24h window."""
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        logger.warning("WhatsApp not configured - template not sent")
+        return False
+    international_phone = phone_to_international(to_phone)
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
+    headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
+    
+    components = []
+    if image_url:
+        components.append({
+            "type": "header",
+            "parameters": [{"type": "image", "image": {"link": image_url}}]
+        })
+    if parameters:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(p)} for p in parameters]
+        })
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": international_phone,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language},
+            "components": components
+        }
+    }
+    try:
+        async with httpx.AsyncClient() as client_http:
+            resp = await client_http.post(url, json=payload, headers=headers, timeout=15)
+            if resp.status_code in (200, 201):
+                logger.info(f"WhatsApp template '{template_name}' sent to {international_phone}")
+                return True
+            else:
+                logger.error(f"WhatsApp template error to {international_phone}: {resp.status_code} {resp.text[:300]}")
+                return False
+    except Exception as e:
+        logger.error(f"WhatsApp template exception to {international_phone}: {e}")
+        return False
+
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
@@ -3411,6 +3457,8 @@ class CampaignCreate(BaseModel):
     image_url: Optional[str] = ""
     scheduled_date: Optional[str] = ""
     active: Optional[bool] = True
+    wa_template_name: Optional[str] = ""
+    wa_template_language: Optional[str] = "es"
 
 @api_router.get("/campaigns")
 async def get_campaigns(user=Depends(get_current_user)):
@@ -3523,21 +3571,41 @@ async def send_campaign(campaign_id: str, body: dict = {}, user=Depends(get_curr
             msg = campaign["message_template"].replace("{nombre}", lead.get("name", "").split()[0] if lead.get("name") else "")
             lead_id = lead["id"]
             image_url = campaign.get("image_url", "")
+            wa_template_name = campaign.get("wa_template_name", "")
+            wa_template_lang = campaign.get("wa_template_language", "es")
             
-            # 1. Send via WhatsApp API FIRST — only record in chat if successful
-            wa_success = False
+            # Resolve image URL for WhatsApp
+            full_image_url = ""
             if image_url:
                 full_image_url = image_url
                 if image_url.startswith("/api/") or image_url.startswith("/"):
                     full_image_url = f"{public_url}{image_url}"
-                logger.info(f"Campaign image URL resolved: {full_image_url}")
-                wa_success = await send_whatsapp_image(phone, full_image_url, msg)
+            
+            # 1. Send via WhatsApp API FIRST — only record in chat if successful
+            wa_success = False
+            
+            if wa_template_name:
+                # Use pre-approved template (works outside 24h window)
+                lead_name = lead.get("name", "").split()[0] if lead.get("name") else "cliente"
+                params = [lead_name]  # {{1}} = nombre
+                wa_success = await send_whatsapp_template(
+                    phone, wa_template_name, wa_template_lang, params,
+                    image_url=full_image_url if full_image_url else None
+                )
+                if not wa_success:
+                    errors.append(f"{lead.get('name', phone)}: Template '{wa_template_name}' falló. Verifica que esté aprobado en Meta.")
             else:
-                wa_success = await send_whatsapp_message(phone, msg)
+                # Use regular text/image (only works within 24h window)
+                if full_image_url:
+                    logger.info(f"Campaign image URL resolved: {full_image_url}")
+                    wa_success = await send_whatsapp_image(phone, full_image_url, msg)
+                else:
+                    wa_success = await send_whatsapp_message(phone, msg)
+                if not wa_success:
+                    errors.append(f"{lead.get('name', phone)}: Falló. Si el lead no escribió en 24h, usa un Template de Meta.")
             
             if not wa_success:
                 failed += 1
-                errors.append(f"{lead.get('name', phone)}: WhatsApp API falló")
                 logger.warning(f"Campaign WA send failed for {phone}")
                 continue
             
