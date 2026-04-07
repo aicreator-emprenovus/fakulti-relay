@@ -12,7 +12,7 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 ## Funcionalidades Implementadas
 1. WhatsApp Bot bidireccional con Meta Cloud API v25.0
 2. AI Bot (GPT-5.2) con historial de conversación y Anti-Amnesia
-3. Smart Reminders contextuales por etapa de lead
+3. Smart Reminders contextuales por etapa de lead con soporte de templates
 4. Alerta visual de Lead Caliente (campana pulsante)
 5. Roles: Admin, Asesor, Desarrollador
 6. Centro de Entrenamiento IA (DevPanelPage)
@@ -25,17 +25,18 @@ Plataforma CRM completa con automatización de ventas por WhatsApp para la marca
 13. Feature: Alerta inmediata cuando cliente solicita asesor
 14. Feature: Flujo completo de contraseñas provisionales
 15. Bugfix: Campañas/Recordatorios - envío real verificado (7 Apr 2026)
-16. Feature: Soporte de Message Templates de Meta para campañas (7 Apr 2026)
-    - Nueva función send_whatsapp_template() para envíos fuera de ventana 24h
-    - Campos wa_template_name y wa_template_language en campañas
-    - Error claro si WhatsApp no está configurado
-    - Reporte detallado de errores por lead
+16. Feature: Soporte de Message Templates de Meta (7 Apr 2026)
+    - send_whatsapp_template() para envíos fuera de ventana 24h
+    - Campos wa_template_name y wa_template_language en campañas Y recordatorios
+    - Guía de 9 pasos integrada en la página de Campañas
+    - Fidelización: ahora envía realmente por WhatsApp (antes solo marcaba como enviado)
+    - Reportes detallados de errores por lead
 
 ## Backlog Priorizado
 ### P1
 - Configurar flujos de venta IA para 3 productos restantes (BLOQUEADO - requiere input del usuario)
 - Dividir componentes grandes del frontend (ChatPage, LeadsPage, ConfigPage)
-- Refactorizar server.py (~4000 líneas) en routers modulares
+- Refactorizar server.py (~4200 líneas) en routers modulares
 
 ### P2
 - Agregar type hints al backend Python

@@ -134,6 +134,32 @@ export default function CampaignsPage() {
         </Button>
       </div>
 
+      {/* Template Guide */}
+      <Card className="bg-card border-border rounded-2xl border-l-4 border-l-amber-500">
+        <CardContent className="p-4">
+          <details>
+            <summary className="text-sm font-semibold text-amber-400 cursor-pointer flex items-center gap-1.5">
+              <Send size={14} /> Como crear un Template en Meta para campañas masivas
+            </summary>
+            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+              <p>WhatsApp solo permite enviar mensajes a clientes que NO te escribieron en las últimas 24 horas usando <strong>plantillas (templates) aprobadas por Meta</strong>.</p>
+              <ol className="list-decimal list-inside space-y-1.5 pl-2">
+                <li>Ingresa a <a href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" rel="noreferrer" className="text-primary hover:underline">Meta Business Manager &rarr; WhatsApp Manager &rarr; Message Templates</a></li>
+                <li>Clic en <strong>"Crear plantilla"</strong></li>
+                <li>Selecciona categoría <strong>"Marketing"</strong></li>
+                <li>Dale un nombre (ej: <code className="bg-muted px-1 rounded">promo_fakulti</code>) e idioma <strong>Español</strong></li>
+                <li>En el cuerpo, escribe tu mensaje. Usa <code className="bg-muted px-1 rounded">{"{{1}}"}</code> donde quieras el nombre del lead</li>
+                <li>Ejemplo: <em>"Hola {"{{1}}"}, tenemos algo especial para ti en Fakulti!"</em></li>
+                <li>Puedes agregar un encabezado con imagen si lo deseas</li>
+                <li>Envía para revisión. Meta aprueba en minutos/horas</li>
+                <li>Una vez aprobado, pon el nombre exacto del template en el campo al crear la campaña</li>
+              </ol>
+              <p className="text-amber-400 font-medium mt-2">Sin template, las campañas solo llegarán a clientes que te escribieron en las últimas 24 horas.</p>
+            </div>
+          </details>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {campaigns.map(c => (
           <Card key={c.id} data-testid={`campaign-card-${c.id}`} className="bg-card border-border rounded-2xl overflow-hidden">

@@ -1362,24 +1362,57 @@ async def delete_enrollment(enrollment_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/loyalty/process")
 async def process_loyalty_messages(user=Depends(get_current_user)):
-    """Process all pending loyalty messages that are due."""
+    """Process all pending loyalty messages that are due. Actually sends via WhatsApp."""
     now = datetime.now(timezone.utc)
     enrollments = await db.loyalty_enrollments.find({"status": "activo"}, {"_id": 0}).to_list(500)
+    
+    wa_config = await get_whatsapp_config()
+    wa_ready = wa_config and wa_config.get("phone_number_id") and wa_config.get("access_token")
+    
     sent_count = 0
+    failed_count = 0
     for enrollment in enrollments:
         updated = False
         all_done = True
+        phone = enrollment.get("lead_whatsapp", "")
         for msg in enrollment.get("messages", []):
             if msg["status"] == "pendiente":
                 scheduled = datetime.fromisoformat(msg["scheduled_date"].replace("Z", "+00:00")) if "Z" in msg.get("scheduled_date", "") else datetime.fromisoformat(msg["scheduled_date"])
                 if scheduled.tzinfo is None:
                     scheduled = scheduled.replace(tzinfo=timezone.utc)
                 if now >= scheduled:
-                    msg["status"] = "enviado"
-                    msg["sent_at"] = now.isoformat()
-                    sent_count += 1
+                    # Actually send via WhatsApp
+                    wa_sent = False
+                    if wa_ready and phone:
+                        message_text = msg.get("content", msg.get("message", f"Recordatorio Día {msg.get('day', '?')}"))
+                        # Try template first if configured
+                        template_name = enrollment.get("wa_template_name", "")
+                        if template_name:
+                            lead_name = enrollment.get("lead_name", "cliente").split()[0]
+                            wa_sent = await send_whatsapp_template(phone, template_name, enrollment.get("wa_template_language", "es"), [lead_name])
+                        else:
+                            wa_sent = await send_whatsapp_message(phone, message_text)
+                        
+                        if wa_sent:
+                            # Also record in chat history
+                            session_id = f"wa_{phone}"
+                            await db.chat_messages.insert_one({
+                                "id": str(uuid.uuid4()), "session_id": session_id,
+                                "lead_id": enrollment.get("lead_id", ""),
+                                "role": "assistant", "content": message_text,
+                                "timestamp": now.isoformat(), "source": "loyalty"
+                            })
+                    
+                    if wa_sent or not wa_ready:
+                        msg["status"] = "enviado"
+                        msg["sent_at"] = now.isoformat()
+                        sent_count += 1
+                    else:
+                        msg["status"] = "fallido"
+                        msg["error"] = "WhatsApp API falló. Verifica que el template esté aprobado o que el lead haya escrito en las últimas 24h."
+                        failed_count += 1
                     updated = True
-                    logger.info(f"Loyalty msg sent to {enrollment['lead_name']} ({enrollment['lead_whatsapp']}): Day {msg['day']}")
+                    logger.info(f"Loyalty msg {'sent' if wa_sent else 'failed'} to {enrollment['lead_name']} ({phone}): Day {msg.get('day', '?')}")
                 else:
                     all_done = False
             elif msg["status"] != "enviado":
@@ -1390,7 +1423,7 @@ async def process_loyalty_messages(user=Depends(get_current_user)):
                 update_data["status"] = "completado"
                 update_data["completed_at"] = now.isoformat()
             await db.loyalty_enrollments.update_one({"id": enrollment["id"]}, {"$set": update_data})
-    return {"processed": sent_count, "message": f"{sent_count} mensajes procesados"}
+    return {"processed": sent_count, "failed": failed_count, "message": f"{sent_count} enviados, {failed_count} fallidos"}
 
 @api_router.get("/loyalty/metrics")
 async def get_loyalty_metrics(user=Depends(get_current_user)):
@@ -3691,6 +3724,8 @@ class ReminderCreate(BaseModel):
     days_since_last_interaction: Optional[int] = 7
     batch_size: Optional[int] = 10
     active: Optional[bool] = True
+    wa_template_name: Optional[str] = ""
+    wa_template_language: Optional[str] = "es"
 
 @api_router.get("/reminders")
 async def get_reminders(user=Depends(get_current_user)):
@@ -3757,14 +3792,31 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
     
     sent = 0
     failed = 0
+    errors = []
+    wa_template_name = reminder.get("wa_template_name", "")
+    wa_template_lang = reminder.get("wa_template_language", "es")
+    
     for lead in leads:
         phone = lead.get("whatsapp", "")
         if not phone:
             failed += 1
+            errors.append(f"{lead.get('name', 'Sin nombre')}: sin número de WhatsApp")
             continue
         try:
             msg = _build_smart_reminder_message(lead, reminder.get("message_template", ""))
-            wa_success = await send_whatsapp_message(phone, msg)
+            wa_success = False
+            
+            if wa_template_name:
+                # Use template (works outside 24h window)
+                lead_name = lead.get("name", "cliente").split()[0] if lead.get("name") else "cliente"
+                wa_success = await send_whatsapp_template(phone, wa_template_name, wa_template_lang, [lead_name])
+                if not wa_success:
+                    errors.append(f"{lead.get('name', phone)}: Template '{wa_template_name}' falló")
+            else:
+                # Try regular text (only works within 24h window)
+                wa_success = await send_whatsapp_message(phone, msg)
+                if not wa_success:
+                    errors.append(f"{lead.get('name', phone)}: Falló. El lead no escribió en 24h, necesitas un Template de Meta.")
             
             if not wa_success:
                 failed += 1
@@ -3789,11 +3841,15 @@ async def execute_reminder(reminder_id: str, user=Depends(get_current_user)):
         except Exception as e:
             logger.error(f"Reminder send error for {phone}: {e}")
             failed += 1
+            errors.append(f"{lead.get('name', phone)}: {str(e)[:80]}")
     
     await db.reminders.update_one({"id": reminder_id}, {
         "$set": {"last_run": datetime.now(timezone.utc).isoformat(), "total_sent": reminder.get("total_sent", 0) + sent}
     })
-    return {"message": f"Recordatorio ejecutado: {sent} enviados, {failed} fallidos de {len(leads)} leads elegibles", "sent": sent, "failed": failed}
+    result = {"message": f"Recordatorio ejecutado: {sent} enviados, {failed} fallidos de {len(leads)} leads elegibles", "sent": sent, "failed": failed}
+    if errors:
+        result["errors"] = errors[:10]
+    return result
 
 # ========== BLOCK 12: ADMIN DASHBOARD BY ADVISOR ==========
 
