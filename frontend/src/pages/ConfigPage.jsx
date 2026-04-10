@@ -94,7 +94,7 @@ export default function ConfigPage() {
 
   const openEditRule = (r) => {
     setEditRule(r);
-    setForm({ name: r.name, trigger_type: r.trigger_type, trigger_value: r.trigger_value || "", action_type: r.action_type, action_value: r.action_value || "", description: r.description || "", active: r.active });
+    setForm({ name: r.name, trigger_type: r.trigger_type, trigger_value: r.trigger_value || "", action_type: r.action_type, action_value: r.action_value || "", description: r.description || "", active: r.active, wa_template_name: r.wa_template_name || "", wa_template_language: r.wa_template_language || "es" });
     setShowForm(true);
   };
 
@@ -153,12 +153,50 @@ export default function ConfigPage() {
 
       {tab === "automation" && (
         <div className="space-y-4">
+          {/* Scheduler Status */}
+          <Card className="bg-card border-border rounded-2xl border-l-4 border-l-emerald-500">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Zap size={14} className="text-emerald-500" /> Scheduler Automático
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Las reglas de tipo "Sin respuesta" se procesan automáticamente cada 30 minutos</p>
+                </div>
+                <Button
+                  data-testid="run-automation-now"
+                  onClick={async () => {
+                    try {
+                      const res = await axios.post(`${API}/automation/run-now`);
+                      const d = res.data;
+                      if (d.sent > 0 || d.actions > 0) {
+                        toast.success(d.message);
+                      } else if (d.failed > 0) {
+                        toast.warning(d.message);
+                      } else {
+                        toast.info(d.message || "No hay leads pendientes para procesar");
+                      }
+                      if (d.details && d.details.length > 0) {
+                        d.details.slice(0, 3).forEach(det => toast.info(det, { duration: 6000 }));
+                      }
+                    } catch (err) {
+                      toast.error(err.response?.data?.detail || "Error al ejecutar automatización");
+                    }
+                  }}
+                  className="bg-emerald-600 text-white font-semibold rounded-full hover:bg-emerald-700 text-xs h-8 px-3 gap-1"
+                >
+                  <Zap size={12} /> Ejecutar Ahora
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Reglas de Automatización</h2>
               <p className="text-xs text-muted-foreground">{rules.length} reglas configuradas</p>
             </div>
-            <Button data-testid="add-rule-btn" onClick={() => { setEditRule(null); setForm({ name: "", trigger_type: "nuevo_lead", trigger_value: "", action_type: "enviar_mensaje", action_value: "", description: "", active: true }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
+            <Button data-testid="add-rule-btn" onClick={() => { setEditRule(null); setForm({ name: "", trigger_type: "nuevo_lead", trigger_value: "", action_type: "enviar_mensaje", action_value: "", description: "", active: true, wa_template_name: "", wa_template_language: "es" }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
               <Plus size={14} className="mr-1" /> Nueva Regla
             </Button>
           </div>
@@ -319,7 +357,24 @@ export default function ConfigPage() {
               </div>
             </div>
             <div><Label className="text-xs text-muted-foreground">Valor del disparador</Label><Input value={form.trigger_value} onChange={e => setForm(f => ({ ...f, trigger_value: e.target.value }))} placeholder="Ej: 4 (horas), keywords separados por coma" className="bg-muted border-input text-foreground" /></div>
-            <div><Label className="text-xs text-muted-foreground">Contenido / Valor de la acción</Label><Textarea value={form.action_value} onChange={e => setForm(f => ({ ...f, action_value: e.target.value }))} className="bg-muted border-input text-foreground" rows={3} /></div>
+            <div><Label className="text-xs text-muted-foreground">Contenido / Valor de la acción</Label><Textarea value={form.action_value} onChange={e => setForm(f => ({ ...f, action_value: e.target.value }))} className="bg-muted border-input text-foreground" rows={3} placeholder="Usa {nombre} para personalizar. Ej: Hola {nombre}, te recordamos..." /></div>
+            {form.trigger_type === "sin_respuesta" && form.action_type === "enviar_mensaje" && (
+              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                <Label className="text-xs text-amber-400 font-medium">Template de WhatsApp (opcional)</Label>
+                <p className="text-[10px] text-muted-foreground">Si el lead no escribió en 24h, necesitas un template aprobado por Meta para que el mensaje llegue.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={form.wa_template_name || ""} onChange={e => setForm(f => ({ ...f, wa_template_name: e.target.value }))} placeholder="ej: recordatorio_fakulti" className="bg-muted border-input text-foreground text-xs h-8" />
+                  <Select value={form.wa_template_language || "es"} onValueChange={v => setForm(f => ({ ...f, wa_template_language: v }))}>
+                    <SelectTrigger className="bg-muted border-input text-foreground h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-input">
+                      <SelectItem value="es">Español</SelectItem>
+                      <SelectItem value="es_MX">Español MX</SelectItem>
+                      <SelectItem value="en_US">English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
             <div><Label className="text-xs text-muted-foreground"> Descripción</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="bg-muted border-input text-foreground" rows={2} /></div>
             <div className="flex items-center gap-2"><Label className="text-xs text-muted-foreground">Activa</Label><Switch checked={form.active} onCheckedChange={v => setForm(f => ({ ...f, active: v }))} /></div>
             <Button data-testid="save-rule-btn" onClick={saveRule} className="w-full bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">{editRule ? "Actualizar" : "Crear Regla"}</Button>

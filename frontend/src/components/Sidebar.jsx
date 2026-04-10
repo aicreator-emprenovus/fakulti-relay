@@ -17,7 +17,7 @@ const allNavItems = [
   { path: "/games", icon: Gamepad2, label: "Juegos", roles: ["admin"] },
   { path: "/loyalty", icon: Heart, label: "Fidelización", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "Productos y Bots", roles: ["admin"] },
-  { path: "/config", icon: Zap, label: "Configuración", roles: ["developer"] },
+  { path: "/config", icon: Zap, label: "Configuración", roles: ["admin", "developer"] },
   { path: "/dev-panel", icon: Code, label: "Centro de Entrenamiento", roles: ["developer"] },
   { path: "/dev-alerts", icon: Bell, label: "Panel de Alertas", roles: ["developer"] },
 ];
