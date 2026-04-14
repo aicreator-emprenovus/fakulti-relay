@@ -1,5 +1,7 @@
 """Shared bot prompt builders used by both chat and WhatsApp routes."""
 
+from database import db
+
 
 async def build_product_bot_prompt(product_name: str, all_products: list, lead_data: dict) -> str:
     target = None
@@ -10,6 +12,19 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
 
     if not target:
         return None
+
+    # Load global instructions so product-specific bots also follow general rules
+    global_config = await db.bot_training.find_one({"id": "global"}, {"_id": 0}) or {}
+    global_instructions = global_config.get("general_instructions", "")
+    global_instructions_block = f"\n\nINSTRUCCIONES OBLIGATORIAS DEL SISTEMA:\n{global_instructions}" if global_instructions else ""
+
+    # Load knowledge base for product bots too
+    kb_entries = await db.knowledge_base.find({"active": True}, {"_id": 0, "question": 1, "answer": 1}).to_list(50)
+    kb_block = ""
+    if kb_entries:
+        kb_block = "\n\nBASE DE CONOCIMIENTO (usa estas respuestas cuando el cliente pregunte algo similar):\n" + "\n".join(
+            [f"P: {e['question']}\nR: {e['answer']}" for e in kb_entries]
+        )
 
     bot_cfg = target.get("bot_config", {})
     personality = bot_cfg.get("personality", "experto amigable en el producto")
@@ -90,6 +105,8 @@ RESTRICCIONES GENERALES
 - Siempre lleva la conversacion hacia el cierre de venta.
 - Prioriza beneficios + resultado sobre informacion tecnica.
 - NUNCA repitas una pregunta que el cliente ya respondio en la conversacion.
+{global_instructions_block}
+{kb_block}
 
 EXTRACCION AUTOMATICA DE DATOS
 Al final de CADA respuesta, incluye en lineas separadas:
@@ -147,6 +164,8 @@ RESTRICCIONES
 {restrictions}
 - NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
 - Si piden hablar con un humano, responde que un asesor se comunicara pronto.
+{global_instructions_block}
+{kb_block}
 
 EXTRACCION AUTOMATICA DE DATOS
 Al final de CADA respuesta, incluye en lineas separadas:
