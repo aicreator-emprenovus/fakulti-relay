@@ -65,7 +65,7 @@ export default function SettingsPage() {
     }
     try {
       const res = await axios.get(`${API}/products/${p.id}/bot-config`);
-      setBotForm(res.data);
+      setBotForm(res.data.bot_config || res.data);
       setShowBotConfig(p.id);
     } catch { toast.error("Error al cargar config del bot"); }
   };
