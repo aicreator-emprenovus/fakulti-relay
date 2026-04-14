@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Brain, BookOpen, Plus, Trash2, Edit, Save, TestTube, Send, ChevronDown, ChevronUp } from "lucide-react";
+import { Brain, BookOpen, Plus, Trash2, Edit, Save, TestTube, Send, ChevronDown, ChevronUp, Download, Upload, XCircle } from "lucide-react";
 import { PasswordInput } from "@/components/PasswordInput";
+import * as XLSX from "xlsx";
 
 export default function DevPanelPage() {
   const [tab, setTab] = useState("training");
@@ -72,8 +73,91 @@ function BotTrainingTab() {
 
   if (loading || !config) return <div className="text-muted-foreground text-center py-8">Cargando...</div>;
 
+  const handleExport = async () => {
+    try {
+      const res = await axios.get(`${API}/bot-training/export`);
+      const gc = res.data.global_config || {};
+      const kb = res.data.knowledge_base || [];
+      const wb = XLSX.utils.book_new();
+      const configRows = Object.entries(gc).filter(([k]) => k !== "id").map(([k, v]) => ({ Campo: k, Valor: String(v) }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(configRows), "Config Bot");
+      if (kb.length > 0) {
+        const kbRows = kb.map(e => ({ Pregunta: e.question, Respuesta: e.answer, Categoria: e.category || "general", Activo: e.active !== false ? "Si" : "No" }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(kbRows), "Base Conocimiento");
+      }
+      XLSX.writeFile(wb, "entrenamiento_bot_fakulti.xlsx");
+      toast.success(`Config + ${kb.length} entradas exportadas`);
+    } catch { toast.error("Error al exportar"); }
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const payload = {};
+        const configSheet = wb.Sheets["Config Bot"];
+        if (configSheet) {
+          const rows = XLSX.utils.sheet_to_json(configSheet);
+          const gc = {};
+          rows.forEach(r => {
+            const key = r["Campo"] || r["campo"];
+            let val = r["Valor"] || r["valor"] || "";
+            if (key === "max_emojis_per_message" || key === "max_lines_per_message") val = parseInt(val) || 0;
+            if (key) gc[key] = val;
+          });
+          if (Object.keys(gc).length > 0) payload.global_config = gc;
+        }
+        const kbSheet = wb.Sheets["Base Conocimiento"];
+        if (kbSheet) {
+          const kbRows = XLSX.utils.sheet_to_json(kbSheet);
+          payload.knowledge_base = kbRows.map(r => ({
+            question: r["Pregunta"] || r["question"] || "",
+            answer: r["Respuesta"] || r["answer"] || "",
+            category: r["Categoria"] || r["category"] || "general",
+            active: (r["Activo"] || r["active"] || "Si").toString().toLowerCase() !== "no",
+          })).filter(e => e.question && e.answer);
+        }
+        if (!payload.global_config && !payload.knowledge_base?.length) {
+          toast.error("No se encontraron datos validos. El Excel debe tener hojas 'Config Bot' y/o 'Base Conocimiento'.");
+          return;
+        }
+        const res = await axios.post(`${API}/bot-training/import`, payload);
+        toast.success(res.data.message);
+        axios.get(`${API}/bot-training/global-config`).then(r => setConfig(r.data));
+      } catch { toast.error("Error al importar archivo"); }
+    };
+    input.click();
+  };
+
+  const handleDeleteAll = async () => {
+    if (!window.confirm("¿Borrar TODA la configuracion del bot y la base de conocimiento? Esta accion no se puede deshacer.")) return;
+    if (!window.confirm("¿Estas seguro? El bot volverá a su configuracion por defecto.")) return;
+    try {
+      const res = await axios.delete(`${API}/bot-training/all`);
+      toast.success(res.data.message);
+      axios.get(`${API}/bot-training/global-config`).then(r => setConfig(r.data));
+    } catch { toast.error("Error al borrar"); }
+  };
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end gap-2">
+        <Button data-testid="export-bot-training-btn" variant="outline" onClick={handleExport} className="rounded-full text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10">
+          <Download size={14} className="mr-1" /> Exportar
+        </Button>
+        <Button data-testid="import-bot-training-btn" variant="outline" onClick={handleImport} className="rounded-full text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10">
+          <Upload size={14} className="mr-1" /> Importar
+        </Button>
+        <Button data-testid="delete-all-bot-training-btn" variant="outline" onClick={handleDeleteAll} className="rounded-full text-xs border-red-500/30 text-red-600 hover:bg-red-500/10">
+          <XCircle size={14} className="mr-1" /> Borrar Todo
+        </Button>
+      </div>
       <Card className="bg-card border-border rounded-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Brain size={18} className="text-violet-500" /> Personalidad Global del Bot</CardTitle>
@@ -133,6 +217,51 @@ function KnowledgeBaseTab() {
     try { await axios.delete(`${API}/bot-training/knowledge-base/${id}`); toast.success("Eliminada"); fetch(); } catch { toast.error("Error"); }
   };
 
+  const handleExportKB = () => {
+    const data = entries.map(e => ({ Pregunta: e.question, Respuesta: e.answer, Categoria: e.category || "general", Activo: e.active !== false ? "Si" : "No" }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Base Conocimiento");
+    XLSX.writeFile(wb, "base_conocimiento_fakulti.xlsx");
+    toast.success(`${data.length} entradas exportadas`);
+  };
+
+  const handleImportKB = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws);
+        const kb = rows.map(r => ({
+          question: r["Pregunta"] || r["question"] || "",
+          answer: r["Respuesta"] || r["answer"] || "",
+          category: r["Categoria"] || r["category"] || "general",
+          active: (r["Activo"] || r["active"] || "Si").toString().toLowerCase() !== "no",
+        })).filter(e => e.question && e.answer);
+        if (!kb.length) { toast.error("No se encontraron entradas validas"); return; }
+        const res = await axios.post(`${API}/bot-training/import`, { knowledge_base: kb });
+        toast.success(res.data.message);
+        fetch();
+      } catch { toast.error("Error al importar"); }
+    };
+    input.click();
+  };
+
+  const handleDeleteAllKB = async () => {
+    if (!window.confirm(`¿Eliminar TODAS las ${entries.length} entradas de la base de conocimiento?`)) return;
+    try {
+      const res = await axios.delete(`${API}/bot-training/all`);
+      toast.success(res.data.message);
+      fetch();
+    } catch { toast.error("Error al borrar"); }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -140,9 +269,20 @@ function KnowledgeBaseTab() {
           <h2 className="text-lg font-semibold text-foreground">Base de Conocimiento / FAQ</h2>
           <p className="text-xs text-muted-foreground">{entries.length} entradas — El bot consulta esta base para responder preguntas frecuentes</p>
         </div>
-        <Button data-testid="add-kb-entry" onClick={() => { setEditEntry(null); setForm({ question: "", answer: "", category: "general" }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
-          <Plus size={14} className="mr-1" /> Nueva Entrada
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button data-testid="export-kb-btn" variant="outline" onClick={handleExportKB} className="rounded-full text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10">
+            <Download size={14} className="mr-1" /> Exportar
+          </Button>
+          <Button data-testid="import-kb-btn" variant="outline" onClick={handleImportKB} className="rounded-full text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10">
+            <Upload size={14} className="mr-1" /> Importar
+          </Button>
+          <Button data-testid="delete-all-kb-btn" variant="outline" onClick={handleDeleteAllKB} className="rounded-full text-xs border-red-500/30 text-red-600 hover:bg-red-500/10">
+            <XCircle size={14} className="mr-1" /> Borrar Todo
+          </Button>
+          <Button data-testid="add-kb-entry" onClick={() => { setEditEntry(null); setForm({ question: "", answer: "", category: "general" }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
+            <Plus size={14} className="mr-1" /> Nueva Entrada
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">

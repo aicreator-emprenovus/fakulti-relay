@@ -85,6 +85,58 @@ async def delete_knowledge_entry(entry_id: str, user=Depends(get_current_user)):
     return {"message": "Entrada eliminada"}
 
 
+@router.get("/bot-training/export")
+async def export_bot_training(user=Depends(get_current_user)):
+    config = await db.bot_training.find_one({"id": "global"}, {"_id": 0})
+    entries = await db.knowledge_base.find({}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return {"global_config": config or {}, "knowledge_base": entries}
+
+
+@router.post("/bot-training/import")
+async def import_bot_training(body: dict, user=Depends(get_current_user)):
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo el desarrollador")
+    imported_config = False
+    imported_kb = 0
+
+    gc = body.get("global_config")
+    if gc and isinstance(gc, dict):
+        gc["id"] = "global"
+        await db.bot_training.update_one({"id": "global"}, {"$set": gc}, upsert=True)
+        imported_config = True
+
+    kb_entries = body.get("knowledge_base", [])
+    for entry in kb_entries:
+        doc = {
+            "id": str(uuid.uuid4()),
+            "question": entry.get("question", entry.get("Pregunta", "")),
+            "answer": entry.get("answer", entry.get("Respuesta", "")),
+            "category": entry.get("category", entry.get("Categoria", "general")),
+            "active": entry.get("active", True) if isinstance(entry.get("active"), bool) else str(entry.get("active", entry.get("Activo", "true"))).lower() not in ("no", "false", "0"),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        if doc["question"] and doc["answer"]:
+            await db.knowledge_base.insert_one(doc)
+            imported_kb += 1
+
+    parts = []
+    if imported_config:
+        parts.append("Config global importada")
+    if imported_kb:
+        parts.append(f"{imported_kb} entradas de conocimiento importadas")
+    return {"message": " | ".join(parts) if parts else "Sin datos para importar", "config_imported": imported_config, "kb_imported": imported_kb}
+
+
+@router.delete("/bot-training/all")
+async def delete_all_bot_training(user=Depends(get_current_user)):
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Solo el desarrollador")
+    await db.bot_training.delete_many({})
+    kb_result = await db.knowledge_base.delete_many({})
+    logger.info(f"Bot training reset: config deleted, {kb_result.deleted_count} KB entries deleted")
+    return {"message": f"Config del bot reseteada y {kb_result.deleted_count} entradas de conocimiento eliminadas", "kb_deleted": kb_result.deleted_count}
+
+
 @router.post("/bot-training/test")
 async def test_bot_response(body: dict, user=Depends(get_current_user)):
     if user.get("role") != "developer":
