@@ -98,9 +98,14 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
 
     session_id = f"wa_{phone}"
-    history = await db.chat_messages.find(
+    history_raw = await db.chat_messages.find(
         {"session_id": session_id}, {"_id": 0}
     ).sort("timestamp", 1).to_list(20)
+
+    # Filter out automated messages (campaigns, reminders, loyalty) so GPT
+    # only sees real conversation between the client and the bot
+    auto_sources = {"auto_reminder", "campaign", "reminder", "loyalty"}
+    history = [m for m in history_raw if m.get("source") not in auto_sources]
 
     all_user_text = "\n".join([m["content"] for m in history if m.get("role") == "user"])
 
