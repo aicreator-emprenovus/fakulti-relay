@@ -94,7 +94,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
             if detected:
                 existing_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0}) or existing_lead
 
-    products = await db.products.find({}, {"_id": 0}).to_list(100)
+    products = await db.products.find({"active": True}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
 
     session_id = f"wa_{phone}"

@@ -124,7 +124,8 @@ async def startup():
             logger.error(f"Failed to seed admin: {e}")
 
     product_count = await db.products.count_documents({})
-    if product_count == 0:
+    products_ever_managed = await db.system_config.find_one({"id": "products_managed"}, {"_id": 0})
+    if product_count == 0 and not products_ever_managed:
         products = [
             {"id": str(uuid.uuid4()), "name": "Bombro - Bone Broth Hidrolizado", "code": "BOMBRO", "description": "Bone Broth Hidrolizado premium. Producto unico en Ecuador. Rico en colageno y nutrientes esenciales.", "price": 55.95, "original_price": 59.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2023/02/EDIT_BONE-BROTH-POWDER-200G_FAKULTI_2024.png", "stock": 150, "category": "nutricion", "active": True, "bot_config": {"personality": "Experto en nutricion y caldo de hueso hidrolizado.", "key_benefits": "Colageno de alta absorcion, mejora digestion, soporte articular", "usage_info": "Un sachet al dia. Diluir en agua caliente.", "restrictions": "No prometer curas. No afirmar que reemplaza tratamientos medicos.", "faqs": "Se toma un sachet al dia. Apto para toda la familia."}},
             {"id": str(uuid.uuid4()), "name": "Gomitas Melatonina", "code": "GUMMELAT", "description": "Gomitas de melatonina para un descanso natural y reparador.", "price": 13.25, "original_price": 15.99, "image_url": "https://fakultisupplements.com/wp-content/uploads/2022/10/PRODUCTOS-FAKULTI-GUMMIES-DEFENSE.png", "stock": 200, "category": "bienestar", "active": True, "bot_config": {"personality": "Asesor de bienestar y descanso.", "key_benefits": "Ayuda a conciliar el sueno de forma natural", "usage_info": "Tomar 1-2 gomitas 30 minutos antes de dormir.", "restrictions": "No prometer que cura insomnio. No reemplaza tratamiento medico.", "faqs": "Son gomitas con sabor frutal. No generan dependencia."}},

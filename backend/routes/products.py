@@ -63,8 +63,22 @@ async def import_products(body: dict, user=Depends(get_current_user)):
 async def delete_all_products(user=Depends(get_current_user)):
     if user.get("role") not in ("admin", "developer"):
         raise HTTPException(status_code=403, detail="Sin permisos")
+    # Mark that products have been managed so seed data doesn't re-create them
+    await db.system_config.update_one({"id": "products_managed"}, {"$set": {"id": "products_managed", "value": True}}, upsert=True)
+    # Get all product names before deleting to clean lead references
+    all_products = await db.products.find({}, {"_id": 0, "name": 1}).to_list(500)
+    product_names = [p["name"] for p in all_products if p.get("name")]
     result = await db.products.delete_many({})
-    logger.info(f"All products deleted: {result.deleted_count}")
+    # Clear product_interest on leads that referenced deleted products
+    if product_names:
+        await db.leads.update_many(
+            {"product_interest": {"$in": product_names}},
+            {"$set": {"product_interest": ""}}
+        )
+    # Remove all loyalty sequences
+    await db.loyalty_sequences.delete_many({})
+    await db.loyalty_enrollments.delete_many({})
+    logger.info(f"All products deleted: {result.deleted_count}, lead product refs cleared")
     return {"message": f"{result.deleted_count} productos eliminados", "deleted": result.deleted_count}
 
 
@@ -73,6 +87,7 @@ async def create_product(req: ProductCreate, user=Depends(get_current_user)):
     doc = {"id": str(uuid.uuid4()), **req.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
     await db.products.insert_one(doc)
     doc.pop("_id", None)
+    await db.system_config.update_one({"id": "products_managed"}, {"$set": {"id": "products_managed", "value": True}}, upsert=True)
     return doc
 
 
@@ -85,7 +100,16 @@ async def update_product(product_id: str, req: ProductCreate, user=Depends(get_c
 
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str, user=Depends(get_current_user)):
+    product = await db.products.find_one({"id": product_id}, {"_id": 0, "name": 1})
     await db.products.delete_one({"id": product_id})
+    # Clear product_interest references in leads so bot doesn't use deleted product
+    if product:
+        await db.leads.update_many(
+            {"product_interest": product.get("name", "")},
+            {"$set": {"product_interest": ""}}
+        )
+    # Also remove loyalty sequences tied to this product
+    await db.loyalty_sequences.delete_many({"product_id": product_id})
     return {"message": "Producto eliminado"}
 
 

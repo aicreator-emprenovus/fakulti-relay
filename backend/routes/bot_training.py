@@ -95,7 +95,7 @@ async def test_bot_response(body: dict, user=Depends(get_current_user)):
     if not message:
         raise HTTPException(status_code=400, detail="Mensaje requerido")
 
-    products = await db.products.find({}, {"_id": 0}).to_list(100)
+    products = await db.products.find({"active": True}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
 
     # Use global config from Bot Training Center

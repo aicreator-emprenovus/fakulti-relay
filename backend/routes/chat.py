@@ -89,7 +89,7 @@ async def _parse_ai_response(assistant_content: str, has_name: bool, lead_id_for
 async def send_chat_message(req: ChatMessageRequest, user=Depends(get_current_user)):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-    products = await db.products.find({}, {"_id": 0}).to_list(100)
+    products = await db.products.find({"active": True}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
 
     lead, has_name = await _resolve_chat_lead(req.session_id, req.lead_id)
