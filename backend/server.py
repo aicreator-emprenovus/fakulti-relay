@@ -200,6 +200,8 @@ class AutomationRuleCreate(BaseModel):
     action_value: Optional[str] = ""
     description: Optional[str] = ""
     active: Optional[bool] = True
+    wa_template_name: Optional[str] = ""
+    wa_template_language: Optional[str] = "es"
 
 class WhatsAppConfigUpdate(BaseModel):
     phone_number_id: Optional[str] = ""
@@ -3236,12 +3238,54 @@ async def toggle_automation_rule(rule_id: str, user=Depends(get_current_user)):
     await db.automation_rules.update_one({"id": rule_id}, {"$set": {"active": new_active}})
     return {"active": new_active}
 
+@api_router.delete("/automation/rules/all")
+async def delete_all_automation_rules(user=Depends(get_current_user)):
+    """Delete ALL automation rules."""
+    if user.get("role") not in ("admin", "developer"):
+        raise HTTPException(status_code=403, detail="Sin permisos")
+    result = await db.automation_rules.delete_many({})
+    return {"message": f"{result.deleted_count} reglas eliminadas", "deleted": result.deleted_count}
+
 @api_router.delete("/automation/rules/{rule_id}")
 async def delete_automation_rule(rule_id: str, user=Depends(get_current_user)):
     await db.automation_rules.delete_one({"id": rule_id})
     return {"message": "Regla eliminada"}
 
 @api_router.get("/automation/log")
+
+@api_router.get("/automation/rules/export")
+async def export_automation_rules(user=Depends(get_current_user)):
+    """Export all automation rules as JSON (frontend converts to Excel)."""
+    rules = await db.automation_rules.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return rules
+
+@api_router.post("/automation/rules/import")
+async def import_automation_rules(body: dict, user=Depends(get_current_user)):
+    """Import automation rules from a list."""
+    rules_data = body.get("rules", [])
+    if not rules_data:
+        raise HTTPException(status_code=400, detail="No se proporcionaron reglas")
+    
+    imported = 0
+    for r in rules_data:
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": r.get("name", "Regla importada"),
+            "trigger_type": r.get("trigger_type", "sin_respuesta"),
+            "trigger_value": str(r.get("trigger_value", "")),
+            "action_type": r.get("action_type", "enviar_mensaje"),
+            "action_value": r.get("action_value", ""),
+            "description": r.get("description", ""),
+            "active": r.get("active", True) if isinstance(r.get("active"), bool) else str(r.get("active", "true")).lower() in ("true", "1", "si", "sí"),
+            "wa_template_name": r.get("wa_template_name", ""),
+            "wa_template_language": r.get("wa_template_language", "es"),
+            "order": imported + 1,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.automation_rules.insert_one(doc)
+        imported += 1
+    return {"message": f"{imported} reglas importadas exitosamente", "imported": imported}
+
 async def get_automation_log(limit: int = 50, user=Depends(get_current_user)):
     """Get recent automation execution log."""
     logs = await db.automation_log.find({}, {"_id": 0}).sort("sent_at", -1).to_list(limit)

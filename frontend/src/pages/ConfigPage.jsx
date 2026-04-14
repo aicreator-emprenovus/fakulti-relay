@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import { API } from "@/App";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PasswordInput } from "@/components/PasswordInput";
-import { Zap, MessageSquare, Bot, Plus, Trash2, Edit, Copy, CheckCircle, AlertTriangle, Wifi } from "lucide-react";
+import { Zap, MessageSquare, Bot, Plus, Trash2, Edit, Copy, CheckCircle, AlertTriangle, Wifi, Download, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 
 const TRIGGER_TYPES = {
   nuevo_lead: "Nuevo lead",
@@ -96,6 +98,70 @@ export default function ConfigPage() {
     setEditRule(r);
     setForm({ name: r.name, trigger_type: r.trigger_type, trigger_value: r.trigger_value || "", action_type: r.action_type, action_value: r.action_value || "", description: r.description || "", active: r.active, wa_template_name: r.wa_template_name || "", wa_template_language: r.wa_template_language || "es" });
     setShowForm(true);
+  };
+
+  const exportRules = async () => {
+    try {
+      const res = await axios.get(`${API}/automation/rules/export`);
+      const data = res.data.map(r => ({
+        nombre: r.name,
+        tipo_trigger: r.trigger_type,
+        valor_trigger: r.trigger_value || "",
+        tipo_accion: r.action_type,
+        valor_accion: r.action_value || "",
+        descripcion: r.description || "",
+        activa: r.active ? "Sí" : "No",
+        template_wa: r.wa_template_name || "",
+        idioma_template: r.wa_template_language || "es",
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Reglas");
+      XLSX.writeFile(wb, "reglas_automatizacion_fakulti.xlsx");
+      toast.success(`${data.length} reglas exportadas a Excel`);
+    } catch { toast.error("Error al exportar"); }
+  };
+
+  const importRules = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls,.csv";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer);
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws);
+        const mapped = rows.map(r => ({
+          name: r.nombre || r.name || "Regla importada",
+          trigger_type: r.tipo_trigger || r.trigger_type || "sin_respuesta",
+          trigger_value: String(r.valor_trigger || r.trigger_value || ""),
+          action_type: r.tipo_accion || r.action_type || "enviar_mensaje",
+          action_value: r.valor_accion || r.action_value || "",
+          description: r.descripcion || r.description || "",
+          active: ["Sí", "Si", "true", "1", "TRUE"].includes(String(r.activa || r.active || "true")),
+          wa_template_name: r.template_wa || r.wa_template_name || "",
+          wa_template_language: r.idioma_template || r.wa_template_language || "es",
+        }));
+        if (!window.confirm(`Se importarán ${mapped.length} reglas. ¿Continuar?`)) return;
+        await axios.post(`${API}/automation/rules/import`, { rules: mapped });
+        toast.success(`${mapped.length} reglas importadas`);
+        fetchAll();
+      } catch { toast.error("Error al importar. Verifica el formato del archivo."); }
+    };
+    input.click();
+  };
+
+  const deleteAllRules = async () => {
+    if (!window.confirm("¿BORRAR TODAS las reglas de automatización? Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Estás seguro? Se eliminarán TODAS las reglas.")) return;
+    try {
+      const res = await axios.delete(`${API}/automation/rules/all`);
+      toast.success(res.data.message);
+      fetchAll();
+    } catch { toast.error("Error al borrar"); }
   };
 
   const saveWaConfig = async () => {
@@ -191,14 +257,25 @@ export default function ConfigPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Reglas de Automatización</h2>
               <p className="text-xs text-muted-foreground">{rules.length} reglas configuradas</p>
             </div>
-            <Button data-testid="add-rule-btn" onClick={() => { setEditRule(null); setForm({ name: "", trigger_type: "nuevo_lead", trigger_value: "", action_type: "enviar_mensaje", action_value: "", description: "", active: true, wa_template_name: "", wa_template_language: "es" }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
-              <Plus size={14} className="mr-1" /> Nueva Regla
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button data-testid="export-rules-btn" variant="outline" size="sm" onClick={exportRules} className="rounded-full text-xs h-8 gap-1">
+                <Download size={12} /> Exportar
+              </Button>
+              <Button data-testid="import-rules-btn" variant="outline" size="sm" onClick={importRules} className="rounded-full text-xs h-8 gap-1">
+                <Upload size={12} /> Importar
+              </Button>
+              <Button data-testid="delete-all-rules-btn" variant="outline" size="sm" onClick={deleteAllRules} className="rounded-full text-xs h-8 gap-1 text-red-500 border-red-500/30 hover:bg-red-500/10 hover:text-red-400">
+                <Trash2 size={12} /> Borrar Todas
+              </Button>
+              <Button data-testid="add-rule-btn" onClick={() => { setEditRule(null); setForm({ name: "", trigger_type: "nuevo_lead", trigger_value: "", action_type: "enviar_mensaje", action_value: "", description: "", active: true, wa_template_name: "", wa_template_language: "es" }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">
+                <Plus size={14} className="mr-1" /> Nueva Regla
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">
