@@ -326,6 +326,34 @@ async def startup():
         }
         await db.products.update_one({"id": p["id"]}, {"$set": {"bot_config": default_bot}})
 
+    # Migration: Update Bombro with full bot_config if it has the old minimal one
+    bombro = await db.products.find_one({"name": {"$regex": "Bombro|Bone Broth", "$options": "i"}}, {"_id": 0, "id": 1, "bot_config": 1})
+    if bombro:
+        current_personality = (bombro.get("bot_config") or {}).get("personality", "")
+        current_sales_flow = (bombro.get("bot_config") or {}).get("sales_flow", "")
+        if not current_sales_flow or len(current_personality) < 80:
+            full_bombro_config = {
+                "personality": "Asesor humano de Fakulti Laboratorios, especializado en Bone Broth Hidrolizado (Bombro). Experto en nutricion, colageno y bienestar integral. Cercano, confiable, cientifico pero accesible.",
+                "key_benefits": "Colageno de alta absorcion tipo I, II y III. Mejora digestion y salud intestinal. Soporte articular y oseo. Fortalece cabello, unas y piel. Rico en aminoacidos esenciales. Producto unico en Ecuador. Biotecnologia avanzada.",
+                "usage_info": "Un sachet al dia. Diluir en agua caliente o fria. Se puede mezclar con jugos o batidos. Apto para toda la familia. Sabor neutro.",
+                "restrictions": "No prometer curas. No afirmar que reemplaza tratamientos medicos. No dar dosificaciones medicas. Siempre recomendar consultar con un profesional de salud.",
+                "faqs": "Se toma un sachet al dia. Apto para toda la familia. No contiene azucar anadida. Es libre de gluten. Se puede tomar frio o caliente. Resultados visibles en 2-4 semanas de uso continuo.",
+                "sales_flow": "MODO HUMANO AMIGABLE\nEstilo: habla como un amigo que sabe mucho de salud. Nada de frases genericas de vendedor.\n\nPASO 1 - PRIMER CONTACTO\nSi es nuevo: Hola! Bienvenido a Fakulti. Soy tu asesor de bienestar. Como te llamas?\nSi ya tiene nombre: Hola [nombre]! Que gusto saludarte. En que te puedo ayudar?\n\nPASO 2 - IDENTIFICAR NECESIDAD\nCuando el cliente mencione interes en Bombro o caldo de hueso:\n- Que bueno que te interesa Bombro! Es nuestro producto estrella.\n- Es un Bone Broth Hidrolizado premium, unico en Ecuador.\n- Tiene colageno tipo I, II y III de alta absorcion.\n- Perfecto para articulaciones, digestion, piel y cabello.\n- Un sachet al dia es todo lo que necesitas.\n\nPASO 3 - RESOLVER DUDAS\nResponde preguntas sobre:\n- Precio: $55.95 (oferta) / precio normal $59.99\n- Presentacion: Caja con sachets individuales\n- Sabor: Neutro, se mezcla facil con agua, jugos o batidos\n- Beneficios: colageno, articulaciones, digestion, piel, cabello, unas\n- Uso: 1 sachet diario, frio o caliente\n\nPASO 4 - CIERRE DE VENTA\nCuando el cliente muestre interes en comprar:\n1. Pregunta: Cuantas cajas te gustaria llevar? Tenemos promo de 2 cajas.\n2. Pide datos de envio: nombre completo, ciudad, direccion\n3. Pregunta: El pago prefieres realizar por deposito, transferencia o con tarjeta de credito?\n4. Confirma el pedido con todos los datos\n\nPASO 5 - POST-VENTA\nUna vez confirmado:\n- Perfecto! Tu pedido esta registrado.\n- Te enviaremos la confirmacion por este medio.\n- Cualquier duda, aqui estamos para ayudarte.\n\nREGLAS ESPECIALES:\n- Si pide hablar con un humano: Un momento, te transfiero con un asesor del equipo.\n- Si pregunta por otro producto: Claro, tambien tenemos otros productos. Te cuento sobre ellos.\n- Maximo 4-6 lineas por mensaje. No enviar bloques largos.\n- El cliente esta en Ecuador. Todos los precios en dolares."
+            }
+            await db.products.update_one({"id": bombro["id"]}, {"$set": {"bot_config": full_bombro_config}})
+            logger.info("Bombro bot_config migrated to full version")
+
+    # Migration: Seed behavior rules if none exist
+    behavior_count = await db.automation_rules.count_documents({"trigger_type": "comportamiento_bot"})
+    if behavior_count == 0:
+        behavior_rules = [
+            {"id": str(uuid.uuid4()), "name": "Formas de pago", "trigger_type": "comportamiento_bot", "trigger_value": "", "action_type": "instruccion_bot", "action_value": "Cuando el cliente pregunte por formas de pago o como pagar, responde: El pago prefieres realizar por deposito, transferencia o con tarjeta de credito? NO menciones otras formas de pago.", "description": "Define las formas de pago que el bot debe ofrecer", "active": True, "order": 100, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Tono y estilo de comunicacion", "trigger_type": "comportamiento_bot", "trigger_value": "", "action_type": "instruccion_bot", "action_value": "Habla como persona real, cercano y profesional. Frases cortas. Maximo 2 emojis por mensaje. Maximo 4-6 lineas. Evita frases como Gracias por su consulta o Procedo a brindarle informacion. Usa: Claro te cuento, Buena pregunta, Mira te explico rapido.", "description": "Define el tono y estilo del bot", "active": True, "order": 101, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Restricciones medicas", "trigger_type": "comportamiento_bot", "trigger_value": "", "action_type": "instruccion_bot", "action_value": "No prometer curas. No afirmar que los productos reemplazan tratamientos medicos. No usar markdown ni negritas, solo texto plano.", "description": "Restricciones que el bot debe seguir siempre", "active": True, "order": 102, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.automation_rules.insert_many(behavior_rules)
+        logger.info("Bot behavior rules seeded (3 rules)")
+
     logger.info("Fakulti CRM Backend ready")
 
     # Start background automation scheduler
