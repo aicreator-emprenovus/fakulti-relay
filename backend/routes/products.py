@@ -127,9 +127,16 @@ async def get_product_bot_config(product_id: str, user=Depends(get_current_user)
 
 @router.put("/products/{product_id}/bot-config")
 async def update_product_bot_config(product_id: str, config: dict, user=Depends(get_current_user)):
+    # Accept both {bot_config: {...}} and flat {personality: ..., key_benefits: ...}
+    bot_data = config.get("bot_config", config)
+    # Filter out non-bot fields that might be sent
+    allowed_keys = {"personality", "key_benefits", "usage_info", "restrictions", "faqs", "sales_flow"}
+    clean_data = {k: v for k, v in bot_data.items() if k in allowed_keys}
+    if not clean_data:
+        clean_data = {k: v for k, v in config.items() if k in allowed_keys}
     await db.products.update_one(
         {"id": product_id},
-        {"$set": {"bot_config": config.get("bot_config", config)}}
+        {"$set": {"bot_config": clean_data}}
     )
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     return {"product_id": product_id, "product_name": product["name"], "bot_config": product.get("bot_config", {})}

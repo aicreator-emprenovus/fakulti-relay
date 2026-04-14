@@ -72,7 +72,7 @@ export default function SettingsPage() {
 
   const saveBotConfig = async (productId) => {
     try {
-      await axios.put(`${API}/products/${productId}/bot-config`, botForm);
+      await axios.put(`${API}/products/${productId}/bot-config`, { bot_config: botForm });
       toast.success("Configuración del bot actualizada");
       fetchProducts();
     } catch { toast.error("Error al guardar config del bot"); }
