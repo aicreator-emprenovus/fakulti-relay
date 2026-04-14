@@ -157,65 +157,119 @@ async def process_loyalty_messages(user=Depends(get_current_user)):
 
 @router.get("/loyalty/metrics")
 async def get_loyalty_metrics(user=Depends(get_current_user)):
+    from utils import STAGE_LABELS
+
+    # === SUMMARY ===
+    total_leads = await db.leads.count_documents({})
+    converted = await db.leads.count_documents({"funnel_stage": {"$in": ["cliente_nuevo", "cliente_activo"]}})
+    in_progress = await db.leads.count_documents({"funnel_stage": {"$in": ["interesado", "en_negociacion"]}})
+    lost = await db.leads.count_documents({"funnel_stage": "perdido"})
+    conversion_rate = round((converted / total_leads * 100) if total_leads > 0 else 0, 1)
+
+    total_sessions = await db.chat_sessions_meta.count_documents({})
+    bot_messages = await db.chat_messages.count_documents({"role": "assistant"})
+    user_messages = await db.chat_messages.count_documents({"role": "user"})
+    total_campaign_sends = 0
+    campaigns_data = await db.campaigns.find({}, {"_id": 0, "name": 1, "sent_count": 1, "failed_count": 1, "status": 1}).to_list(100)
+    for c in campaigns_data:
+        total_campaign_sends += c.get("sent_count", 0)
+
+    summary = {
+        "total_leads": total_leads,
+        "conversion_rate": conversion_rate,
+        "total_sessions": total_sessions,
+        "bot_messages": bot_messages,
+        "user_messages": user_messages,
+        "total_campaign_sends": total_campaign_sends,
+        "converted": converted,
+        "in_progress": in_progress,
+        "lost": lost,
+    }
+
+    # === FUNNEL DISTRIBUTION ===
+    funnel_stages = ["nuevo", "interesado", "en_negociacion", "cliente_nuevo", "cliente_activo", "perdido"]
+    funnel_distribution = []
+    for stage in funnel_stages:
+        count = await db.leads.count_documents({"funnel_stage": stage})
+        funnel_distribution.append({"stage": STAGE_LABELS.get(stage, stage), "count": count})
+
+    # === PRODUCT INTEREST ===
+    product_pipeline = [
+        {"$match": {"product_interest": {"$ne": ""}}},
+        {"$group": {"_id": "$product_interest", "leads": {"$sum": 1}}},
+        {"$sort": {"leads": -1}},
+        {"$limit": 10}
+    ]
+    product_interest_raw = await db.leads.aggregate(product_pipeline).to_list(10)
+    product_interest = [{"product": p["_id"], "leads": p["leads"]} for p in product_interest_raw]
+
+    # === PRODUCT REVENUE ===
+    revenue_pipeline = [
+        {"$unwind": "$purchase_history"},
+        {"$group": {"_id": "$purchase_history.product_name", "revenue": {"$sum": "$purchase_history.price"}, "count": {"$sum": 1}}},
+        {"$sort": {"revenue": -1}},
+        {"$limit": 10}
+    ]
+    revenue_raw = await db.leads.aggregate(revenue_pipeline).to_list(10)
+    product_revenue = [{"product": r["_id"], "revenue": round(r["revenue"], 2), "orders": r["count"]} for r in revenue_raw]
+
+    # === LOYALTY ===
     total_enrollments = await db.loyalty_enrollments.count_documents({})
     active_enrollments = await db.loyalty_enrollments.count_documents({"status": "active"})
     completed_enrollments = await db.loyalty_enrollments.count_documents({"status": "completed"})
-
+    sent_loyalty_msgs = await db.chat_messages.count_documents({"source": "loyalty"})
+    total_loyalty_msgs = 0
     sequences = await db.loyalty_sequences.find({}, {"_id": 0}).to_list(100)
-    seq_metrics = []
+    for seq in sequences:
+        total_loyalty_msgs += len(seq.get("messages", []))
+
+    loyalty = {
+        "total_enrollments": total_enrollments,
+        "active_enrollments": active_enrollments,
+        "completed_enrollments": completed_enrollments,
+        "sent_messages": sent_loyalty_msgs,
+        "total_messages": total_loyalty_msgs,
+    }
+
+    # === SEQUENCE EFFECTIVENESS ===
+    sequence_effectiveness = []
     for seq in sequences:
         enrolled = await db.loyalty_enrollments.count_documents({"sequence_id": seq["id"]})
-        active = await db.loyalty_enrollments.count_documents({"sequence_id": seq["id"], "status": "active"})
         done = await db.loyalty_enrollments.count_documents({"sequence_id": seq["id"], "status": "completed"})
-        seq_metrics.append({
-            "id": seq["id"], "name": seq.get("product_name", ""), "total_enrolled": enrolled,
-            "active": active, "completed": done,
-            "total_messages": len(seq.get("messages", [])),
-            "completion_rate": round((done / enrolled * 100) if enrolled > 0 else 0, 1)
+        comp_rate = round((done / enrolled * 100) if enrolled > 0 else 0, 1)
+        sequence_effectiveness.append({
+            "name": seq.get("product_name", ""),
+            "enrollments": enrolled,
+            "completion_rate": comp_rate,
+            "delivery_rate": 100 if enrolled > 0 else 0,
         })
 
-    # Recompra analysis
-    pipeline = [
-        {"$match": {"funnel_stage": {"$in": ["cliente_nuevo", "cliente_activo"]}}},
-        {"$project": {"purchase_count": {"$size": {"$ifNull": ["$purchase_history", []]}}, "name": 1, "id": 1}},
-        {"$match": {"purchase_count": {"$gte": 2}}},
-        {"$count": "repeat_buyers"}
-    ]
-    repeat = await db.leads.aggregate(pipeline).to_list(1)
-    repeat_buyers = repeat[0]["repeat_buyers"] if repeat else 0
+    # === CAMPAIGNS ===
+    campaigns_list = [{"name": c.get("name", ""), "sent": c.get("sent_count", 0), "failed": c.get("failed_count", 0), "status": c.get("status", "draft")} for c in campaigns_data]
 
-    total_clients = await db.leads.count_documents({"funnel_stage": {"$in": ["cliente_nuevo", "cliente_activo"]}})
-
-    # Top repeat buyers
+    # === TOP BUYERS ===
     top_pipeline = [
-        {"$match": {"funnel_stage": {"$in": ["cliente_nuevo", "cliente_activo"]}}},
+        {"$match": {"purchase_history": {"$exists": True, "$ne": []}}},
         {"$project": {
-            "_id": 0, "id": 1, "name": 1, "whatsapp": 1,
-            "purchase_count": {"$size": {"$ifNull": ["$purchase_history", []]}},
-            "total_spent": {"$sum": {"$ifNull": ["$purchase_history.price", []]}}
+            "_id": 0, "id": 1, "name": 1, "whatsapp": 1, "funnel_stage": 1,
+            "purchase_count": {"$size": "$purchase_history"},
+            "total_spent": {"$sum": "$purchase_history.price"}
         }},
         {"$sort": {"purchase_count": -1}},
         {"$limit": 10}
     ]
-    top_buyers = await db.leads.aggregate(top_pipeline).to_list(10)
-
-    # Churn risk (active but no interaction > 30 days)
-    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    churn_risk = await db.leads.count_documents({
-        "funnel_stage": {"$in": ["cliente_nuevo", "cliente_activo"]},
-        "last_interaction": {"$lte": thirty_days_ago}
-    })
+    top_raw = await db.leads.aggregate(top_pipeline).to_list(10)
+    top_buyers = [{"name": b.get("name", ""), "purchases": b.get("purchase_count", 0), "total_spent": round(b.get("total_spent", 0), 2), "stage": STAGE_LABELS.get(b.get("funnel_stage", ""), b.get("funnel_stage", ""))} for b in top_raw]
 
     return {
-        "total_enrollments": total_enrollments,
-        "active_enrollments": active_enrollments,
-        "completed_enrollments": completed_enrollments,
-        "sequences": seq_metrics,
-        "repeat_buyers": repeat_buyers,
-        "total_clients": total_clients,
-        "recompra_rate": round((repeat_buyers / total_clients * 100) if total_clients > 0 else 0, 1),
+        "summary": summary,
+        "funnel_distribution": funnel_distribution,
+        "product_interest": product_interest,
+        "product_revenue": product_revenue,
+        "loyalty": loyalty,
+        "sequence_effectiveness": sequence_effectiveness,
+        "campaigns": campaigns_list,
         "top_buyers": top_buyers,
-        "churn_risk_count": churn_risk
     }
 
 
