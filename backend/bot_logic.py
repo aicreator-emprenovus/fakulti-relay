@@ -13,18 +13,16 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
     if not target:
         return None
 
-    # Load global instructions so product-specific bots also follow general rules
-    global_config = await db.bot_training.find_one({"id": "global"}, {"_id": 0}) or {}
-    global_instructions = global_config.get("general_instructions", "")
-    global_instructions_block = f"\n\nINSTRUCCIONES OBLIGATORIAS DEL SISTEMA:\n{global_instructions}" if global_instructions else ""
+    # Load behavior rules from automation_rules (replaces old bot_training)
+    behavior_rules = await db.automation_rules.find(
+        {"trigger_type": "comportamiento_bot", "active": True}, {"_id": 0}
+    ).sort("order", 1).to_list(50)
+    behavior_instructions = "\n".join([
+        f"- {r.get('name', '')}: {r.get('action_value', '')}" for r in behavior_rules if r.get('action_value')
+    ])
+    global_instructions_block = f"\n\nREGLAS DE COMPORTAMIENTO DEL BOT:\n{behavior_instructions}" if behavior_instructions else ""
 
-    # Load knowledge base for product bots too
-    kb_entries = await db.knowledge_base.find({"active": True}, {"_id": 0, "question": 1, "answer": 1}).to_list(50)
     kb_block = ""
-    if kb_entries:
-        kb_block = "\n\nBASE DE CONOCIMIENTO (usa estas respuestas cuando el cliente pregunte algo similar):\n" + "\n".join(
-            [f"P: {e['question']}\nR: {e['answer']}" for e in kb_entries]
-        )
 
     bot_cfg = target.get("bot_config", {})
     personality = bot_cfg.get("personality", "experto amigable en el producto")

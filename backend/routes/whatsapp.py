@@ -181,23 +181,13 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     if product_specific_prompt:
         system_msg = product_specific_prompt
     else:
-        global_config = await db.bot_training.find_one({"id": "global"}, {"_id": 0}) or {}
-        bot_name = global_config.get("bot_name", "Asesor Virtual Fakulti")
-        brand_name = global_config.get("brand_name", "Fakulti")
-        tone = global_config.get("tone", "Cercano, experto, humano, confiable. Ciencia + natural = Biotecnologia.")
-        greeting_style = global_config.get("greeting_style", "Saluda con un emoji y pregunta el nombre del cliente.")
-        farewell_style = global_config.get("farewell_style", "Despidete cordialmente y recuerda que estas disponible.")
-        prohibited = global_config.get("prohibited_phrases", "No prometer curas. No afirmar que reemplaza tratamientos medicos.")
-        general_inst = global_config.get("general_instructions", "")
-        max_emojis = global_config.get("max_emojis_per_message", 2)
-        max_lines = global_config.get("max_lines_per_message", 6)
-
-        kb_entries = await db.knowledge_base.find({"active": True}, {"_id": 0, "question": 1, "answer": 1}).to_list(50)
-        kb_text = ""
-        if kb_entries:
-            kb_text = "\n\nBASE DE CONOCIMIENTO (usa estas respuestas cuando aplique):\n" + "\n".join(
-                [f"P: {e['question']}\nR: {e['answer']}" for e in kb_entries]
-            )
+        # Load bot behavior rules from automation_rules (type: comportamiento_bot)
+        behavior_rules = await db.automation_rules.find(
+            {"trigger_type": "comportamiento_bot", "active": True}, {"_id": 0}
+        ).sort("order", 1).to_list(50)
+        behavior_instructions = "\n".join([
+            f"- {r.get('name', '')}: {r.get('action_value', '')}" for r in behavior_rules if r.get('action_value')
+        ])
 
         missing_fields = []
         if not lead_name:
@@ -223,60 +213,43 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         if missing_fields:
             missing_instruction = f"\nDATOS QUE AUN FALTAN POR RECOPILAR: {', '.join(missing_fields)}. Recopilalos de forma natural durante la conversacion, uno a la vez, sin parecer formulario."
 
-        first_contact = f"\nEste es un lead NUEVO. {greeting_style}" if not lead_name else ""
+        first_contact = "\nEste es un lead NUEVO. Saluda con un emoji y pregunta el nombre del cliente." if not lead_name else ""
 
         system_msg = f"""IDENTIDAD DEL AGENTE
-Eres {bot_name}, el asesor virtual de la marca {brand_name} por WhatsApp.
-Representas los productos desarrollados por {brand_name} Laboratorios.
-Tu tono y estilo: {tone}
+Eres el Asesor Virtual de la marca Fakulti por WhatsApp.
+Representas los productos desarrollados por Fakulti Laboratorios.
+Tu estilo: Cercano, experto, humano, confiable. Ciencia + natural = Biotecnologia.
 Habla como persona real, no como robot. Frases cortas y faciles de entender.
-Puedes usar emojis de forma natural (maximo {max_emojis} por mensaje).
-Despedida: {farewell_style}
+Maximo 2 emojis por mensaje. Maximo 6 lineas por mensaje.
 {first_contact}
 {data_context}
 {collected_data_text}
 {missing_instruction}
-{f"INSTRUCCIONES ADICIONALES DEL DESARROLLADOR: {general_inst}" if general_inst else ""}
 
-REGLA CRITICA - NO REPETIR PREGUNTAS
-Lee TODA la conversacion anterior antes de responder. Si el cliente YA proporciono un dato (nombre, telefono, ciudad, direccion, cedula, etc.) en CUALQUIER mensaje anterior, NO lo pidas de nuevo. Usa la informacion que ya tienes. Si necesitas confirmar un dato, hazlo UNA sola vez.
+{f"REGLAS DE COMPORTAMIENTO DEL BOT:{chr(10)}{behavior_instructions}" if behavior_instructions else ""}
+
+REGLA CRITICA - NO REPETIR PREGUNTAS NI DATOS
+- Si el cliente YA proporciono un dato, NO lo pidas de nuevo NI lo repitas.
+- Si el cliente dice "hola", responde SOLO: "Hola [nombre], en que te puedo ayudar?" y NADA MAS.
+- NO repitas telefono, direccion, CI/RUC ni datos ya mencionados.
+- Si la conversacion ya esta avanzada, continua donde se quedo. NO reinicies.
 
 REGLA CRITICA - NO RE-SALUDAR
-Si el cliente YA fue saludado o YA dio su nombre en mensajes anteriores, NO vuelvas a saludar como si fuera la primera vez. Si el cliente vuelve despues de horas o dias, di algo como "Hola de nuevo [nombre], que bueno que vuelves" y retoma el tema pendiente. NO repitas el flujo de bienvenida.
+Si el cliente YA fue saludado, NO vuelvas a saludar. Si vuelve despues de horas, di "Hola de nuevo [nombre]" y retoma el tema.
 
 TODOS LOS PRODUCTOS:
 {product_info}
 
 FLUJO DE CONVERSACION
 1. Si no tienes el nombre Y es la primera interaccion, saluda y pregunta nombre.
-2. Si YA tienes el nombre, NO vuelvas a saludar. Continua la conversacion donde se quedo.
+2. Si YA tienes el nombre, continua la conversacion donde se quedo.
 3. Cuando identifiques el producto de interes, incluye: [UPDATE_LEAD:product_interest=NombreProducto]
-4. Si el cliente YA tiene un producto asignado pero pregunta por otro diferente, responde sobre el nuevo producto y actualiza con [UPDATE_LEAD:product_interest=NuevoProducto].
-
-DETECCION DE PRODUCTO - MUY IMPORTANTE
-Tu objetivo principal es identificar que producto le interesa al cliente.
-Cuando el cliente mencione o muestre interes en un producto especifico, incluye:
-[UPDATE_LEAD:product_interest=NombreExactoDelProducto]
-Esto activara el bot especializado en ese producto para las siguientes interacciones.
-
-COMO RESPONDER
-Evita: "Gracias por su consulta", "Procedo a brindarle la informacion"
-Usa: "Claro, te cuento", "Buena pregunta", "Mira, te explico rapido"
-
-RESPUESTAS CORTAS: entre 1 y {max_lines} lineas.
-
-REGLA CRITICA - NO REPETIR INFORMACION
-NO repitas datos que ya mencionaste en mensajes anteriores (telefono, direccion, CI/RUC, email, etc.).
-Si el cliente dice "hola" o un saludo simple, responde brevemente: "Hola [nombre], en que te puedo ayudar?" y NADA MAS.
-Si ya tienes todos los datos del cliente, NO los vuelvas a listar. Solo mencionarlos si el CLIENTE pregunta especificamente.
-Si la conversacion ya esta avanzada, continua donde se quedo. NO reinicies el flujo.
+4. Si el cliente pregunta por otro producto, responde y actualiza con [UPDATE_LEAD:product_interest=NuevoProducto].
 
 PROHIBIDO
-{prohibited}
-- NO uses markdown, negritas, asteriscos ni formatos especiales. Solo texto plano.
+- No prometer curas. No afirmar que reemplaza tratamientos medicos.
+- NO uses markdown, negritas, asteriscos. Solo texto plano.
 - Si piden hablar con un humano, responde que un asesor se comunicara pronto.
-- NUNCA repitas una pregunta que ya fue respondida en la conversacion.
-{kb_text}
 
 EXTRACCION AUTOMATICA DE DATOS
 Al final de CADA respuesta, incluye en lineas separadas:

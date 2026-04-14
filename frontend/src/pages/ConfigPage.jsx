@@ -16,6 +16,7 @@ import { Zap, MessageSquare, Bot, Plus, Trash2, Edit, Copy, CheckCircle, AlertTr
 import * as XLSX from "xlsx";
 
 const TRIGGER_TYPES = {
+  comportamiento_bot: "Comportamiento del Bot",
   nuevo_lead: "Nuevo lead",
   lead_sin_datos: "Lead sin datos",
   sin_respuesta: "Sin respuesta (horas)",
@@ -25,6 +26,7 @@ const TRIGGER_TYPES = {
   dias_post_compra: "Días post-compra",
 };
 const ACTION_TYPES = {
+  instruccion_bot: "Instrucción para el Bot",
   enviar_mensaje: "Enviar mensaje",
   respuesta_ia: "Respuesta IA",
   cambiar_etapa: "Cambiar etapa",
