@@ -100,7 +100,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     session_id = f"wa_{phone}"
     history = await db.chat_messages.find(
         {"session_id": session_id}, {"_id": 0}
-    ).sort("timestamp", 1).to_list(50)
+    ).sort("timestamp", 1).to_list(20)
 
     all_user_text = "\n".join([m["content"] for m in history if m.get("role") == "user"])
 
@@ -147,38 +147,23 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
 
     collected_data_text = ""
     if conversation_data:
-        collected_data_text = "\n\nDATOS YA PROPORCIONADOS POR EL CLIENTE (PROHIBIDO volver a solicitar):\n" + "\n".join(f"- {d}" for d in conversation_data)
-    if conversation_summary:
-        collected_data_text += f"\n\nRESUMEN ULTIMOS MENSAJES:\n{conversation_summary}"
+        collected_data_text = "\n\nDATOS YA CONFIRMADOS DEL CLIENTE (NO repetir ni volver a solicitar, solo usarlos cuando sea necesario):\n" + "\n".join(f"- {d}" for d in conversation_data)
 
-    # Repetition detection
+    # Repetition detection - if bot is looping, force short response
     bot_messages = [m["content"] for m in history if m.get("role") == "assistant"]
-    repetition_keywords = ["direccion", "direccion", "cedula", "cedula", "contacto", "telefono", "telefono", "numero", "numero", "nombre completo"]
-    ask_counts = {}
-    for bm in bot_messages[-6:]:
-        bm_lower = bm.lower()
-        for kw in repetition_keywords:
-            if kw in bm_lower and "?" in bm:
-                ask_counts[kw] = ask_counts.get(kw, 0) + 1
-    repeated_topics = [kw for kw, count in ask_counts.items() if count >= 2]
-    if repeated_topics:
-        advisor_id = existing_lead.get("assigned_advisor", "")
-        await db.chat_alerts.insert_one({
-            "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id,
-            "lead_name": existing_lead.get("name", phone), "type": "bot_confused",
-            "message": f"Bot repite preguntas sobre: {', '.join(repeated_topics)}. Se requiere intervencion.",
-            "resolved": False, "created_at": datetime.now(timezone.utc).isoformat()
-        })
-        if advisor_id:
-            await db.advisor_notifications.insert_one({
-                "id": str(uuid.uuid4()), "advisor_id": advisor_id, "type": "bot_escalation",
-                "title": f"Bot necesita ayuda con {existing_lead.get('name', phone)}",
-                "message": f"Bot repite preguntas sobre {', '.join(repeated_topics)}.",
-                "lead_id": lead_id, "session_id": session_id, "read": False,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-        logger.warning(f"Bot escalation: repetition for lead {lead_id} on: {repeated_topics}")
-        collected_data_text += f"\n\nALERTA: Cliente YA proporciono {', '.join(repeated_topics)}. NO pidas estos datos. Si no puedes continuar, di: 'Un momento, te transfiero con un asesor.'"
+    is_bot_looping = False
+    if len(bot_messages) >= 3:
+        # Check if last 3 bot messages are very similar (>60% overlap in content)
+        last3 = [set(bm.lower().split()) for bm in bot_messages[-3:]]
+        if len(last3) == 3:
+            overlap_1_2 = len(last3[0] & last3[1]) / max(len(last3[0] | last3[1]), 1)
+            overlap_2_3 = len(last3[1] & last3[2]) / max(len(last3[1] | last3[2]), 1)
+            if overlap_1_2 > 0.6 and overlap_2_3 > 0.6:
+                is_bot_looping = True
+                logger.warning(f"Bot loop detected for lead {lead_id} ({phone}) - forcing concise response")
+
+    if is_bot_looping:
+        collected_data_text += "\n\nALERTA CRITICA: Tus ultimas respuestas fueron MUY similares. Estas en BUCLE. PARA de repetir datos. Responde con UNA frase corta y directa. Si el cliente dice 'hola', responde solo: 'Hola [nombre], en que te puedo ayudar?' NO repitas datos ya confirmados."
 
     existing_lead["_collected_data_text"] = collected_data_text
 
@@ -274,6 +259,12 @@ Evita: "Gracias por su consulta", "Procedo a brindarle la informacion"
 Usa: "Claro, te cuento", "Buena pregunta", "Mira, te explico rapido"
 
 RESPUESTAS CORTAS: entre 1 y {max_lines} lineas.
+
+REGLA CRITICA - NO REPETIR INFORMACION
+NO repitas datos que ya mencionaste en mensajes anteriores (telefono, direccion, CI/RUC, email, etc.).
+Si el cliente dice "hola" o un saludo simple, responde brevemente: "Hola [nombre], en que te puedo ayudar?" y NADA MAS.
+Si ya tienes todos los datos del cliente, NO los vuelvas a listar. Solo mencionarlos si el CLIENTE pregunta especificamente.
+Si la conversacion ya esta avanzada, continua donde se quedo. NO reinicies el flujo.
 
 PROHIBIDO
 {prohibited}
