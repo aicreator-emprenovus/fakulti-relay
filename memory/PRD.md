@@ -1,38 +1,73 @@
 # Fakulti CRM - PRD
 
-## Problema Original
-Plataforma CRM completa con automatización de ventas por WhatsApp para la marca "Fakulti".
+## Original Problem Statement
+Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca "Fakulti". Incluye bot IA con GPT-5.2, gestion de leads, asesores, campanas, recordatorios, juegos de captacion, cotizaciones, sistema de fidelizacion, y panel de desarrollador para entrenamiento del bot.
 
-## Arquitectura
-- Frontend: React + Tailwind + Shadcn UI
-- Backend: FastAPI + MongoDB (Motor)
-- AI: GPT-5.2 via emergentintegrations
-- External API: Meta WhatsApp Cloud API v25.0
+## Tech Stack
+- **Frontend**: React, Tailwind CSS, Shadcn UI
+- **Backend**: FastAPI (Python), MongoDB (Motor async)
+- **AI**: GPT-5.2 via emergentintegrations (Emergent LLM Key)
+- **External API**: Meta WhatsApp Cloud API v25.0 with Message Templates
 
-## Funcionalidades Implementadas
-1. WhatsApp Bot bidireccional con Meta Cloud API v25.0
-2. AI Bot (GPT-5.2) con historial de conversación y Anti-Amnesia
-3. Smart Reminders contextuales por etapa de lead
-4. Alerta visual de Lead Caliente
-5. Roles: Admin, Asesor, Desarrollador
-6. Centro de Entrenamiento IA + Consola de Pruebas aislada
-7. Panel de Alertas + Contraseñas provisionales
-8. Scheduler automático de recordatorios (cada 30 min)
-9. Soporte de Message Templates de Meta
-10. Export/Import/Delete de reglas de automatización (Excel)
-11. Alerta inmediata cuando cliente solicita asesor
-12. Flujo completo de contraseñas provisionales con seguridad alta
+## Architecture (Post-Refactoring Feb 2026)
+```
+/app/backend/
+├── server.py              # 337 lines - App setup, middleware, startup seed, scheduler
+├── database.py            # DB connection (db, client)
+├── models.py              # All Pydantic models
+├── auth.py                # JWT, password hashing, get_current_user
+├── utils.py               # Phone normalization, constants (FUNNEL_STAGES, etc.)
+├── whatsapp_utils.py      # WA Cloud API helpers (send_message, send_image, send_template)
+├── bot_logic.py           # Shared bot prompt builder (build_product_bot_prompt)
+├── routes/
+│   ├── auth.py            # Auth routes (login, register, password management)
+│   ├── dashboard.py       # Dashboard stats + advisor performance
+│   ├── leads.py           # Lead CRUD, stage, assign, purchase, bot pause/resume
+│   ├── advisors.py        # Advisor CRUD, notifications (advisor + general)
+│   ├── products.py        # Product CRUD, bot config per product
+│   ├── bot_training.py    # Bot Training Center (developer only)
+│   ├── games.py           # Games config (roulette, slots, scratch)
+│   ├── quotations.py      # Quotation CRUD + PDF
+│   ├── loyalty.py         # Loyalty sequences, enrollments, metrics, auto-enroll
+│   ├── chat.py            # Chat messages, sessions, alerts, WA monitoring, AI analysis
+│   ├── bulk.py            # Bulk upload/download Excel reports
+│   ├── whatsapp.py        # WA webhooks, bot logic, upload images
+│   ├── automation.py      # Automation rules CRUD, background scheduler
+│   ├── config.py          # WA + AI configuration
+│   └── campaigns.py       # QR campaigns, promo campaigns, smart reminders
+└── tests/                 # Test files
+```
 
-## Backlog
-### P1
-- Crear templates en Meta Business Manager
-- Configurar flujos IA para 3 productos restantes
-- Refactorizar server.py en routers modulares
+## User Roles
+1. **Developer** (aicreator@emprenovus.com) - Full access, bot training, admin management
+2. **Admin** (admin@fakulti.com) - CRM management, campaigns, advisor management
+3. **Advisor** - Assigned lead conversations only
 
-### P2
-- Type hints en backend
-- Reportes automáticos por email
+## Key Features Implemented
+- Bi-directional WhatsApp integration via Meta Cloud API v25.0
+- AI Bot with GPT-5.2: Anti-Amnesia, Smart product-specific prompts
+- Hot Lead alerts + Handover detection (bot_transfer, solicitud_usuario)
+- Forced password change on first login with provisional passwords
+- Message Template support for campaigns and reminders (24h rule bypass)
+- Background async scheduler for automation rules (every 30 min)
+- Excel Export/Import for automation rules and bulk leads
+- Lead deduplication and phone normalization on startup
+- QR campaign tracking with automatic channel detection
+- Loyalty sequences with WhatsApp delivery
+- Full Excel reporting with 7-sheet executive reports
 
-## Credenciales
-- Admin: admin@fakulti.com / Admin123!
-- Developer: aicreator@emprenovus.com / Jlsb*1082
+## Completed Work
+- [x] WhatsApp Cloud API v25.0 integration
+- [x] GPT-5.2 AI bot with product-specific and general prompts
+- [x] Handover alerts (bot_transfer, solicitud_usuario, timeout)
+- [x] Secure password flow (provisional, forced change, strength validation)
+- [x] Message Templates for campaigns and reminders
+- [x] Automation scheduler (asyncio background task)
+- [x] Excel export/import for rules
+- [x] **server.py refactoring: 4647 -> 337 lines (15 route modules)**
+
+## Backlog (Cancelled by User)
+- Configure AI Sales Flows for remaining 3 products (needs user scripts)
+- Frontend component splitting (ChatPage, LeadsPage, ConfigPage)
+- Type hints for Python backend
+- Automated email reports for advisors
