@@ -24,7 +24,7 @@ Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca 
 │   ├── dashboard.py       # Dashboard stats + advisor performance
 │   ├── leads.py           # Lead CRUD, stage, assign, purchase, bot pause/resume
 │   ├── advisors.py        # Advisor CRUD, notifications (advisor + general)
-│   ├── products.py        # Product CRUD, bot config per product
+│   ├── products.py        # Product CRUD, bot config, export/import/delete-all
 │   ├── bot_training.py    # Bot Training Center (developer only)
 │   ├── games.py           # Games config (roulette, slots, scratch)
 │   ├── quotations.py      # Quotation CRUD + PDF
@@ -38,24 +38,6 @@ Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca 
 └── tests/                 # Test files
 ```
 
-## User Roles
-1. **Developer** (aicreator@emprenovus.com) - Full access, bot training, admin management
-2. **Admin** (admin@fakulti.com) - CRM management, campaigns, advisor management
-3. **Advisor** - Assigned lead conversations only
-
-## Key Features Implemented
-- Bi-directional WhatsApp integration via Meta Cloud API v25.0
-- AI Bot with GPT-5.2: Anti-Amnesia, Smart product-specific prompts
-- Hot Lead alerts + Handover detection (bot_transfer, solicitud_usuario)
-- Forced password change on first login with provisional passwords
-- Message Template support for campaigns and reminders (24h rule bypass)
-- Background async scheduler for automation rules (every 30 min)
-- Excel Export/Import for automation rules and bulk leads
-- Lead deduplication and phone normalization on startup
-- QR campaign tracking with automatic channel detection
-- Loyalty sequences with WhatsApp delivery
-- Full Excel reporting with 7-sheet executive reports
-
 ## Completed Work
 - [x] WhatsApp Cloud API v25.0 integration
 - [x] GPT-5.2 AI bot with product-specific and general prompts
@@ -63,11 +45,6 @@ Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca 
 - [x] Secure password flow (provisional, forced change, strength validation)
 - [x] Message Templates for campaigns and reminders
 - [x] Automation scheduler (asyncio background task)
-- [x] Excel export/import for rules
-- [x] **server.py refactoring: 4647 -> 337 lines (15 route modules)**
-
-## Backlog (Cancelled by User)
-- Configure AI Sales Flows for remaining 3 products (needs user scripts)
-- Frontend component splitting (ChatPage, LeadsPage, ConfigPage)
-- Type hints for Python backend
-- Automated email reports for advisors
+- [x] Excel export/import for automation rules
+- [x] server.py refactoring: 4647 -> 337 lines (15 route modules)
+- [x] Products & Bots: Export/Import Excel + Delete All buttons

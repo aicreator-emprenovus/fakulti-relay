@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Package, Bot, ChevronDown, ChevronUp, Save } from "lucide-react";
+import { Plus, Edit, Trash2, Package, Bot, ChevronDown, ChevronUp, Save, Download, Upload, XCircle } from "lucide-react";
+import * as XLSX from "xlsx";
 
 export default function SettingsPage() {
   const [products, setProducts] = useState([]);
@@ -79,6 +80,76 @@ export default function SettingsPage() {
 
   if (loading) return <div className="text-muted-foreground text-center py-12">Cargando productos...</div>;
 
+  const handleExport = async () => {
+    try {
+      const res = await axios.get(`${API}/products/export`);
+      const data = res.data.map(p => ({
+        Nombre: p.name, Codigo: p.code || "", Descripcion: p.description || "",
+        Precio: p.price, "Precio Original": p.original_price || "", Stock: p.stock || 0,
+        Categoria: p.category || "", Activo: p.active ? "Si" : "No", "URL Imagen": p.image_url || "",
+        "Bot - Personalidad": p.bot_config?.personality || "",
+        "Bot - Beneficios": p.bot_config?.key_benefits || "",
+        "Bot - Uso": p.bot_config?.usage_info || "",
+        "Bot - Restricciones": p.bot_config?.restrictions || "",
+        "Bot - FAQs": p.bot_config?.faqs || "",
+        "Bot - Flujo de Ventas": p.bot_config?.sales_flow || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Productos");
+      XLSX.writeFile(wb, "productos_fakulti.xlsx");
+      toast.success(`${data.length} productos exportados`);
+    } catch { toast.error("Error al exportar"); }
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws);
+        const products_to_import = rows.map(r => ({
+          name: r["Nombre"] || r["name"] || "",
+          code: r["Codigo"] || r["code"] || "",
+          description: r["Descripcion"] || r["description"] || "",
+          price: parseFloat(r["Precio"] || r["price"] || 0),
+          original_price: parseFloat(r["Precio Original"] || r["original_price"] || 0) || null,
+          stock: parseInt(r["Stock"] || r["stock"] || 100),
+          category: r["Categoria"] || r["category"] || "general",
+          active: (r["Activo"] || r["active"] || "Si").toString().toLowerCase() !== "no",
+          image_url: r["URL Imagen"] || r["image_url"] || "",
+          personality: r["Bot - Personalidad"] || r["personality"] || "",
+          key_benefits: r["Bot - Beneficios"] || r["key_benefits"] || "",
+          usage_info: r["Bot - Uso"] || r["usage_info"] || "",
+          restrictions: r["Bot - Restricciones"] || r["restrictions"] || "",
+          faqs: r["Bot - FAQs"] || r["faqs"] || "",
+          sales_flow: r["Bot - Flujo de Ventas"] || r["sales_flow"] || "",
+        })).filter(p => p.name);
+        if (!products_to_import.length) { toast.error("No se encontraron productos validos"); return; }
+        const res = await axios.post(`${API}/products/import`, { products: products_to_import });
+        toast.success(res.data.message);
+        fetchProducts();
+      } catch { toast.error("Error al importar archivo"); }
+    };
+    input.click();
+  };
+
+  const handleDeleteAll = async () => {
+    if (!window.confirm(`¿Eliminar TODOS los ${products.length} productos? Esta accion no se puede deshacer.`)) return;
+    if (!window.confirm("¿Estas seguro? Se borraran todos los productos y sus configuraciones de bot.")) return;
+    try {
+      const res = await axios.delete(`${API}/products/all`);
+      toast.success(res.data.message);
+      fetchProducts();
+    } catch { toast.error("Error al eliminar productos"); }
+  };
+
   return (
     <div data-testid="settings-page" className="space-y-6 animate-fade-in-up">
       <div className="flex items-center justify-between">
@@ -86,9 +157,20 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-foreground">Productos y Bots</h1>
           <p className="text-sm text-muted-foreground">Administra el catálogo de productos y configura los bots especializados por producto</p>
         </div>
-        <Button data-testid="add-product-btn" onClick={() => { setEditProduct(null); setForm({ name: "", code: "", description: "", price: 0, original_price: 0, image_url: "", stock: 100, category: "general", active: true }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 shadow-sm">
-          <Plus size={16} className="mr-1" /> Nuevo Producto
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button data-testid="export-products-btn" variant="outline" onClick={handleExport} className="rounded-full text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10">
+            <Download size={14} className="mr-1" /> Exportar
+          </Button>
+          <Button data-testid="import-products-btn" variant="outline" onClick={handleImport} className="rounded-full text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10">
+            <Upload size={14} className="mr-1" /> Importar
+          </Button>
+          <Button data-testid="delete-all-products-btn" variant="outline" onClick={handleDeleteAll} className="rounded-full text-xs border-red-500/30 text-red-600 hover:bg-red-500/10">
+            <XCircle size={14} className="mr-1" /> Borrar Todo
+          </Button>
+          <Button data-testid="add-product-btn" onClick={() => { setEditProduct(null); setForm({ name: "", code: "", description: "", price: 0, original_price: 0, image_url: "", stock: 100, category: "general", active: true }); setShowForm(true); }} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90 shadow-sm">
+            <Plus size={16} className="mr-1" /> Nuevo Producto
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
