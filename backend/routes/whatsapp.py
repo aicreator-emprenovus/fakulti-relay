@@ -109,6 +109,7 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
 
     all_user_text = "\n".join([m["content"] for m in history if m.get("role") == "user"])
 
+    # Build collected data from lead record + conversation extraction
     conversation_data = []
     if existing_lead.get("name"):
         conversation_data.append(f"Nombre: {existing_lead['name']}")
@@ -118,41 +119,57 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         conversation_data.append(f"Email: {existing_lead['email']}")
     if existing_lead.get("product_interest"):
         conversation_data.append(f"Producto de interes: {existing_lead['product_interest']}")
+    if existing_lead.get("address"):
+        conversation_data.append(f"Direccion de envio: {existing_lead['address']}")
+    if existing_lead.get("ci_ruc"):
+        conversation_data.append(f"CI/RUC: {existing_lead['ci_ruc']}")
     conversation_data.append(f"WhatsApp: {phone}")
 
     import re as _re
-    ci_matches = _re.findall(r'(?:cedula|ci|ruc|cedula)[:\s]*(\d{10,13})', all_user_text, _re.IGNORECASE)
+
+    # Extract and SAVE city from conversation if not already in lead
+    if not existing_lead.get("city") and lead_id:
+        city_patterns = [
+            r'(?:en|de|ciudad|vivo en|estoy en|soy de)\s+(quito|guayaquil|cuenca|ambato|loja|machala|manta|portoviejo|riobamba|ibarra|esmeraldas|santo domingo)',
+            r'(quito|guayaquil|cuenca|ambato|loja|machala|manta|portoviejo|riobamba|ibarra|esmeraldas|santo domingo)',
+        ]
+        for pattern in city_patterns:
+            city_match = _re.search(pattern, all_user_text, _re.IGNORECASE)
+            if city_match:
+                detected_city = city_match.group(1).strip().title()
+                await db.leads.update_one({"id": lead_id}, {"$set": {"city": detected_city}})
+                conversation_data.append(f"Ciudad: {detected_city}")
+                break
+
+    # Extract and SAVE address from conversation if not already in lead
+    if not existing_lead.get("address") and lead_id:
+        # Look for address-like text in user messages (streets, avenues, buildings, etc.)
+        addr_keywords = r'(?:av\.?|avenida|calle|edificio|ed\.?|cdla|ciudadela|mz|manzana|villa|sector|urbanizacion|piso|km|barrio|conjunto)'
+        addr_match = _re.search(rf'({addr_keywords}.{{5,80}})', all_user_text, _re.IGNORECASE)
+        if not addr_match:
+            # Try matching after "en" or location context
+            addr_match = _re.search(r'(?:direccion|domicilio|entrega|envio|recib)[:\s]*(.{10,80})', all_user_text, _re.IGNORECASE)
+        if addr_match:
+            detected_addr = addr_match.group(1).strip().rstrip('.')
+            await db.leads.update_one({"id": lead_id}, {"$set": {"address": detected_addr}})
+            conversation_data.append(f"Direccion de envio: {detected_addr}")
+
+    # Extract CI/RUC
+    ci_matches = _re.findall(r'(?:cedula|ci|ruc)[:\s]*(\d{10,13})', all_user_text, _re.IGNORECASE)
     if not ci_matches:
         ci_matches = _re.findall(r'\b(\d{10})\b', all_user_text)
     if ci_matches:
         ci_val = ci_matches[-1]
-        conversation_data.append(f"CI/RUC mencionado: {ci_val}")
+        if f"CI/RUC: {ci_val}" not in str(conversation_data):
+            conversation_data.append(f"CI/RUC: {ci_val}")
         if lead_id and not existing_lead.get("ci_ruc"):
             await db.leads.update_one({"id": lead_id}, {"$set": {"ci_ruc": ci_val}})
 
-    phone_matches = _re.findall(r'(?:telefono|numero|celular|contacto|cel)[:\s]*(09\d{8}|593\d{9})', all_user_text, _re.IGNORECASE)
-    if not phone_matches:
-        phone_matches = _re.findall(r'\b(09\d{8})\b', all_user_text)
-    if phone_matches:
-        conversation_data.append(f"Telefono contacto: {phone_matches[-1]}")
-
-    addr_matches = _re.findall(r'(?:direccion|direccion|domicilio|entrega)[:\s]*(.{10,80})', all_user_text, _re.IGNORECASE)
-    if addr_matches:
-        conversation_data.append(f"Direccion: {addr_matches[-1].strip()}")
-        if lead_id and not existing_lead.get("address"):
-            await db.leads.update_one({"id": lead_id}, {"$set": {"address": addr_matches[-1].strip()}})
-    list_addr = _re.findall(r'1\.\s*(.+(?:sauces|cdla|ciudadela|calle|mz|villa|manzana).+)', all_user_text, _re.IGNORECASE)
-    if list_addr and not addr_matches:
-        conversation_data.append(f"Direccion: {list_addr[-1].strip()}")
-        if lead_id and not existing_lead.get("address"):
-            await db.leads.update_one({"id": lead_id}, {"$set": {"address": list_addr[-1].strip()}})
-
-    recent_msgs = history[-10:] if len(history) > 10 else history
-    conversation_summary = "\n".join([f"{'CLIENTE' if m['role']=='user' else 'BOT'}: {m['content'][:200]}" for m in recent_msgs])
-
+    # Build the context text for the prompt
     collected_data_text = ""
     if conversation_data:
-        collected_data_text = "\n\nDATOS YA CONFIRMADOS DEL CLIENTE (NO repetir ni volver a solicitar, solo usarlos cuando sea necesario):\n" + "\n".join(f"- {d}" for d in conversation_data)
+        collected_data_text = "\n\nDATOS YA REGISTRADOS DEL CLIENTE (NUNCA volver a pedir estos datos, el cliente YA los proporciono):\n" + "\n".join(f"- {d}" for d in conversation_data)
+        collected_data_text += "\nSi el cliente ya dio ciudad, direccion, nombre, CI/RUC u otro dato, NO lo vuelvas a pedir bajo ninguna circunstancia. Avanza al siguiente paso del flujo."
 
     # Repetition detection - if bot is looping, force short response
     bot_messages = [m["content"] for m in history if m.get("role") == "assistant"]
@@ -229,6 +246,7 @@ Habla como persona real, no como robot. Frases cortas.
 3. Las formas de pago SOLO se mencionan cuando el cliente YA confirmo compra, cantidad y datos de envio. NUNCA antes.
 4. NO anticipes pasos. Espera a que el cliente responda antes de avanzar.
 5. Lee con cuidado la solicitud del cliente. Calidad > velocidad.
+6. Si el cliente YA dio ciudad, direccion u otro dato (ver DATOS YA REGISTRADOS), NUNCA lo vuelvas a pedir.
 6. Maximo 1-2 emojis por mensaje.
 
 {f"REGLAS DE COMPORTAMIENTO:{chr(10)}{behavior_instructions}" if behavior_instructions else ""}
