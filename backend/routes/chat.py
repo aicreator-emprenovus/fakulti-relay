@@ -256,6 +256,10 @@ async def get_chat_sessions(user=Depends(get_current_user)):
         meta = await db.chat_sessions_meta.find_one({"session_id": s["_id"]}, {"_id": 0})
         lead_name = meta.get("lead_name", "") if meta else ""
         source = meta.get("source", "chat_ia") if meta else "chat_ia"
+        # Fallback: sessions with wa_ prefix are always WhatsApp (defensive check
+        # in case chat_sessions_meta was not created or missing source field)
+        if source != "whatsapp" and s["_id"].startswith("wa_"):
+            source = "whatsapp"
         lead_phone = ""
         lead_channel = ""
         bot_paused = False

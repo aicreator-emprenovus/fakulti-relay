@@ -82,6 +82,7 @@ Habla como persona real, NO como robot. Frases cortas. Maximo 1-2 emojis por men
 5. NO anticipes pasos del flujo. Espera a que el cliente responda antes de avanzar.
 6. Lee con cuidado lo que el cliente escribio. Entiende bien su solicitud antes de responder. Calidad > velocidad.
 7. REGLA CRITICA - DATOS YA PROPORCIONADOS: Si en la seccion "DATOS YA REGISTRADOS" aparece ciudad, direccion, nombre u otro dato, el cliente YA lo dio. NUNCA vuelvas a pedir un dato que ya esta registrado. Si el cliente dice "ya te la di", disculpate brevemente y continua con el siguiente paso.
+8. ENTREGAS: TODA compra se envia en UNA SOLA ENTREGA. NUNCA preguntes si quiere la entrega en una sola parte o en entregas parciales. NUNCA ofrezcas entregas parciales, fraccionadas ni por lotes. Asume siempre entrega unica sin preguntarlo.
 
 === PRODUCTO ===
 {target['name']}
@@ -130,6 +131,7 @@ Habla como persona real, no como robot. Frases cortas. Maximo 1-2 emojis por men
 5. Lee con cuidado la solicitud del cliente. Calidad > velocidad.
 6. Si el cliente YA dio ciudad, direccion u otro dato (ver DATOS YA REGISTRADOS), NUNCA lo vuelvas a pedir.
 6. Si el cliente YA fue saludado, NO re-saludes. Continua donde se quedo.
+7. ENTREGAS: TODA compra se envia en UNA SOLA ENTREGA. NUNCA preguntes si la entrega es en una sola parte o en entregas parciales. NUNCA ofrezcas fraccionar la entrega. Asume siempre entrega unica.
 
 === PRODUCTO ===
 {target['name']}

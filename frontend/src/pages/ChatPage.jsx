@@ -598,7 +598,7 @@ export default function ChatPage() {
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <p className="text-[10px] text-muted-foreground">
-                              {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }) : ""}
+                              {msg.timestamp ? `${new Date(msg.timestamp).toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "2-digit" })} · ${new Date(msg.timestamp).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}` : ""}
                             </p>
                             {msg.response_time_ms && (
                               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
