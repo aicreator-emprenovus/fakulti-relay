@@ -280,13 +280,36 @@ async def get_chat_sessions(user=Depends(get_current_user)):
             has_alert = alert is not None
         if user_role == "advisor" and assigned_advisor != user_id:
             continue
+        # Unread count = user messages received after last time someone opened this session
+        last_seen_at = meta.get("last_seen_at") if meta else None
+        if last_seen_at:
+            unread_count = await db.chat_messages.count_documents({
+                "session_id": s["_id"], "role": "user", "timestamp": {"$gt": last_seen_at}
+            })
+        else:
+            unread_count = await db.chat_messages.count_documents({
+                "session_id": s["_id"], "role": "user"
+            })
         result.append({
             "session_id": s["_id"], "lead_id": s.get("lead_id"), "lead_name": lead_name,
             "last_message": s["last_message"], "timestamp": s["timestamp"], "message_count": s["count"],
             "source": source, "lead_phone": lead_phone, "lead_channel": lead_channel, "bot_paused": bot_paused, "has_alert": has_alert,
-            "assigned_advisor": assigned_advisor, "needs_advisor": needs_advisor
+            "assigned_advisor": assigned_advisor, "needs_advisor": needs_advisor,
+            "unread_count": unread_count
         })
     return result
+
+
+@router.post("/chat/sessions/{session_id}/mark-read")
+async def mark_session_read(session_id: str, user=Depends(get_current_user)):
+    """Marca la sesion como leida actualizando last_seen_at en chat_sessions_meta."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.chat_sessions_meta.update_one(
+        {"session_id": session_id},
+        {"$set": {"last_seen_at": now}},
+        upsert=True
+    )
+    return {"success": True, "last_seen_at": now}
 
 
 @router.get("/chat/lead-session/{lead_id}")

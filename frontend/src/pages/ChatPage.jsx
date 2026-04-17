@@ -34,12 +34,13 @@ const REASON_LABELS = {
 
 function SessionItem({ s, isActive, onClick }) {
   const timeAgo = s.timestamp ? (() => { const d = (Date.now() - new Date(s.timestamp).getTime()) / 60000; return d < 1 ? "ahora" : d < 60 ? `${Math.floor(d)}m` : d < 1440 ? `${Math.floor(d / 60)}h` : `${Math.floor(d / 1440)}d`; })() : "";
+  const hasUnread = !isActive && (s.unread_count || 0) > 0;
   return (
     <button
       data-testid={`session-${s.session_id}`}
       onClick={onClick}
       className={`w-full text-left p-2.5 rounded-lg text-xs transition-all relative ${
-        isActive ? "bg-green-500/10 text-green-700 border border-green-500/20" : "text-muted-foreground hover:bg-muted"
+        isActive ? "bg-green-500/10 text-green-700 border border-green-500/20" : hasUnread ? "bg-blue-500/5 hover:bg-blue-500/10" : "text-muted-foreground hover:bg-muted"
       }`}
     >
       <div className="flex items-center gap-2">
@@ -48,7 +49,7 @@ function SessionItem({ s, isActive, onClick }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate font-medium text-foreground">{s.lead_name || "Sin nombre"}</span>
+            <span className={`truncate ${hasUnread ? "font-semibold text-blue-600" : "font-medium text-foreground"}`}>{s.lead_name || "Sin nombre"}</span>
             {s.needs_advisor && (
               <span data-testid={`hot-bell-${s.session_id}`} className="flex-shrink-0 hot-lead-bell" title="Lead caliente - requiere asesor">
                 <Bell size={12} className="text-amber-500" />
@@ -56,6 +57,11 @@ function SessionItem({ s, isActive, onClick }) {
             )}
             {s.has_alert && <AlertTriangle size={11} className="text-red-500 flex-shrink-0" />}
             {s.bot_paused && <span className="text-[9px] px-1 py-0 rounded bg-amber-500/20 text-amber-500 flex-shrink-0">HUMANO</span>}
+            {hasUnread && (
+              <span data-testid={`unread-badge-${s.session_id}`} className="ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center" title={`${s.unread_count} mensaje(s) sin leer`}>
+                {s.unread_count > 9 ? "9+" : s.unread_count}
+              </span>
+            )}
           </div>
           <p className="truncate text-muted-foreground mt-0.5">{s.lead_phone || s.session_id.replace("wa_", "")}</p>
           {s.lead_channel && <span className="text-[10px] px-1.5 py-0 rounded bg-emerald-500/20 text-emerald-400 inline-block mt-0.5">{s.lead_channel}</span>}
@@ -218,6 +224,10 @@ export default function ChatPage() {
     setActiveLeadId(session.lead_id || null);
     setBotPaused(session.bot_paused || false);
     axios.get(`${API}/chat/history/${session.session_id}`).then(res => setMessages(res.data)).catch(() => {});
+    // Mark session as read so unread indicator clears
+    axios.post(`${API}/chat/sessions/${session.session_id}/mark-read`).then(() => {
+      setSessions(prev => prev.map(x => x.session_id === session.session_id ? { ...x, unread_count: 0 } : x));
+    }).catch(() => {});
     if (session.lead_id) {
       axios.get(`${API}/leads/${session.lead_id}`).then(res => {
         const lead = res.data;
