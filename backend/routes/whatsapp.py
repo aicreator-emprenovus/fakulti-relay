@@ -94,6 +94,24 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
             if detected:
                 existing_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0}) or existing_lead
 
+    # Save the incoming user message IMMEDIATELY so it is persisted even if
+    # downstream processing (LLM, extraction, reply) fails for any reason.
+    session_id_early = f"wa_{phone}"
+    now_early = datetime.now(timezone.utc).isoformat()
+    try:
+        await db.chat_messages.insert_one({
+            "id": str(uuid.uuid4()), "session_id": session_id_early,
+            "lead_id": lead_id, "role": "user", "content": message_text,
+            "timestamp": now_early, "source": "whatsapp"
+        })
+        await db.chat_sessions_meta.update_one(
+            {"session_id": session_id_early},
+            {"$set": {"session_id": session_id_early, "lead_id": lead_id, "lead_name": lead_name or phone, "source": "whatsapp", "last_activity": now_early}},
+            upsert=True
+        )
+    except Exception as _e:
+        logger.error(f"Failed to save incoming WA user message for {phone}: {_e}")
+
     products = await db.products.find({"active": True}, {"_id": 0}).to_list(100)
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
 
@@ -445,20 +463,43 @@ async def whatsapp_incoming(request: Request):
                 if phone and text:
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
                         start_time = datetime.now(timezone.utc)
-                        reply, lead_id = await process_whatsapp_incoming(phone, text)
+                        try:
+                            reply, lead_id = await process_whatsapp_incoming(phone, text)
+                        except Exception as e:
+                            logger.exception(f"process_whatsapp_incoming failed for {phone}: {e}")
+                            # Still save the inbound user message so the CRM shows the conversation
+                            fallback_sid = f"wa_{phone}"
+                            fallback_now = datetime.now(timezone.utc).isoformat()
+                            try:
+                                await db.chat_messages.insert_one({
+                                    "id": str(uuid.uuid4()), "session_id": fallback_sid,
+                                    "lead_id": None, "role": "user", "content": text,
+                                    "timestamp": fallback_now, "source": "whatsapp"
+                                })
+                                await db.chat_sessions_meta.update_one(
+                                    {"session_id": fallback_sid},
+                                    {"$set": {"session_id": fallback_sid, "source": "whatsapp", "last_activity": fallback_now}},
+                                    upsert=True
+                                )
+                            except Exception as _e:
+                                logger.error(f"Fallback user-msg save failed for {phone}: {_e}")
+                            continue
                         response_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
                         sent = await send_whatsapp_message(phone, reply)
                         session_id = f"wa_{phone}"
                         now = datetime.now(timezone.utc).isoformat()
                         updated_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1}) if lead_id else None
                         resolved_lead_name = (updated_lead.get("name", "") if updated_lead else "") or phone
-                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": text, "timestamp": now, "source": "whatsapp"})
-                        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent})
-                        await db.chat_sessions_meta.update_one(
-                            {"session_id": session_id},
-                            {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
-                            upsert=True
-                        )
+                        try:
+                            await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent})
+                            await db.chat_sessions_meta.update_one(
+                                {"session_id": session_id},
+                                {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
+                                upsert=True
+                            )
+                            logger.info(f"WA msgs persisted: session={session_id} lead_id={lead_id} delivered={sent}")
+                        except Exception as e:
+                            logger.exception(f"Failed to persist WA assistant message: {e}")
                         # Bot timeout detection
                         if lead_id:
                             recent_msgs = await db.chat_messages.find(

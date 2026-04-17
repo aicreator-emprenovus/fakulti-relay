@@ -241,6 +241,31 @@ async def get_chat_history(session_id: str, user=Depends(get_current_user)):
     return messages
 
 
+@router.get("/chat/whatsapp-debug/{phone}")
+async def whatsapp_debug(phone: str, user=Depends(get_current_user)):
+    """Diagnóstico de conversación por teléfono. Acepta formato 0xxxxxxxxx o 593xxxxxxxxx."""
+    p = phone.strip().replace("+", "").replace(" ", "")
+    if p.startswith("593") and len(p) > 9:
+        p_norm = "0" + p[3:]
+    elif p.startswith("0"):
+        p_norm = p
+    else:
+        p_norm = "0" + p
+    session_id = f"wa_{p_norm}"
+    messages = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("timestamp", 1).to_list(200)
+    meta = await db.chat_sessions_meta.find_one({"session_id": session_id}, {"_id": 0})
+    lead = await db.leads.find_one({"whatsapp": {"$in": [p_norm, p, "593" + p_norm[1:]]}}, {"_id": 0})
+    return {
+        "input_phone": phone,
+        "normalized_phone": p_norm,
+        "session_id": session_id,
+        "messages_count": len(messages),
+        "messages": messages[-20:],
+        "meta": meta,
+        "lead": lead
+    }
+
+
 @router.get("/chat/sessions")
 async def get_chat_sessions(user=Depends(get_current_user)):
     pipeline = [
