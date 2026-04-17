@@ -112,7 +112,7 @@ async def generate_qr_code(campaign_id: str):
             pass
 
     if not phone:
-        phone = "593XXXXXXXXX"
+        phone = "593963241414"
 
     msg = campaign.get("initial_message", "Hola")
     wa_link = f"https://wa.me/{phone}?text={msg.replace(' ', '%20')}"
@@ -146,7 +146,7 @@ async def get_qr_link(campaign_id: str, user=Depends(get_current_user)):
         except Exception:
             pass
     if not phone:
-        phone = "593XXXXXXXXX"
+        phone = "593963241414"
     msg = campaign.get("initial_message", "Hola")
     wa_link = f"https://wa.me/{phone}?text={msg.replace(' ', '%20')}"
     return {"link": wa_link, "campaign": campaign}

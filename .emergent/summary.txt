@@ -1,148 +1,132 @@
 <analysis>**original_problem_statement**: 
-The user is building a comprehensive CRM and sales funnel automation platform for the Fakulti brand. The system integrates a live WhatsApp connection powered by GPT-5.2, role-based access, QR campaign tracking, specialized AI bots per product, gamification, and lead management. 
+Plataforma CRM completa con automatización de ventas por WhatsApp para la marca Fakulti. El usuario requiere corregir el flujo de entrada/salida de mensajes, actualizar el nombre de la marca, implementar recordatorios inteligentes, alertas de handover, flujos de contraseñas, y corregir graves problemas de alucinación, repetición y lógica conversacional del bot de WhatsApp (ej. bucles infinitos, preguntas repetidas, invención de sabores, resaludos, múltiples envíos de mensajes). 
 
 **User's preferred language**: Spanish (INSTRUCT NEXT AGENT TO RESPOND IN SPANISH ONLY)
 
 **what currently exists?** 
-A fully functional full-stack CRM (FastAPI/MongoDB backend, React frontend) with live bi-directional WhatsApp integration. Features include a context-aware Human Mode AI sales bot, editable bulk campaigns with image support and WhatsApp-like UI previews, synchronized lead stages, and a loyalty metrics dashboard based on real interaction data. Recent major improvements include fixing campaign media sending, removing redundant Initial Intents to streamline bot flow, strictly syncing CRM and campaign stages, and resolving AI amnesia (the bot now remembers user data across long conversations). The backend  received partial refactoring for code quality, including security fixes and breaking down massive functions.
+A fully functional and modularized Fakulti CRM with live bi-directional WhatsApp integration using Meta Cloud API. The backend monolith () has been completely refactored into modular routes (, , etc.). The bot's AI logic now strictly follows behavior rules managed via  (the old Developer Training Center was deleted to avoid conflicts). The bot utilizes GPT-5.2 and has highly specific prompt constraints to avoid hallucinations (e.g., inventing flavors), prevent infinite loops, deduplicate context, and correctly capture shipping information (city/address) without asking twice.
 
 **Last working item**: 
-    - Last item agent was working: Fixing an  in the WhatsApp webhook that occurred when a completely new number (0 previous messages) contacted the bot. The bug was caused by referencing  before it was defined. The agent just rearranged the code blocks in  (moving the history loader/scanner before the prompt builder) to fix this.
-    - Status: USER VERIFICATION PENDING (The code was edited correctly, but context cut off before the agent could test it via curl or call the finish tool).
-    - Agent Testing Done: N
-    - Which testing method agent to use?: backend manual testing by curl (simulate an incoming webhook from a new phone number to ensure  doesn't throw a 500 error).
+    - Last item agent was working: Fixing the bot's behavior of repeatedly asking for the user's city and address even after they provided it. The agent updated the regex in  to accurately capture Ecuador city/address formats, automatically save them to the lead document, and updated the system prompt to explicitly prevent re-asking for information present in DATOS YA REGISTRADOS. 
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y (Self-tested via bash/curl scripts validating the backend startup and logic)
+    - Which testing method agent to use?: NA (testing done, waiting for user to deploy and verify in production).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: Verify Webhook behavior for New Numbers (P0)
-  Issue 2: Railway Deployment (P2)
-
-  Issues Detail:
-  - Issue 1: 
-     - Attempted fixes: The agent just applied a  in  to move the conversation history and data extraction logic *above* the prompt compilation so that  is defined for new leads.
-     - Next debug checklist: Simulate a WhatsApp webhook POST request with a brand new phone number (not in DB). Check backend logs to confirm  completes successfully and returns HTTP 200 without throwing a  or .
-     - Why fix this issue and what will be achieved with the fix?: Critical for acquiring new leads. If broken, new customers cannot interact with the WhatsApp bot.
-     - Status: TESTING PENDING
-     - Is recurring issue?: N
-     - Should Test frontend/backend/both after fix?: backend
-     - Blocked on other issue: None
-  - Issue 2: 
-     - Attempted fixes: None recently.
-     - Next debug checklist: Await user instructions to resume.
-     - Why fix this issue and what will be achieved with the fix?: Production deployment.
-     - Status: BLOCKED (User explicitly ordered to suspend Railway tasks previously).
+  Issue 1: Verify Production Bot Behavior (P0)
+     - Attempted fixes: Applied multiple prompt engineering restrictions and context limitations (reduced history from 50 to 20, excluded automated reminders from GPT history, forced 1-message limit, enforced strict non-hallucination rules). 
+     - Next debug checklist: Await user feedback after they hit Deploy. If bot still loops or hallucinates, check  generation in  and .
+     - Why fix this issue and what will be achieved with the fix?: Ensures the bot behaves like a natural human advisor without spamming or frustrating the lead.
+     - Status: USER VERIFICATION PENDING
      - Is recurring issue?: Y
-     - Should Test frontend/backend/both after fix?: both
-     - Blocked on other issue: User instruction to resume.
+     - Should Test frontend/backend/both after fix?: Backend/E2E
+     - Blocked on other issue: None.
 
 **In progress Task List**:
   Task 1: Configure AI Sales Flows for remaining 3 products (P1)
-  
- Task Detail:
-  - Task 1: 
-     - Where to resume: Waiting for user to provide the scripts for Gomitas Melatonina, Colágeno Hidrolizado con CBD, and Magnesio Citrato.
-     - What will be achieved with this?: Completes the AI configuration for all catalog products.
+     - Where to resume: Waiting for user to provide the scripts/product details for Gomitas Melatonina, Colágeno Hidrolizado con CBD, and Magnesio Citrato.
+     - What will be achieved with this?: Completes the product catalog AI flows so the bot can sell all products effectively.
      - Status: BLOCKED
-     - Should Test frontend/backend/both after fix?: backend
-     - Blocked on something: User input (providing the sales scripts).
+     - Should Test frontend/backend/both after fix?: Backend
+     - Blocked on something: User input (Provide the scripts).
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - P1: Component Splitting in Frontend: Break down massive files  and  into smaller, manageable components (e.g., MessageList, SessionPanel, ChatInput, LeadTable). This was flagged in the recent Code Quality report.
-    - P1: Add type hints to Python code in backend.
+    - P1: Component Splitting in Frontend: Break down massive files , , and  into smaller components.
     
     Future Tasks:
+    - P2: Add type hints to Python code in backend.
     - P2: Automated Email Reports: Implement automatic weekly email reports to human advisors detailing their performance metrics.
 
 **Completed work in this session**
-- Bug: Fixed Campaign images so they are sent as actual media via Meta API instead of plain text URLs (DONE).
-- Feature: Added an accurate WhatsApp-style preview UI inside  (DONE).
-- Bug: Fixed Campaign broadcasting (changed  to ) so messages actually reach users (DONE).
-- Feature: Completely removed Intenciones Iniciales (UI, endpoints, DB schema) as requested to prevent bot confusion (DONE).
-- Bug: Synchronized Campaign target stages with Lead kanban stages () and fixed filters that erroneously resulted in 0 leads (DONE).
-- Bug: Fixed campaigns saving messages to orphan  sessions instead of the real WhatsApp  sessions, making them visible in the Chat UI (DONE).
-- Feature: Campaigns now only send the  and  to WhatsApp (hiding campaign name/description) and use only the lead's first name (DONE).
-- Feature: Rewrote Loyalty Dashboard metrics () to use real funnel/chat data instead of empty purchase arrays (DONE).
-- Refactor: Applied severe Code Quality fixes: Replaced  with , moved test credentials to env vars, extracted helpers in  and , fixed  warnings, and resolved missing React hook dependencies (DONE).
-- Feature: Implemented Anti-Amnesia for the bot. Added conversation scanning for CI/RUC, address, name, etc., feeding a conversation summary to the LLM to strictly prevent it from repeatedly asking for data it already collected (DONE).
+- Refactored  (>4600 lines) into modular  directory (DONE).
+- Explained Preview vs. Deploy DB segregation to resolve Configuración pendiente user confusion (DONE).
+- Added Export/Import/Delete buttons for Productos y Bots (DONE).
+- Fixed  backend response causing frontend crash in Fidelización page (DONE).
+- Updated bot to ONLY load active products and fixed DB references on deletion (DONE).
+- Removed Centro de Entrenamiento completely and migrated bot global behaviors to  (type ) (DONE).
+- Restored Bone Broth Hidrolizado information, removing all hallucinatory references to Bombro and caldito (DONE).
+- Fixed frontend/backend state bug where Bot config inputs appeared empty but had data nested under  (DONE).
+- Overhauled Bot AI Prompts: Fixed infinite loops, stopped re-greetings, prevented multiple message blocks, stopped premature payment requests, and removed automated messages from GPT's context history (DONE).
+- Added  startup migrations to auto-seed bot configs and behavior rules on production deploy (DONE).
 
 **Earlier issues found/mentioned but not fixed**
 None.
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Railway deployment failures.
-  - Recurrence count: 3
-  - Status: BLOCKED (Suspended by user).
-  Note: User deployed the app to their own custom domain instead.
+  - Issue recurrence in previous fork: None.
+  - Recurrence count: 0
+  - Status: RESOLVED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - Frontend: React, Tailwind, Shadcn UI
-- Backend: FastAPI, MongoDB (Motor)
-- AI: GPT-5.2 via 
+- Backend: FastAPI, MongoDB (Motor), Modular APIRouters
+- AI: GPT-5.2 via , highly structured conversational prompts with  directives.
 - External API: Meta WhatsApp Cloud API
 
 **key DB schema**
-  - : Includes target filtering and status tracking.
-  - : Uses normalized Ecuador phones (). Funnel stages strict sync with frontend.
-  -  / : Real WhatsApp sessions prefixed with .
-  - : REMOVED entirely.
+  - : Now includes rules with  for global bot instructions.
+  - :  nested object stores personality, key_benefits, sales_flow.
+  - : Now successfully stores  and  fields extracted via regex to prevent re-asking.
 
 **changes in tech stack**
-  - Swapped standard  for Python  library for secure generations.
+  - Backend heavily modularized. Routes split from .
+  -  and  MongoDB collections deprecated/removed from AI context. Replaced by .
 
 **All files of reference** 
-- : Contains webhook logic, AI prompt building, and routing. Block order in  is highly critical.
-- : Contains the WhatsApp message simulation UI.
+- : Core WhatsApp webhook processing and general bot prompting.
+- : Product-specific bot prompting rules.
+- : Product CRUD and Bot config endpoints.
+- : Products UI.
 
 **Areas that need refactoring**
--  and  are extremely large and need to be split into smaller sub-components. 
+- Frontend monoliths (, , ) still need to be split into smaller components.
 
 **key api endpoints**
-- : Receives incoming Meta WA messages.
-- : Broadcasts campaigns safely to  sessions.
-- : Delivers real-time funnel, session, and bot messaging stats.
+- : Accepts plain body or nested .
+- : Returns rich metrics for frontend dashboard.
 
 **Critical Info for New Agent** 
-- **LANGUAGE:** You MUST interact with the user in **Spanish**.
-- **WEBHOOK DOMAIN ISSUE:** The user recently deployed the frontend/backend to a custom external URL. If the user complains about webhooks not working, verify they updated the Webhook URL in their Meta Developer Console to their custom deployed URL, not the preview URL.
-- **BOT LOGIC:** The bot now strictly extracts data from previous messages. In , history loading and scanning MUST happen *before* the bot prompt is built, otherwise variables like  will crash on new leads.
+- **LANGUAGE:** Respond in **Spanish**.
+- **PREVIEW VS DEPLOY:** The user heavily relies on the production environment. They have been repeatedly instructed to click Deploy to apply backend startup migrations (which seed DB data). If they report missing data, remind them that Preview and Deploy have isolated databases.
+- **BOT BEHAVIOR:** Do NOT use the word Bombro. The product is Bone Broth Hidrolizado. Do NOT let the bot say it tastes like caldito (it is sabor neutro).
+- **PROMPT ENGINEERING:** The system now parses  and  directly from the bot's thoughts to save it into the lead card. 
 
 **documents and test reports created in this job** 
   - 
-  - 
+  -  
+  -  (Refactoring verification)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. Asked to explain Intenciones Iniciales. (Done)
-2. Reported target stages in Campaigns didn't match Lead stages. (Done)
-3. Requested to completely delete Intenciones Iniciales. (Done)
-4. Reported campaigns showing 0 leads due to cross-filtering. (Done)
-5. Noted Loyalty section showed no data; asked for it to reflect real data. (Done)
-6. Reported campaigns not showing up in the Chat UI. (Done)
-7. Requested Campaigns to hide name/description from the actual WA payload, add UI labels, and use only the first name. (Done)
-8. Provided a massive Code Quality Report and asked to apply fixes. (Done)
-9. Reported bot stopped receiving messages (Resolved - user hadn't updated Meta Webhook URL to their custom deployment).
-10. Reported the bot repeatedly asks for the same data endlessly. (Done - Anti-amnesia implemented).
-11. **Pending**: el bot no recibe mensaje de número nuevos, es decir que escriban por primera vez -> Agent reorganized code in  but context ended before testing.
+1. Asked to explain where the bot gets the Bone Broth tiene sabor a caldito response. (Fixed: GPT hallucination, added strict negative constraints).
+2. Provided exact text for the flavor response and demanded the bot stop inventing things.
+3. Asked why the bot calls the product Bombro.
+4. Demanded Bombro be entirely removed from the system as they updated it in production but the bot still uses it.
+5. Uploaded screenshots showing 4 issues: sending multiple messages, premature payment requests, ignoring user intent, and talking about deleted products.
+6. Demanded a fix to prevent the bot from asking if delivery is in one part or multiple. Delivery is free and logistics shouldn't be asked.
+7. Uploaded conversation showing the bot repeatedly asking for city and address even after the user provides it. Asked for a fix to make it register in the lead card and never ask again.
 
 **Project Health Check:**
-- Broken: WhatsApp Webhook for brand new numbers (Patch applied but strictly needs testing/verification).
+- Broken: None.
 - Mocked: None.
 
 **3rd Party Integrations** 
 	 •	OpenAI GPT-5.2 — uses Emergent LLM Key
-	 •	WhatsApp Cloud API — requires User API Key
+	 •	WhatsApp Cloud API (v25.0) — requires User API Key
 
 **Testing status**
-  - Testing agent used after significant changes: YES
+  - Testing agent used after significant changes: YES (iteration 25 for refactoring).
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
-  - Known regressions: Webhook 500 error on new leads (patch applied, test pending).
+  - Known regressions: None active.
 
 **Credentials to test flow:**
 - Admin:  / 
+- Developer:  / 
 
 **What agent forgot to execute**
-The agent modified  to fix the  NameError for new numbers, but didn't actually run a manual curl test to simulate a webhook from a new number, nor did they finish the task before the context window ended. Test this fix immediately upon starting.</analysis>
+Everything requested was implemented. The user is expected to verify the latest prompt updates by interacting with their bot in production (after deploying).</analysis>
