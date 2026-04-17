@@ -176,12 +176,18 @@ export default function ChatPage() {
       if (activeSession) {
         axios.get(`${API}/chat/history/${activeSession}`).then(res => {
           setMessages(prev => {
+            // Detect change by length OR by last message id/timestamp (covers updates to delivered/response_time_ms too)
             if (res.data.length !== prev.length) return res.data;
+            const pLast = prev[prev.length - 1];
+            const nLast = res.data[res.data.length - 1];
+            if (pLast?.id !== nLast?.id || pLast?.timestamp !== nLast?.timestamp || pLast?.content !== nLast?.content) {
+              return res.data;
+            }
             return prev;
           });
         }).catch(() => {});
       }
-    }, 8000);
+    }, 3000);
     return () => clearInterval(pollRef.current);
   }, [activeSession, fetchSessions, fetchAlerts]);
 
