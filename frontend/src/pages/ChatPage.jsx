@@ -303,26 +303,39 @@ export default function ChatPage() {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = "";
     if (!file || !activeLeadId) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error("Imagen mayor a 5MB"); return; }
-    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) { toast.error("Formato no soportado (usa JPG/PNG/WEBP)"); return; }
+    // Accept images, PDFs/documents, audio and video. WhatsApp Cloud API limits enforced server-side.
     const caption = input.trim();
     setInput("");
     setSending(true);
-    const localUrl = URL.createObjectURL(file);
-    const optimistic = { role: "assistant", content: caption || "[imagen]", image_url: localUrl, message_type: "image", timestamp: new Date().toISOString(), sent_by: "crm_agent" };
+    const isImage = file.type.startsWith("image/");
+    const localUrl = isImage ? URL.createObjectURL(file) : "";
+    const mediaType = file.type.startsWith("image/") ? "image"
+      : file.type.startsWith("audio/") ? "audio"
+      : file.type.startsWith("video/") ? "video"
+      : "document";
+    const optimistic = {
+      role: "assistant",
+      content: caption || `[${mediaType}] ${file.name}`,
+      ...(isImage ? { image_url: localUrl } : {}),
+      media_type: mediaType,
+      filename: file.name,
+      message_type: mediaType,
+      timestamp: new Date().toISOString(),
+      sent_by: "crm_agent",
+    };
     setMessages(prev => [...prev, optimistic]);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("lead_id", activeLeadId);
       fd.append("caption", caption);
-      await axios.post(`${API}/chat/whatsapp-reply-image`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("Imagen enviada por WhatsApp");
+      await axios.post(`${API}/chat/whatsapp-reply-media`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`${mediaType === "image" ? "Imagen" : mediaType === "document" ? "Documento" : mediaType === "audio" ? "Audio" : "Video"} enviado por WhatsApp`);
       const res = await axios.get(`${API}/chat/history/${activeSession}`);
       setMessages(res.data);
       fetchSessions();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Error al enviar imagen");
+      toast.error(err?.response?.data?.detail || "Error al enviar archivo");
       setMessages(prev => prev.slice(0, -1));
     }
     setSending(false);
@@ -685,6 +698,30 @@ export default function ChatPage() {
                                 />
                                 {msg.content && msg.content !== "[imagen]" && <p>{msg.content}</p>}
                               </>
+                            ) : msg.media_type === "document" && msg.media_url ? (
+                              <>
+                                <a
+                                  href={msg.media_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  data-testid={`chat-msg-doc-${i}`}
+                                  className="flex items-center gap-2 p-2 rounded-lg bg-background/40 border border-border hover:bg-background/60 transition-colors mb-1"
+                                >
+                                  <span className="w-8 h-8 rounded bg-red-500/15 text-red-500 flex items-center justify-center text-[10px] font-bold shrink-0">PDF</span>
+                                  <span className="text-xs truncate">{msg.filename || "documento"}</span>
+                                </a>
+                                {msg.content && !msg.content.startsWith("[") && <p>{msg.content}</p>}
+                              </>
+                            ) : msg.media_type === "audio" && msg.media_url ? (
+                              <>
+                                <audio controls src={msg.media_url} data-testid={`chat-msg-audio-${i}`} className="max-w-full mb-1" preload="metadata">Tu navegador no soporta audio.</audio>
+                                {msg.content && !msg.content.startsWith("[") && <p>{msg.content}</p>}
+                              </>
+                            ) : msg.media_type === "video" && msg.media_url ? (
+                              <>
+                                <video controls src={msg.media_url} data-testid={`chat-msg-video-${i}`} className="rounded-lg max-w-full max-h-60 mb-1" preload="metadata">Tu navegador no soporta video.</video>
+                                {msg.content && !msg.content.startsWith("[") && <p>{msg.content}</p>}
+                              </>
                             ) : msg.content && msg.content.includes("[Imagen:") ? (
                               <>
                                 <p>{msg.content.replace(/\n?\[Imagen:.*?\]/g, "")}</p>
@@ -752,7 +789,7 @@ export default function ChatPage() {
                 <input
                   data-testid="chat-image-input"
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,audio/*,video/mp4,video/3gpp"
                   id="chat-image-file"
                   className="hidden"
                   onChange={handleImageUpload}
@@ -765,7 +802,7 @@ export default function ChatPage() {
                   className="h-10 w-10 p-0 shrink-0"
                   disabled={sending || !activeSession}
                   onClick={() => document.getElementById("chat-image-file")?.click()}
-                  title="Adjuntar imagen"
+                  title="Adjuntar archivo (imagen, PDF, audio, video)"
                 >
                   <Paperclip size={15} />
                 </Button>

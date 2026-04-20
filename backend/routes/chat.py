@@ -11,7 +11,7 @@ from database import db
 from auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
 from models import ChatMessageRequest, CRMWhatsAppReply
 from utils import FUNNEL_STAGES
-from whatsapp_utils import send_whatsapp_message, send_whatsapp_image
+from whatsapp_utils import send_whatsapp_message, send_whatsapp_image, send_whatsapp_media
 from bot_logic import build_product_bot_prompt
 from realtime import broker
 
@@ -545,6 +545,109 @@ async def crm_whatsapp_reply_image(
     )
     await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
     return {"message": "Imagen enviada", "delivered": sent, "image_url": image_url}
+
+
+@router.post("/chat/whatsapp-reply-media")
+async def crm_whatsapp_reply_media(
+    lead_id: str = Form(...),
+    caption: str = Form(""),
+    request: Request = None,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    """Advisor sends any WhatsApp-compatible media (image/pdf/audio/video) to the lead."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    phone = lead.get("whatsapp", "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Lead no tiene numero de WhatsApp")
+
+    ct = (file.content_type or "").lower()
+    # WhatsApp Cloud API supported formats + limits
+    # image: jpg/png/webp (5MB), document: pdf/docx/xlsx/pptx/txt (100MB),
+    # audio: aac/mp4/mpeg/amr/ogg (16MB), video: mp4/3gp (16MB)
+    type_map = [
+        ({"image/jpeg", "image/jpg", "image/png", "image/webp"}, "image", 5 * 1024 * 1024),
+        ({"application/pdf", "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-powerpoint",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "text/plain"}, "document", 100 * 1024 * 1024),
+        ({"audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg",
+          "audio/opus", "audio/webm", "audio/wav", "audio/x-wav"}, "audio", 16 * 1024 * 1024),
+        ({"video/mp4", "video/3gpp"}, "video", 16 * 1024 * 1024),
+    ]
+    media_type = None
+    max_size = 0
+    for types, mt, limit in type_map:
+        if ct in types:
+            media_type = mt
+            max_size = limit
+            break
+    if not media_type:
+        raise HTTPException(status_code=400, detail=f"Formato no soportado ({ct}). Permitidos: imagen (JPG/PNG/WEBP), PDF/DOC/XLS/PPT/TXT, audio (MP3/OGG/OPUS/AAC/WAV) o video (MP4).")
+
+    content = await file.read()
+    if len(content) > max_size:
+        raise HTTPException(status_code=400, detail=f"Archivo supera el limite para {media_type} ({max_size // (1024*1024)}MB).")
+
+    # Pick extension from filename or content-type
+    orig_name = file.filename or f"archivo.{media_type}"
+    ext = pathlib.Path(orig_name).suffix.lower() or ""
+    if not ext:
+        ext_by_ct = {
+            "application/pdf": ".pdf", "audio/mpeg": ".mp3", "audio/ogg": ".ogg",
+            "audio/opus": ".opus", "audio/aac": ".aac", "audio/wav": ".wav",
+            "audio/webm": ".webm", "video/mp4": ".mp4", "video/3gpp": ".3gp",
+            "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+            "text/plain": ".txt",
+        }
+        ext = ext_by_ct.get(ct, "")
+
+    uploads_dir = pathlib.Path(__file__).resolve().parent.parent / "uploads"
+    uploads_dir.mkdir(exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    with open(uploads_dir / filename, "wb") as f:
+        f.write(content)
+
+    base_url = ""
+    if request is not None:
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        base_url = f"{proto}://{host}"
+    media_url = f"{base_url}/api/uploads/{filename}"
+
+    sent = await send_whatsapp_media(phone, media_type, media_url, caption=caption, filename=orig_name)
+    if not sent:
+        raise HTTPException(status_code=500, detail=f"Error al enviar {media_type} por WhatsApp")
+
+    session_id = f"wa_{phone}"
+    now = datetime.now(timezone.utc).isoformat()
+    advisor_msg_doc = {
+        "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id,
+        "role": "assistant",
+        "content": caption or f"[{media_type}]",
+        "media_url": media_url,
+        "media_type": media_type,
+        "filename": orig_name,
+        "timestamp": now, "source": "whatsapp", "sent_by": "crm_agent", "delivered": sent,
+        "message_type": media_type,
+    }
+    # Also set image_url for images so existing frontend image rendering works seamlessly
+    if media_type == "image":
+        advisor_msg_doc["image_url"] = media_url
+
+    await db.chat_messages.insert_one(advisor_msg_doc)
+    await db.chat_sessions_meta.update_one(
+        {"session_id": session_id},
+        {"$set": {"last_activity": now}},
+        upsert=True
+    )
+    await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
+    return {"message": f"{media_type} enviado", "delivered": sent, "media_url": media_url, "media_type": media_type}
 
 
 @router.post("/chat/analyze/{session_id}")

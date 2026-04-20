@@ -94,6 +94,42 @@ async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
         return False
 
 
+async def send_whatsapp_media(to_phone: str, media_type: str, media_url: str, caption: str = "", filename: str = ""):
+    """Generic sender for image / document / audio / video via link."""
+    if media_type not in ("image", "document", "audio", "video"):
+        logger.error(f"Unsupported media_type: {media_type}")
+        return False
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        logger.warning(f"WhatsApp not configured, skipping {media_type} send")
+        return False
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
+    headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
+    international = phone_to_international(to_phone)
+    media_obj = {"link": media_url}
+    if caption and media_type in ("image", "document", "video"):
+        media_obj["caption"] = caption
+    if filename and media_type == "document":
+        media_obj["filename"] = filename
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": international,
+        "type": media_type,
+        media_type: media_obj,
+    }
+    try:
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(url, json=payload, headers=headers, timeout=20)
+            if resp.status_code in (200, 201):
+                logger.info(f"WA {media_type} sent to {international}")
+                return True
+            logger.error(f"WA {media_type} send error {resp.status_code}: {resp.text[:200]}")
+            return False
+    except Exception as e:
+        logger.error(f"WA {media_type} send exception: {e}")
+        return False
+
+
 async def send_whatsapp_template(to_phone: str, template_name: str, language: str = "es", parameters: list = None, image_url: str = None):
     config = await get_whatsapp_config()
     if not config.get("phone_number_id") or not config.get("access_token"):
