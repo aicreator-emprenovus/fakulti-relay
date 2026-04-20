@@ -174,17 +174,10 @@ export default function ChatPage() {
       fetchSessions();
       fetchAlerts();
       if (activeSession) {
-        axios.get(`${API}/chat/history/${activeSession}`).then(res => {
-          setMessages(prev => {
-            // Detect change by length OR by last message id/timestamp (covers updates to delivered/response_time_ms too)
-            if (res.data.length !== prev.length) return res.data;
-            const pLast = prev[prev.length - 1];
-            const nLast = res.data[res.data.length - 1];
-            if (pLast?.id !== nLast?.id || pLast?.timestamp !== nLast?.timestamp || pLast?.content !== nLast?.content) {
-              return res.data;
-            }
-            return prev;
-          });
+        // Always replace messages with freshest data (React reconciles via key).
+        // Cache-busting param prevents any intermediate caching.
+        axios.get(`${API}/chat/history/${activeSession}?_t=${Date.now()}`).then(res => {
+          setMessages(res.data);
         }).catch(() => {});
       }
     }, 3000);
