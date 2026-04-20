@@ -426,12 +426,30 @@ async def whatsapp_incoming(request: Request):
     except Exception:
         return {"status": "ok"}
 
+    # Load currently configured phone_number_id so we ignore messages sent to
+    # any OTHER number that shares the same WABA / app subscription.
+    _cfg = await get_whatsapp_config()
+    configured_pnid = (_cfg.get("phone_number_id") or "").strip()
+
     entries = body.get("entry", [])
     for entry in entries:
+        waba_id = str(entry.get("id", "")).strip()
         changes = entry.get("changes", [])
         for change in changes:
             value = change.get("value", {})
             if value.get("statuses"):
+                continue
+            # Reject messages that are not for our configured phone number.
+            # Accept if either the phone_number_id OR the WABA ID (entry.id)
+            # matches the configured value (tolerates configs that stored WABA ID).
+            metadata = value.get("metadata", {}) or {}
+            incoming_pnid = str(metadata.get("phone_number_id", "")).strip()
+            incoming_display = metadata.get("display_phone_number", "")
+            if configured_pnid and incoming_pnid and configured_pnid not in (incoming_pnid, waba_id):
+                logger.warning(
+                    f"Ignoring WA message: phone_number_id={incoming_pnid} "
+                    f"waba={waba_id} display={incoming_display} - configured={configured_pnid}"
+                )
                 continue
             messages = value.get("messages", [])
             for msg in messages:
