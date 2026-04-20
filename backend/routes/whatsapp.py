@@ -45,7 +45,7 @@ async def detect_channel_from_message(message_text: str, lead_id: str):
     return False
 
 
-async def process_whatsapp_incoming(phone: str, message_text: str):
+async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: str = ""):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
 
     phone = normalize_phone_ec(phone)
@@ -105,6 +105,8 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
             "lead_id": lead_id, "role": "user", "content": message_text,
             "timestamp": now_early, "source": "whatsapp"
         }
+        if wa_msg_id:
+            user_msg_doc["wa_msg_id"] = wa_msg_id
         await db.chat_messages.insert_one(user_msg_doc)
         await db.chat_sessions_meta.update_one(
             {"session_id": session_id_early},
@@ -144,9 +146,40 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
         conversation_data.append(f"Direccion de envio: {existing_lead['address']}")
     if existing_lead.get("ci_ruc"):
         conversation_data.append(f"CI/RUC: {existing_lead['ci_ruc']}")
+    if existing_lead.get("quantity_requested"):
+        conversation_data.append(f"Cantidad confirmada por el cliente: {existing_lead['quantity_requested']} cajas")
     conversation_data.append(f"WhatsApp: {phone}")
 
     import re as _re
+
+    # Extract quantity (cajas/unidades/packs) - ONLY from the LAST user message to avoid
+    # grabbing old numbers from the history (ej. "1000" de pruebas anteriores).
+    last_user_msg = message_text or ""
+    qty_patterns = [
+        r'(?:quiero|dame|pedir|llevar|son|ser[ií]an?|va[yn]|me dan?|confirmo)\s*(?:solo|nada m[aá]s|por favor)?\s*(\d{1,5})\s*(?:cajas?|unidades?|packs?|pzas?|piezas?)?',
+        r'(\d{1,5})\s*(?:cajas?|unidades?|packs?|pzas?|piezas?)',
+        r'^\s*(\d{1,5})\s*$',
+    ]
+    detected_qty = None
+    for pat in qty_patterns:
+        m_qty = _re.search(pat, last_user_msg, _re.IGNORECASE)
+        if m_qty:
+            try:
+                q = int(m_qty.group(1))
+                if 1 <= q <= 100000:
+                    detected_qty = q
+                    break
+            except Exception:
+                pass
+    if detected_qty and lead_id:
+        current_qty = existing_lead.get("quantity_requested")
+        if current_qty != detected_qty:
+            await db.leads.update_one({"id": lead_id}, {"$set": {"quantity_requested": detected_qty}})
+            existing_lead["quantity_requested"] = detected_qty
+            # Replace any previous quantity line in conversation_data
+            conversation_data = [d for d in conversation_data if not d.startswith("Cantidad confirmada")]
+            conversation_data.append(f"Cantidad confirmada por el cliente: {detected_qty} cajas")
+            logger.info(f"Quantity detected and saved for lead {lead_id}: {detected_qty}")
 
     # Extract and SAVE city from conversation if not already in lead
     if not existing_lead.get("city") and lead_id:
@@ -190,7 +223,12 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     collected_data_text = ""
     if conversation_data:
         collected_data_text = "\n\nDATOS YA REGISTRADOS DEL CLIENTE (NUNCA volver a pedir estos datos, el cliente YA los proporciono):\n" + "\n".join(f"- {d}" for d in conversation_data)
-        collected_data_text += "\nSi el cliente ya dio ciudad, direccion, nombre, CI/RUC u otro dato, NO lo vuelvas a pedir bajo ninguna circunstancia. Avanza al siguiente paso del flujo."
+        collected_data_text += "\nSi el cliente ya dio ciudad, direccion, nombre, CI/RUC, cantidad u otro dato, NO lo vuelvas a pedir bajo ninguna circunstancia. Avanza al siguiente paso del flujo."
+        collected_data_text += (
+            "\nREGLA CANTIDAD (CRITICA): si en DATOS YA REGISTRADOS aparece 'Cantidad confirmada por el cliente: N cajas', "
+            "usa EXACTAMENTE ese numero N. NUNCA ofrezcas opciones inventadas como '1, 2 o 1000 cajas'. "
+            "NUNCA menciones otras cantidades. Si NO esta registrada, pregunta de forma abierta: '¿cuantas cajas quieres llevar?' sin sugerir numeros."
+        )
 
     # Repetition detection - if bot is looping, force short response
     bot_messages = [m["content"] for m in history if m.get("role") == "assistant"]
@@ -289,6 +327,7 @@ Si NO sabes algo, di: "No tengo esa informacion, te comunico con un asesor."
 
 EXTRACCION DE DATOS (al final si aplica):
 - [LEAD_NAME:Nombre] / [UPDATE_LEAD:city=Ciudad] / [UPDATE_LEAD:email=correo] / [UPDATE_LEAD:product_interest=Producto]
+- [UPDATE_LEAD:quantity_requested=N] si el cliente confirma cantidad de cajas (solo numero entero)
 - [STAGE:nuevo|interesado|en_negociacion|cliente_nuevo|perdido] SIEMPRE al final."""
 
     llm_key = os.environ.get('EMERGENT_LLM_KEY')
@@ -321,7 +360,7 @@ EXTRACCION DE DATOS (al final si aplica):
     update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', reply)
     if update_matches:
         update_fields = {}
-        allowed_fields = {"city", "product_interest", "email", "ci_ruc", "address"}
+        allowed_fields = {"city", "product_interest", "email", "ci_ruc", "address", "quantity_requested"}
         for field, value in update_matches:
             if field in allowed_fields:
                 update_fields[field] = value.strip()
@@ -459,6 +498,15 @@ async def whatsapp_incoming(request: Request):
                 phone = normalize_phone_ec(msg.get("from", ""))
                 msg_type = msg.get("type", "")
 
+                # IDEMPOTENCY: Meta retries webhooks on timeouts. If we already
+                # processed this exact message id, skip entirely.
+                wamid = msg.get("id", "")
+                if wamid:
+                    existing = await db.chat_messages.find_one({"wa_msg_id": wamid}, {"_id": 0, "id": 1})
+                    if existing:
+                        logger.info(f"Skipping duplicate WA webhook for msg id={wamid}")
+                        continue
+
                 if msg_type == "text":
                     text = msg.get("text", {}).get("body", "")
                 elif msg_type == "image":
@@ -485,7 +533,7 @@ async def whatsapp_incoming(request: Request):
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
                         start_time = datetime.now(timezone.utc)
                         try:
-                            reply, lead_id = await process_whatsapp_incoming(phone, text)
+                            reply, lead_id = await process_whatsapp_incoming(phone, text, wamid)
                         except Exception as e:
                             logger.exception(f"process_whatsapp_incoming failed for {phone}: {e}")
                             # Still save the inbound user message so the CRM shows the conversation
@@ -506,21 +554,51 @@ async def whatsapp_incoming(request: Request):
                                 logger.error(f"Fallback user-msg save failed for {phone}: {_e}")
                             continue
                         response_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-                        sent = await send_whatsapp_message(phone, reply)
+
+                        # FIX #4: avoid sending two near-identical bot messages within 10s
+                        # (protects against Meta retrying the webhook or GPT generating duplicates)
+                        recent_bot = await db.chat_messages.find_one(
+                            {"session_id": f"wa_{phone}", "role": "assistant"},
+                            {"_id": 0, "content": 1, "timestamp": 1},
+                            sort=[("timestamp", -1)]
+                        )
+                        is_duplicate_reply = False
+                        if recent_bot and recent_bot.get("timestamp"):
+                            try:
+                                rt = datetime.fromisoformat(str(recent_bot["timestamp"]).replace("Z", "+00:00"))
+                                seconds_since = (datetime.now(timezone.utc) - rt).total_seconds()
+                                if seconds_since < 10:
+                                    prev_words = set((recent_bot.get("content") or "").lower().split())
+                                    new_words = set((reply or "").lower().split())
+                                    if prev_words and new_words:
+                                        overlap = len(prev_words & new_words) / max(len(prev_words), len(new_words))
+                                        if overlap >= 0.7:
+                                            is_duplicate_reply = True
+                                            logger.warning(f"Skipping duplicate bot reply for {phone} (overlap={overlap:.2f}, age={seconds_since:.1f}s)")
+                            except Exception:
+                                pass
+
+                        if is_duplicate_reply:
+                            sent = False
+                        else:
+                            sent = await send_whatsapp_message(phone, reply)
                         session_id = f"wa_{phone}"
                         now = datetime.now(timezone.utc).isoformat()
                         updated_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1}) if lead_id else None
                         resolved_lead_name = (updated_lead.get("name", "") if updated_lead else "") or phone
                         try:
-                            bot_msg_doc = {"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent}
-                            await db.chat_messages.insert_one(bot_msg_doc)
-                            await db.chat_sessions_meta.update_one(
-                                {"session_id": session_id},
-                                {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
-                                upsert=True
-                            )
-                            await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in bot_msg_doc.items() if k != "_id"}})
-                            logger.info(f"WA msgs persisted: session={session_id} lead_id={lead_id} delivered={sent}")
+                            if is_duplicate_reply:
+                                logger.info(f"WA duplicate bot reply NOT persisted for session=wa_{phone}")
+                            else:
+                                bot_msg_doc = {"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent}
+                                await db.chat_messages.insert_one(bot_msg_doc)
+                                await db.chat_sessions_meta.update_one(
+                                    {"session_id": session_id},
+                                    {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
+                                    upsert=True
+                                )
+                                await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in bot_msg_doc.items() if k != "_id"}})
+                                logger.info(f"WA msgs persisted: session={session_id} lead_id={lead_id} delivered={sent}")
                         except Exception as e:
                             logger.exception(f"Failed to persist WA assistant message: {e}")
                         # Bot timeout detection

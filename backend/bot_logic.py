@@ -48,6 +48,8 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
             data_context += f" CI/RUC: {lead_data['ci_ruc']}."
         if lead_data.get("address"):
             data_context += f" Direccion: {lead_data['address']}."
+        if lead_data.get("quantity_requested"):
+            data_context += f" CANTIDAD CONFIRMADA: {lead_data['quantity_requested']} cajas (USA EXACTAMENTE ESTE NUMERO, no inventes otros)."
 
     missing_fields = []
     if not lead_name:
@@ -83,6 +85,7 @@ Habla como persona real, NO como robot. Frases cortas. Maximo 1-2 emojis por men
 6. Lee con cuidado lo que el cliente escribio. Entiende bien su solicitud antes de responder. Calidad > velocidad.
 7. REGLA CRITICA - DATOS YA PROPORCIONADOS: Si en la seccion "DATOS YA REGISTRADOS" aparece ciudad, direccion, nombre u otro dato, el cliente YA lo dio. NUNCA vuelvas a pedir un dato que ya esta registrado. Si el cliente dice "ya te la di", disculpate brevemente y continua con el siguiente paso.
 8. ENTREGAS: TODA compra se envia en UNA SOLA ENTREGA. NUNCA preguntes si quiere la entrega en una sola parte o en entregas parciales. NUNCA ofrezcas entregas parciales, fraccionadas ni por lotes. Asume siempre entrega unica sin preguntarlo.
+9. CANTIDAD (REGLA CRITICA): Si en DATOS YA REGISTRADOS o en el contexto aparece "CANTIDAD CONFIRMADA: N cajas", usa EXACTAMENTE ese numero. NUNCA ofrezcas opciones inventadas como "1, 2 o 1000 cajas". NUNCA menciones otras cantidades como alternativas. Si el cliente aun no dio cantidad, pregunta abierto: "¿cuantas cajas deseas llevar?" SIN sugerir numeros.
 
 === PRODUCTO ===
 {target['name']}
@@ -112,6 +115,7 @@ EXTRACCION DE DATOS (incluir al final si aplica):
 - [UPDATE_LEAD:email=correo] si detectas email
 - [UPDATE_LEAD:ci_ruc=valor] si detectas CI/RUC
 - [UPDATE_LEAD:address=direccion] si detectas direccion
+- [UPDATE_LEAD:quantity_requested=N] si el cliente confirmo cantidad de cajas (solo el numero entero)
 - [STAGE:nuevo|interesado|en_negociacion|cliente_nuevo|perdido] SIEMPRE al final."""
 
     return f"""IDENTIDAD DEL AGENTE
@@ -132,6 +136,7 @@ Habla como persona real, no como robot. Frases cortas. Maximo 1-2 emojis por men
 6. Si el cliente YA dio ciudad, direccion u otro dato (ver DATOS YA REGISTRADOS), NUNCA lo vuelvas a pedir.
 6. Si el cliente YA fue saludado, NO re-saludes. Continua donde se quedo.
 7. ENTREGAS: TODA compra se envia en UNA SOLA ENTREGA. NUNCA preguntes si la entrega es en una sola parte o en entregas parciales. NUNCA ofrezcas fraccionar la entrega. Asume siempre entrega unica.
+8. CANTIDAD (REGLA CRITICA): Si el cliente ya dio una cantidad (ej. "25 cajas"), usala EXACTAMENTE. NUNCA ofrezcas opciones tipo "¿1, 2 o 1000?". Si el cliente no dio cantidad, pregunta abierto: "¿cuantas cajas deseas?" SIN sugerir numeros.
 
 === PRODUCTO ===
 {target['name']}
