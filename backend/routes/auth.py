@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -8,15 +8,34 @@ from auth import (
     safe_verify_password, validate_strong_password
 )
 from models import LoginRequest, RegisterRequest, PasswordResetRequest, ResetPasswordAction
+from audit import log_event
 
 router = APIRouter(prefix="/api")
 
 
 @router.post("/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     user = await db.admin_users.find_one({"email": req.email}, {"_id": 0})
     if not user or not safe_verify_password(req.password, user["password_hash"]):
+        # Log failed attempt (anónimo pero con email intentado en details)
+        ip = (request.client.host if request.client else "") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        await log_event(
+            action="Intento de login fallido",
+            user=None,
+            details=f"email intentado: {req.email}",
+            ip=ip, path="/api/auth/login", method="POST", status=401,
+            user_agent=request.headers.get("user-agent", "")
+        )
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    # Log successful login with real user info
+    ip = (request.client.host if request.client else "") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    await log_event(
+        action="Inicio de sesión",
+        user={"id": user["id"], "email": user["email"], "name": user.get("name", ""), "role": user.get("role", "admin")},
+        details="",
+        ip=ip, path="/api/auth/login", method="POST", status=200,
+        user_agent=request.headers.get("user-agent", "")
+    )
     token = create_token(user["id"], user["email"])
     return {
         "token": token,

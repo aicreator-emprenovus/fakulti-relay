@@ -27,13 +27,69 @@ from routes import (
     automation as automation_routes,
     config as config_routes,
     campaigns as campaigns_routes,
+    audit as audit_routes,
 )
 from routes.automation import process_automation_rules_background
+from audit import log_event, friendly_label
+import jwt as _jwt
+from auth import JWT_SECRET, JWT_ALGORITHM
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+
+# ---------- Audit logging middleware ----------
+# Logs every state-changing API call (POST/PUT/DELETE/PATCH) plus login attempts.
+_AUDIT_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
+_AUDIT_SKIP_PATHS = (
+    "/api/webhook/",
+    "/api/chat/sessions/",  # mark-read called often, noisy — still logs deletes
+    "/api/auth/me",
+    "/api/health",
+)
+
+
+@app.middleware("http")
+async def audit_middleware(request, call_next):
+    response = await call_next(request)
+    try:
+        method = request.method
+        path = request.url.path
+        if method not in _AUDIT_METHODS:
+            return response
+        # Skip noisy internal endpoints except DELETE / high-value ones
+        if path.endswith("/mark-read"):
+            return response
+        # Login is logged explicitly inside its route handler to get real user info
+        if path == "/api/auth/login":
+            return response
+        # Extract user from bearer token if present (skip for login endpoint)
+        user = None
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            try:
+                payload = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                user = await __import__("database").db.admin_users.find_one({"id": payload.get("user_id")}, {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1})
+            except Exception:
+                user = None
+        # For successful login, enrich user info from request body
+        status = getattr(response, "status_code", 0)
+        details = ""
+        if path == "/api/auth/login" and status == 200:
+            # We can't easily read body here, but the email is already in the subsequent
+            # response. Keep it simple: log anonymous login success — email lookup will
+            # happen via post-login audit in the route.
+            pass
+        action = friendly_label(method, path)
+        ip = (request.client.host if request.client else "") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        ua = request.headers.get("user-agent", "")
+        await log_event(action=action, user=user, details=details, ip=ip, path=path, method=method, status=status, user_agent=ua)
+    except Exception as e:
+        logger.warning(f"Audit middleware error: {e}")
+    return response
 
 # Include all routers
 app.include_router(auth_routes.router)
@@ -51,6 +107,7 @@ app.include_router(whatsapp_routes.router)
 app.include_router(automation_routes.router)
 app.include_router(config_routes.router)
 app.include_router(campaigns_routes.router)
+app.include_router(audit_routes.router)
 
 
 @app.get("/api/health")

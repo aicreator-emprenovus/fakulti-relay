@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API, useAuth } from "@/App";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, DollarSign, ShoppingCart, Gamepad2, TrendingUp, UserCheck, Award, Target, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Users, DollarSign, ShoppingCart, Gamepad2, TrendingUp, UserCheck, Award, Target, AlertTriangle, History, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 function formatPhoneEC(phone) {
@@ -252,6 +254,116 @@ export default function DashboardPage() {
           )}
         </div>
       )}
+
+      {(userRole === "admin" || userRole === "developer") && <AuditLogSection />}
     </div>
+  );
+}
+
+
+function AuditLogSection() {
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [userEmail, setUserEmail] = useState("");
+  const [action, setAction] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [loading, setLoading] = useState(false);
+  const pageSize = 25;
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = { page, page_size: pageSize };
+    if (userEmail) params.user_email = userEmail;
+    if (action) params.action = action;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    axios.get(`${API}/audit-logs`, { params }).then(res => {
+      setItems(res.data.items || []);
+      setTotal(res.data.total || 0);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [page, userEmail, action, dateFrom, dateTo]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const fmtDate = (iso) => {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      return `${d.toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+    } catch { return iso; }
+  };
+
+  return (
+    <Card data-testid="audit-log-section" className="bg-card border-border rounded-2xl mt-6">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <History size={18} className="text-primary" />
+            <CardTitle className="text-lg text-foreground">Historial de actividad</CardTitle>
+            <Badge variant="outline" className="text-[10px]">Solo admin</Badge>
+          </div>
+          <Button data-testid="audit-refresh-btn" variant="outline" size="sm" onClick={() => { setPage(1); load(); }} disabled={loading}>
+            <RefreshCw size={12} className={`mr-1 ${loading ? "animate-spin" : ""}`} /> Refrescar
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <Input data-testid="audit-filter-email" placeholder="Filtrar por email de usuario" value={userEmail} onChange={e => { setUserEmail(e.target.value); setPage(1); }} className="text-xs h-8" />
+          <Input data-testid="audit-filter-action" placeholder="Filtrar por acción (ej. Eliminación)" value={action} onChange={e => { setAction(e.target.value); setPage(1); }} className="text-xs h-8" />
+          <Input data-testid="audit-filter-from" type="datetime-local" value={dateFrom} onChange={e => { setDateFrom(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
+          <Input data-testid="audit-filter-to" type="datetime-local" value={dateTo} onChange={e => { setDateTo(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
+        </div>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/40">
+              <tr className="text-left text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Fecha / Hora</th>
+                <th className="px-3 py-2 font-medium">Usuario</th>
+                <th className="px-3 py-2 font-medium">Acción</th>
+                <th className="px-3 py-2 font-medium hidden md:table-cell">Ruta</th>
+                <th className="px-3 py-2 font-medium hidden lg:table-cell">IP</th>
+                <th className="px-3 py-2 font-medium">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">Sin registros</td></tr>
+              ) : items.map((e, i) => (
+                <tr key={`${e.timestamp}-${i}`} data-testid={`audit-row-${i}`} className="border-t border-border/50 hover:bg-muted/20">
+                  <td className="px-3 py-1.5 text-foreground whitespace-nowrap">{fmtDate(e.timestamp)}</td>
+                  <td className="px-3 py-1.5">
+                    <div className="flex flex-col">
+                      <span className="text-foreground">{e.user_name || e.user_email || "anónimo"}</span>
+                      {e.user_email && e.user_email !== e.user_name && <span className="text-muted-foreground text-[10px]">{e.user_email}</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-1.5 text-foreground">{e.action}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground font-mono text-[10px] hidden md:table-cell">{e.method} {e.path}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground hidden lg:table-cell">{e.ip || "-"}</td>
+                  <td className="px-3 py-1.5">
+                    <Badge variant="outline" className={`text-[10px] ${e.status >= 200 && e.status < 300 ? "border-green-500/30 text-green-500" : e.status >= 400 ? "border-red-500/30 text-red-500" : "border-muted text-muted-foreground"}`}>
+                      {e.status || "-"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{total.toLocaleString("es-EC")} registros en total</span>
+          <div className="flex items-center gap-2">
+            <Button data-testid="audit-prev-btn" variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(p => Math.max(1, p - 1))}>Anterior</Button>
+            <span>{page} / {totalPages}</span>
+            <Button data-testid="audit-next-btn" variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Siguiente</Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
