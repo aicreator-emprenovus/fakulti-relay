@@ -187,6 +187,38 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
             conversation_data.append(f"Cantidad confirmada por el cliente: {detected_qty} cajas")
             logger.info(f"Quantity detected and saved for lead {lead_id}: {detected_qty}")
 
+    # Auto-detect product_interest from the last user message by matching any active
+    # product name (or sensible alias). Prevents needing GPT to emit [UPDATE_LEAD:...].
+    if lead_id and not existing_lead.get("product_interest"):
+        try:
+            active_products = await db.products.find({"active": True}, {"_id": 0, "name": 1, "code": 1}).to_list(100)
+        except Exception:
+            active_products = []
+        msg_lower = (last_user_msg or "").lower()
+        matched_product = None
+        for p in active_products:
+            pname = (p.get("name") or "").strip()
+            pcode = (p.get("code") or "").strip()
+            if not pname:
+                continue
+            tokens = [pname.lower()]
+            # Split product name into significant tokens (words > 3 chars) for fuzzy match
+            for w in pname.lower().split():
+                if len(w) > 3 and w not in ("para", "desde", "hasta", "con", "sin"):
+                    tokens.append(w)
+            if pcode:
+                tokens.append(pcode.lower())
+            for t in tokens:
+                if t and t in msg_lower:
+                    matched_product = pname
+                    break
+            if matched_product:
+                break
+        if matched_product:
+            await db.leads.update_one({"id": lead_id}, {"$set": {"product_interest": matched_product}})
+            existing_lead["product_interest"] = matched_product
+            logger.info(f"Product interest auto-detected for lead {lead_id}: {matched_product}")
+
     # Extract and SAVE city from conversation if not already in lead
     if not existing_lead.get("city") and lead_id:
         city_patterns = [
