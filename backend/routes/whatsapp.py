@@ -121,8 +121,14 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
     product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
 
     session_id = f"wa_{phone}"
+    # Respect bot_context_reset_at: if present, bot only sees messages AFTER that
+    # timestamp (lets advisors reset bot memory while keeping history visible in CRM).
+    reset_at = existing_lead.get("bot_context_reset_at") if existing_lead else None
+    history_query = {"session_id": session_id}
+    if reset_at:
+        history_query["timestamp"] = {"$gt": reset_at}
     history_raw = await db.chat_messages.find(
-        {"session_id": session_id}, {"_id": 0}
+        history_query, {"_id": 0}
     ).sort("timestamp", 1).to_list(20)
 
     # Filter out automated messages (campaigns, reminders, loyalty) so GPT

@@ -202,3 +202,34 @@ async def derive_to_human(lead_id: str, reason: str = Query("general"), user=Dep
     }
     await db.notifications.insert_one(notification)
     return {"message": "Lead derivado a agente humano"}
+
+
+@router.post("/leads/{lead_id}/reset-bot-context")
+async def reset_bot_context(lead_id: str, user=Depends(get_current_user)):
+    """Resetea el contexto del bot para este lead: el historial previo sigue visible en el CRM
+    pero el bot lo ignora a partir de ahora. También limpia campos acumulados (cantidad, dirección,
+    CI/RUC, producto de interés) que pudieron contaminarse con pruebas anteriores.
+    Mantiene intactos: nombre, teléfono, email, canal, stage."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    reset_at = datetime.now(timezone.utc).isoformat()
+    await db.leads.update_one(
+        {"id": lead_id},
+        {
+            "$set": {"bot_context_reset_at": reset_at, "last_interaction": reset_at},
+            "$unset": {
+                "quantity_requested": "",
+                "address": "",
+                "ci_ruc": "",
+                "product_interest": ""
+            }
+        }
+    )
+    # Cancel any pending handover alerts so the bot starts truly fresh
+    await db.handover_alerts.update_many(
+        {"lead_id": lead_id, "status": "pending"},
+        {"$set": {"status": "cancelled", "resolved_at": reset_at}}
+    )
+    logger.info(f"Bot context reset for lead {lead_id} at {reset_at}")
+    return {"message": "Contexto del bot reseteado. El bot empieza fresco en la próxima interacción.", "reset_at": reset_at}

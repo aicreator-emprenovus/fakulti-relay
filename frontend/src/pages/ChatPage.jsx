@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
-  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell
+  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -322,6 +322,25 @@ export default function ChatPage() {
     } catch { toast.error("Error al eliminar conversación"); }
   };
 
+  const resetBotContext = async () => {
+    if (!activeLeadId) return;
+    if (!window.confirm("¿Resetear el contexto del bot?\n\nEl bot ignorará el historial previo y empezará fresco.\nLos mensajes anteriores seguirán visibles en el CRM.\nSe limpiarán: cantidad, dirección, CI/RUC y producto de interés.")) return;
+    try {
+      await axios.post(`${API}/leads/${activeLeadId}/reset-bot-context`);
+      // Refresh lead info so UI reflects cleared fields
+      const res = await axios.get(`${API}/leads/${activeLeadId}`);
+      const lead = res.data;
+      setLeadInfo(prev => prev ? {
+        ...prev,
+        quantity_requested: lead.quantity_requested,
+        address: lead.address,
+        ci_ruc: lead.ci_ruc,
+        product_interest: lead.product_interest
+      } : prev);
+      toast.success("Bot reseteado. Empieza fresco en la próxima interacción.");
+    } catch { toast.error("Error al resetear contexto del bot"); }
+  };
+
   const resolveAlert = async (alertId) => {
     try {
       await axios.put(`${API}/chat/alerts/${alertId}/resolve`);
@@ -477,6 +496,9 @@ export default function ChatPage() {
                       )}
                       <Button data-testid="assign-advisor-btn" variant="outline" size="sm" className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 h-8 text-xs" onClick={() => setShowAssignAdvisor(!showAssignAdvisor)}>
                         <UserCheck size={12} className="mr-1" /> Asignar Asesor
+                      </Button>
+                      <Button data-testid="reset-bot-context-btn" variant="outline" size="sm" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 h-8 text-xs" onClick={resetBotContext} title="Resetea el contexto del bot — el historial sigue visible pero el bot lo ignora y empieza fresco">
+                        <RotateCcw size={12} className="mr-1" /> Resetear Bot
                       </Button>
                     </>
                   )}
