@@ -94,6 +94,70 @@ async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
         return False
 
 
+async def upload_whatsapp_media(file_bytes: bytes, content_type: str, filename: str):
+    """Upload media to Meta Cloud API and return media_id. Works in any environment
+    because the file goes directly to Meta (no public URL required)."""
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        logger.warning("WhatsApp not configured, cannot upload media")
+        return None
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/media"
+    headers = {"Authorization": f"Bearer {config['access_token']}"}
+    files = {
+        "file": (filename or "file", file_bytes, content_type),
+        "messaging_product": (None, "whatsapp"),
+        "type": (None, content_type),
+    }
+    try:
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(url, headers=headers, files=files, timeout=60)
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                media_id = data.get("id")
+                logger.info(f"WA media uploaded, id={media_id}")
+                return media_id
+            logger.error(f"WA media upload error {resp.status_code}: {resp.text[:300]}")
+            return None
+    except Exception as e:
+        logger.error(f"WA media upload exception: {e}")
+        return None
+
+
+async def send_whatsapp_media_by_id(to_phone: str, media_type: str, media_id: str, caption: str = "", filename: str = ""):
+    """Send media that was previously uploaded via upload_whatsapp_media."""
+    if media_type not in ("image", "document", "audio", "video"):
+        return False
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        return False
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
+    headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
+    international = phone_to_international(to_phone)
+    media_obj = {"id": media_id}
+    if caption and media_type in ("image", "document", "video"):
+        media_obj["caption"] = caption
+    if filename and media_type == "document":
+        media_obj["filename"] = filename
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": international,
+        "type": media_type,
+        media_type: media_obj,
+    }
+    try:
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(url, json=payload, headers=headers, timeout=20)
+            if resp.status_code in (200, 201):
+                logger.info(f"WA {media_type} (id={media_id}) sent to {international}")
+                return True, ""
+            err_text = resp.text[:300]
+            logger.error(f"WA {media_type} send-by-id error {resp.status_code}: {err_text}")
+            return False, f"Meta {resp.status_code}: {err_text[:180]}"
+    except Exception as e:
+        logger.error(f"WA send-by-id exception: {e}")
+        return False, str(e)
+
+
 async def send_whatsapp_media(to_phone: str, media_type: str, media_url: str, caption: str = "", filename: str = ""):
     """Generic sender for image / document / audio / video via link."""
     if media_type not in ("image", "document", "audio", "video"):

@@ -11,7 +11,7 @@ from database import db
 from auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
 from models import ChatMessageRequest, CRMWhatsAppReply
 from utils import FUNNEL_STAGES
-from whatsapp_utils import send_whatsapp_message, send_whatsapp_image, send_whatsapp_media
+from whatsapp_utils import send_whatsapp_message, send_whatsapp_image, send_whatsapp_media, upload_whatsapp_media, send_whatsapp_media_by_id
 from bot_logic import build_product_bot_prompt
 from realtime import broker
 
@@ -525,9 +525,19 @@ async def crm_whatsapp_reply_image(
         base_url = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
     image_url = f"{base_url}/api/uploads/{filename}"
 
-    sent = await send_whatsapp_image(phone, image_url, caption=caption)
+    # Upload directly to Meta and send by media_id (works in preview + prod without public URL)
+    media_id = await upload_whatsapp_media(content, file.content_type or "image/jpeg", filename)
+    error_detail = ""
+    if media_id:
+        ok, err = await send_whatsapp_media_by_id(phone, "image", media_id, caption=caption)
+        sent = ok
+        error_detail = err
+    else:
+        sent = await send_whatsapp_image(phone, image_url, caption=caption)
+        if not sent:
+            error_detail = "Meta rechazó la subida. Verifica token y número en Cloud API."
     if not sent:
-        raise HTTPException(status_code=500, detail="Error al enviar imagen por WhatsApp")
+        raise HTTPException(status_code=500, detail=f"Error al enviar imagen por WhatsApp. {error_detail}")
 
     session_id = f"wa_{phone}"
     now = datetime.now(timezone.utc).isoformat()
@@ -620,9 +630,21 @@ async def crm_whatsapp_reply_media(
         base_url = f"{proto}://{host}"
     media_url = f"{base_url}/api/uploads/{filename}"
 
-    sent = await send_whatsapp_media(phone, media_type, media_url, caption=caption, filename=orig_name)
+    # Preferred flow: upload file directly to Meta, get media_id, then send.
+    # This avoids requiring our server to be reachable from Meta. Falls back to
+    # link-based send if upload fails (link still works for production domains).
+    media_id = await upload_whatsapp_media(content, ct, orig_name)
+    error_detail = ""
+    if media_id:
+        ok, err = await send_whatsapp_media_by_id(phone, media_type, media_id, caption=caption, filename=orig_name)
+        sent = ok
+        error_detail = err
+    else:
+        sent = await send_whatsapp_media(phone, media_type, media_url, caption=caption, filename=orig_name)
+        if not sent:
+            error_detail = "Meta rechazó la subida del archivo. Verifica token y que el número esté activo en Cloud API."
     if not sent:
-        raise HTTPException(status_code=500, detail=f"Error al enviar {media_type} por WhatsApp")
+        raise HTTPException(status_code=500, detail=f"Error al enviar {media_type} por WhatsApp. {error_detail}")
 
     session_id = f"wa_{phone}"
     now = datetime.now(timezone.utc).isoformat()
