@@ -1,16 +1,17 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 import jwt as _jwt
 import uuid
 import re
 import os
+import pathlib
 import logging
 from datetime import datetime, timezone, timedelta
 from database import db
 from auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
 from models import ChatMessageRequest, CRMWhatsAppReply
 from utils import FUNNEL_STAGES
-from whatsapp_utils import send_whatsapp_message
+from whatsapp_utils import send_whatsapp_message, send_whatsapp_image
 from bot_logic import build_product_bot_prompt
 from realtime import broker
 
@@ -480,6 +481,70 @@ async def crm_whatsapp_reply(req: CRMWhatsAppReply, user=Depends(get_current_use
     )
     await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
     return {"message": "Mensaje enviado", "delivered": sent}
+
+
+@router.post("/chat/whatsapp-reply-image")
+async def crm_whatsapp_reply_image(
+    lead_id: str = Form(...),
+    caption: str = Form(""),
+    request: Request = None,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    """Advisor sends an image to the lead via WhatsApp. Stores image in /uploads and
+    shares a public URL with Meta Cloud API."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    phone = lead.get("whatsapp", "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Lead no tiene numero de WhatsApp")
+
+    allowed = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+    if (file.content_type or "").lower() not in allowed:
+        raise HTTPException(status_code=400, detail="Formato no soportado. Usa JPG, PNG o WEBP.")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Imagen mayor a 5MB. Reduce tamaño.")
+
+    ext_map = {"image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+    ext = ext_map.get((file.content_type or "").lower(), ".jpg")
+    uploads_dir = pathlib.Path(__file__).resolve().parent.parent / "uploads"
+    uploads_dir.mkdir(exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = uploads_dir / filename
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    base_url = ""
+    if request is not None:
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        base_url = f"{proto}://{host}"
+    else:
+        base_url = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    image_url = f"{base_url}/api/uploads/{filename}"
+
+    sent = await send_whatsapp_image(phone, image_url, caption=caption)
+    if not sent:
+        raise HTTPException(status_code=500, detail="Error al enviar imagen por WhatsApp")
+
+    session_id = f"wa_{phone}"
+    now = datetime.now(timezone.utc).isoformat()
+    advisor_msg_doc = {
+        "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id,
+        "role": "assistant", "content": caption or "[imagen]", "image_url": image_url,
+        "timestamp": now, "source": "whatsapp", "sent_by": "crm_agent", "delivered": sent,
+        "message_type": "image"
+    }
+    await db.chat_messages.insert_one(advisor_msg_doc)
+    await db.chat_sessions_meta.update_one(
+        {"session_id": session_id},
+        {"$set": {"last_activity": now}},
+        upsert=True
+    )
+    await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
+    return {"message": "Imagen enviada", "delivered": sent, "image_url": image_url}
 
 
 @router.post("/chat/analyze/{session_id}")

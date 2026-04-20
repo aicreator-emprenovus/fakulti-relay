@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
-  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw
+  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw, Paperclip
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -299,6 +299,35 @@ export default function ChatPage() {
     setSending(false);
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file || !activeLeadId) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Imagen mayor a 5MB"); return; }
+    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) { toast.error("Formato no soportado (usa JPG/PNG/WEBP)"); return; }
+    const caption = input.trim();
+    setInput("");
+    setSending(true);
+    const localUrl = URL.createObjectURL(file);
+    const optimistic = { role: "assistant", content: caption || "[imagen]", image_url: localUrl, message_type: "image", timestamp: new Date().toISOString(), sent_by: "crm_agent" };
+    setMessages(prev => [...prev, optimistic]);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("lead_id", activeLeadId);
+      fd.append("caption", caption);
+      await axios.post(`${API}/chat/whatsapp-reply-image`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Imagen enviada por WhatsApp");
+      const res = await axios.get(`${API}/chat/history/${activeSession}`);
+      setMessages(res.data);
+      fetchSessions();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Error al enviar imagen");
+      setMessages(prev => prev.slice(0, -1));
+    }
+    setSending(false);
+  };
+
   const deleteMessage = async (msgId, index) => {
     if (!msgId) { setMessages(prev => prev.filter((_, i) => i !== index)); return; }
     try {
@@ -472,7 +501,7 @@ export default function ChatPage() {
                         </span>
                       )}
                       {leadInfo?.funnel_stage && (
-                        <Badge variant="outline" className="text-[10px] h-4" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
+                        <Badge variant="outline" className="text-[10px] h-5 px-2 leading-none inline-flex items-center whitespace-nowrap" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
                           {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
                         </Badge>
                       )}
@@ -645,7 +674,18 @@ export default function ChatPage() {
                         <div className={`px-4 py-2.5 text-sm ${isUser ? "chat-bubble-user" : "chat-bubble-bot"} ${isCrmAgent ? "!border-l-2 !border-l-blue-500" : ""}`} data-testid={`chat-msg-${i}`}>
                           {isCrmAgent && <p className="text-[10px] text-blue-500 font-medium mb-1">Agente CRM</p>}
                           <div className="whitespace-pre-wrap">
-                            {msg.content && msg.content.includes("[Imagen:") ? (
+                            {msg.image_url ? (
+                              <>
+                                <img
+                                  src={msg.image_url}
+                                  alt={msg.content || "Imagen enviada"}
+                                  className="rounded-lg max-w-full max-h-60 object-cover cursor-pointer mb-1"
+                                  onClick={() => window.open(msg.image_url, "_blank")}
+                                  data-testid={`chat-msg-image-${i}`}
+                                />
+                                {msg.content && msg.content !== "[imagen]" && <p>{msg.content}</p>}
+                              </>
+                            ) : msg.content && msg.content.includes("[Imagen:") ? (
                               <>
                                 <p>{msg.content.replace(/\n?\[Imagen:.*?\]/g, "")}</p>
                                 {(() => {
@@ -709,6 +749,26 @@ export default function ChatPage() {
             {/* Input - CRM Agent Reply */}
             <div className="p-3 border-t border-input">
               <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
+                <input
+                  data-testid="chat-image-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  id="chat-image-file"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  disabled={sending || !activeSession}
+                />
+                <Button
+                  data-testid="chat-attach-btn"
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-10 p-0 shrink-0"
+                  disabled={sending || !activeSession}
+                  onClick={() => document.getElementById("chat-image-file")?.click()}
+                  title="Adjuntar imagen"
+                >
+                  <Paperclip size={15} />
+                </Button>
                 <Input
                   data-testid="chat-input"
                   value={input}

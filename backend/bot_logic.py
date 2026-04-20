@@ -31,6 +31,7 @@ async def build_product_bot_prompt(product_name: str, all_products: list, lead_d
     restrictions = bot_cfg.get("restrictions", "No hacer promesas medicas. No afirmar que cura enfermedades.")
     faqs = bot_cfg.get("faqs", "")
     sales_flow = bot_cfg.get("sales_flow", "")
+    prices_response = bot_cfg.get("prices_response", "")
 
     lead_name = lead_data.get("name", "")
     lead_city = lead_data.get("city", "")
@@ -90,6 +91,8 @@ Habla como persona real, NO como robot. Frases cortas. Maximo 1-2 emojis por men
 === PRODUCTO ===
 {target['name']}
 Precio: ${target['price']}{f" (normal: ${target.get('original_price', '')})" if target.get('original_price') else ""}
+
+{f"=== RESPUESTA TEXTUAL PARA PREGUNTAS DE PRECIOS ==={chr(10)}Cuando el cliente pregunte por precios, costos, cuanto cuesta, valor, presentaciones, bolsas o sachets, responde TEXTUALMENTE con este bloque (puedes agregar una linea breve al inicio pero NO cambies las cifras ni inventes otras):{chr(10)}{prices_response}{chr(10)}=== FIN RESPUESTA PRECIOS ===" if prices_response else ""}
 
 === FLUJO DE VENTAS ===
 {sales_flow}

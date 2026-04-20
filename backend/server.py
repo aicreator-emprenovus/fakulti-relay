@@ -126,8 +126,12 @@ app.add_middleware(
 # Serve React static files in production
 import pathlib as _pathlib
 _static_dir = _pathlib.Path(__file__).parent / "static"
+_uploads_dir = _pathlib.Path(__file__).parent / "uploads"
+_uploads_dir.mkdir(exist_ok=True)
+from starlette.staticfiles import StaticFiles
+app.mount("/api/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
+
 if _static_dir.is_dir() and (_static_dir / "index.html").is_file():
-    from starlette.staticfiles import StaticFiles
     from starlette.responses import FileResponse
 
     _static_assets = _static_dir / "static"
@@ -391,15 +395,26 @@ async def startup():
             await db.products.update_one({"id": bone_broth["id"]}, {"$set": {"name": "Bone Broth Hidrolizado", "code": "BONEBROTH"}})
             logger.info(f"Renamed product '{bone_broth['name']}' -> 'Bone Broth Hidrolizado'")
         bc = bone_broth.get("bot_config") or {}
-        needs_update = not bc.get("sales_flow") or len(bc.get("personality", "")) < 80 or "bombro" in json.dumps(bc).lower()
+        needs_update = not bc.get("sales_flow") or len(bc.get("personality", "")) < 80 or "bombro" in json.dumps(bc).lower() or not bc.get("prices_response")
         if needs_update:
+            prices_response_text = (
+                "Presentacion 1\n"
+                "Bone Broth Hidrolizado\n"
+                "Bolsa Doypack 120 gr\n"
+                "PVP $21,99\n"
+                "- Promo 2 bolsas por $35,18 entrega a domicilio gratis\n\n"
+                "Presentacion 2\n"
+                "- Caja 30 sachets 450 gr PVP 82,46 entrega a domicilio gratis\n"
+                "- Promo $61,84"
+            )
             clean_config = {
                 "personality": "Asesor humano de Fakulti Laboratorios, especializado en Bone Broth Hidrolizado. Experto en nutricion, colageno y bienestar integral. Cercano, confiable, cientifico pero accesible.",
                 "key_benefits": "Colageno de alta absorcion tipo I, II y III. Mejora digestion y salud intestinal. Soporte articular y oseo. Fortalece cabello, unas y piel. Rico en aminoacidos esenciales. Producto unico en Ecuador. Biotecnologia avanzada.",
                 "usage_info": "Un sachet al dia. Diluir en agua caliente o fria. Se puede mezclar con jugos o batidos. Apto para toda la familia. Sobre el sabor: nuestro Caldo de Huesos Hidrolizado Fakulti tiene sabor neutro gracias a los procesos biotecnologicos, para que tu experiencia sea mas agradable y puedas consumirlo de manera versatil en preparaciones de dulce o sal. Solamente recuerda tomarlo en su totalidad una vez preparado porque no contiene preservantes ni quimicos y podria contaminarse o perder sus propiedades.",
                 "restrictions": "No prometer curas. No afirmar que reemplaza tratamientos medicos. REGLA ABSOLUTA: NO inventes NADA. Si no tienes la informacion, responde: No tengo esa informacion, te comunico con un asesor. NUNCA uses la palabra Bombro. El producto se llama Bone Broth Hidrolizado o Caldo de Huesos Hidrolizado Fakulti.",
                 "faqs": "Se toma un sachet al dia. Apto para toda la familia. No contiene azucar anadida. Es libre de gluten. Se puede tomar frio o caliente. Resultados visibles en 2-4 semanas de uso continuo. Sobre el sabor: tiene sabor neutro gracias a procesos biotecnologicos, se puede consumir en preparaciones de dulce o sal.",
-                "sales_flow": "MODO HUMANO AMIGABLE\n\nREGLA: NUNCA uses la palabra Bombro. El producto se llama Bone Broth Hidrolizado.\n\nPASO 1 - PRIMER CONTACTO\nSi es nuevo: Hola! Bienvenido a Fakulti. Soy tu asesor de bienestar. Como te llamas?\nSi ya tiene nombre: Hola [nombre]! En que te puedo ayudar?\n\nPASO 2 - IDENTIFICAR NECESIDAD\n- Que bueno que te interesa nuestro Bone Broth Hidrolizado! Es nuestro producto estrella.\n- Es un Caldo de Huesos Hidrolizado premium, unico en Ecuador.\n- Tiene colageno tipo I, II y III de alta absorcion.\n- Perfecto para articulaciones, digestion, piel y cabello.\n\nPASO 3 - RESOLVER DUDAS\n- Precio: $55.95 (oferta) / $59.99\n- Presentacion: Caja con sachets individuales\n- Sabor: Neutro gracias a procesos biotecnologicos. Versatil en dulce o sal. Tomarlo en su totalidad porque no contiene preservantes.\n- Beneficios: colageno, articulaciones, digestion, piel, cabello, unas\n- Uso: 1 sachet diario, frio o caliente\n\nPASO 4 - CIERRE\n1. Cuantas cajas te gustaria llevar?\n2. Datos: nombre, ciudad, direccion\n3. El pago prefieres por deposito, transferencia o tarjeta de credito?\n4. Confirma pedido\n\nPASO 5 - POST-VENTA\n- Tu pedido esta registrado. Te enviaremos confirmacion.\n\nREGLAS:\n- Si pide humano: te transfiero con un asesor.\n- Maximo 4-6 lineas. Si NO sabes algo, di: te comunico con un asesor."
+                "prices_response": prices_response_text,
+                "sales_flow": "MODO HUMANO AMIGABLE\n\nREGLA: NUNCA uses la palabra Bombro. El producto se llama Bone Broth Hidrolizado.\n\nPASO 1 - PRIMER CONTACTO\nSi es nuevo: Hola! Bienvenido a Fakulti. Soy tu asesor de bienestar. Como te llamas?\nSi ya tiene nombre: Hola [nombre]! En que te puedo ayudar?\n\nPASO 2 - IDENTIFICAR NECESIDAD\n- Que bueno que te interesa nuestro Bone Broth Hidrolizado! Es nuestro producto estrella.\n- Es un Caldo de Huesos Hidrolizado premium, unico en Ecuador.\n- Tiene colageno tipo I, II y III de alta absorcion.\n- Perfecto para articulaciones, digestion, piel y cabello.\n\nPASO 3 - RESOLVER DUDAS\n- PRECIOS (cuando el cliente pregunte por precios o costos, responde TEXTUALMENTE con el bloque de presentaciones/promos del producto, sin inventar cifras):\n" + prices_response_text + "\n- Presentaciones: Bolsa Doypack 120 gr y Caja de 30 sachets 450 gr.\n- Sabor: Neutro gracias a procesos biotecnologicos. Versatil en dulce o sal. Tomarlo en su totalidad porque no contiene preservantes.\n- Beneficios: colageno, articulaciones, digestion, piel, cabello, unas\n- Uso: 1 sachet diario, frio o caliente\n\nPASO 4 - CIERRE\n1. Cuantas unidades/cajas te gustaria llevar?\n2. Datos: nombre, ciudad, direccion\n3. El pago prefieres por deposito, transferencia o tarjeta de credito?\n4. Confirma pedido\n\nPASO 5 - POST-VENTA\n- Tu pedido esta registrado. Te enviaremos confirmacion.\n\nREGLAS:\n- Si pide humano: te transfiero con un asesor.\n- Maximo 4-6 lineas. Si NO sabes algo, di: te comunico con un asesor."
             }
             await db.products.update_one({"id": bone_broth["id"]}, {"$set": {"bot_config": clean_config}})
             logger.info("Bone Broth bot_config updated (Bombro removed)")
