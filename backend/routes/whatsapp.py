@@ -16,6 +16,7 @@ from whatsapp_utils import (
 )
 from bot_logic import build_product_bot_prompt
 from models import WhatsAppMessage
+from realtime import broker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -99,16 +100,18 @@ async def process_whatsapp_incoming(phone: str, message_text: str):
     session_id_early = f"wa_{phone}"
     now_early = datetime.now(timezone.utc).isoformat()
     try:
-        await db.chat_messages.insert_one({
+        user_msg_doc = {
             "id": str(uuid.uuid4()), "session_id": session_id_early,
             "lead_id": lead_id, "role": "user", "content": message_text,
             "timestamp": now_early, "source": "whatsapp"
-        })
+        }
+        await db.chat_messages.insert_one(user_msg_doc)
         await db.chat_sessions_meta.update_one(
             {"session_id": session_id_early},
             {"$set": {"session_id": session_id_early, "lead_id": lead_id, "lead_name": lead_name or phone, "source": "whatsapp", "last_activity": now_early}},
             upsert=True
         )
+        await broker.publish(session_id_early, {"type": "message", "message": {k: v for k, v in user_msg_doc.items() if k != "_id"}})
     except Exception as _e:
         logger.error(f"Failed to save incoming WA user message for {phone}: {_e}")
 
@@ -509,12 +512,14 @@ async def whatsapp_incoming(request: Request):
                         updated_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "name": 1}) if lead_id else None
                         resolved_lead_name = (updated_lead.get("name", "") if updated_lead else "") or phone
                         try:
-                            await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent})
+                            bot_msg_doc = {"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "assistant", "content": reply, "timestamp": now, "source": "whatsapp", "response_time_ms": response_time_ms, "delivered": sent}
+                            await db.chat_messages.insert_one(bot_msg_doc)
                             await db.chat_sessions_meta.update_one(
                                 {"session_id": session_id},
                                 {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": resolved_lead_name, "source": "whatsapp", "last_activity": now}},
                                 upsert=True
                             )
+                            await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in bot_msg_doc.items() if k != "_id"}})
                             logger.info(f"WA msgs persisted: session={session_id} lead_id={lead_id} delivered={sent}")
                         except Exception as e:
                             logger.exception(f"Failed to persist WA assistant message: {e}")

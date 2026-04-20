@@ -152,6 +152,7 @@ export default function ChatPage() {
   const [showAssignAdvisor, setShowAssignAdvisor] = useState(false);
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
+  const sseRef = useRef(null);
 
   const fetchSessions = useCallback(() => {
     axios.get(`${API}/chat/sessions`).then(res => {
@@ -169,18 +170,51 @@ export default function ChatPage() {
     axios.get(`${API}/advisors`).then(res => setAdvisors(res.data)).catch(() => {});
   }, [fetchSessions, fetchAlerts]);
 
+  // Server-Sent Events: instant push of new messages for active session
+  useEffect(() => {
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+    if (!activeSession) return;
+    const token = localStorage.getItem("faculty_token");
+    if (!token) return;
+    const url = `${API}/chat/stream/${activeSession}?token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+    sseRef.current = es;
+    es.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload.type === "message" && payload.message) {
+          setMessages(prev => {
+            if (prev.some(m => m.id === payload.message.id)) return prev;
+            return [...prev, payload.message];
+          });
+          // Also refresh sidebar so last-message + timestamp updates
+          fetchSessions();
+        }
+      } catch { /* ignore malformed events */ }
+    };
+    es.onerror = () => {
+      // EventSource auto-reconnects; no action needed. Polling below is fallback.
+    };
+    return () => {
+      es.close();
+      if (sseRef.current === es) sseRef.current = null;
+    };
+  }, [activeSession, fetchSessions]);
+
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchSessions();
       fetchAlerts();
       if (activeSession) {
-        // Always replace messages with freshest data (React reconciles via key).
-        // Cache-busting param prevents any intermediate caching.
+        // Fallback polling in case SSE is unavailable behind strict proxies.
         axios.get(`${API}/chat/history/${activeSession}?_t=${Date.now()}`).then(res => {
           setMessages(res.data);
         }).catch(() => {});
       }
-    }, 3000);
+    }, 8000);
     return () => clearInterval(pollRef.current);
   }, [activeSession, fetchSessions, fetchAlerts]);
 

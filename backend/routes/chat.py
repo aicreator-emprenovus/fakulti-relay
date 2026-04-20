@@ -1,15 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import StreamingResponse
+import jwt as _jwt
 import uuid
 import re
 import os
 import logging
 from datetime import datetime, timezone, timedelta
 from database import db
-from auth import get_current_user
+from auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
 from models import ChatMessageRequest, CRMWhatsAppReply
 from utils import FUNNEL_STAGES
 from whatsapp_utils import send_whatsapp_message
 from bot_logic import build_product_bot_prompt
+from realtime import broker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -188,6 +191,7 @@ Incluye SIEMPRE el tag [STAGE:] al final."""
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.chat_messages.insert_one(user_msg_doc)
+    await broker.publish(req.session_id, {"type": "message", "message": {k: v for k, v in user_msg_doc.items() if k != "_id"}})
 
     try:
         response = await chat.send_message(UserMessage(text=req.message))
@@ -210,6 +214,7 @@ Incluye SIEMPRE el tag [STAGE:] al final."""
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     await db.chat_messages.insert_one(assistant_msg_doc)
+    await broker.publish(req.session_id, {"type": "message", "message": {k: v for k, v in assistant_msg_doc.items() if k != "_id"}})
 
     lead_info = None
     if lead_id_for_session:
@@ -337,6 +342,39 @@ async def mark_session_read(session_id: str, user=Depends(get_current_user)):
     return {"success": True, "last_seen_at": now}
 
 
+@router.get("/chat/stream/{session_id}")
+async def chat_stream(session_id: str, request: Request, token: str = ""):
+    """Server-Sent Events stream for a chat session. Token via query param because EventSource no soporta headers custom."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Token requerido")
+    try:
+        payload = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user = await db.admin_users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalido")
+
+    async def event_generator():
+        yield "retry: 3000\n\n"
+        async for event in broker.subscribe(session_id):
+            if await request.is_disconnected():
+                break
+            yield event
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @router.get("/chat/lead-session/{lead_id}")
 async def get_or_create_lead_session(lead_id: str, user=Depends(get_current_user)):
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
@@ -429,16 +467,18 @@ async def crm_whatsapp_reply(req: CRMWhatsAppReply, user=Depends(get_current_use
 
     session_id = f"wa_{phone}"
     now = datetime.now(timezone.utc).isoformat()
-    await db.chat_messages.insert_one({
+    advisor_msg_doc = {
         "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": req.lead_id,
         "role": "assistant", "content": req.message, "timestamp": now,
         "source": "whatsapp", "sent_by": "crm_agent", "delivered": sent
-    })
+    }
+    await db.chat_messages.insert_one(advisor_msg_doc)
     await db.chat_sessions_meta.update_one(
         {"session_id": session_id},
         {"$set": {"last_activity": now}},
         upsert=True
     )
+    await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
     return {"message": "Mensaje enviado", "delivered": sent}
 
 
