@@ -572,8 +572,8 @@ export default function ChatPage() {
                     </>
                   )}
                   {activeSession && messages.length > 0 && (
-                    <Button data-testid="delete-conversation-btn" variant="ghost" size="sm" className="text-muted-foreground hover:text-red-400 h-8" onClick={deleteConversation}>
-                      <Trash2 size={14} />
+                    <Button data-testid="delete-conversation-btn" variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8 text-xs" onClick={deleteConversation}>
+                      <Trash2 size={12} className="mr-1" /> Eliminar Chat
                     </Button>
                   )}
                   {activeSession && messages.length > 0 && (
