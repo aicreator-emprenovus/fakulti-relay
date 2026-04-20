@@ -547,26 +547,9 @@ export default function ChatPage() {
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${botPaused ? "bg-amber-500/10" : "bg-green-500/10"}`}>
                     {botPaused ? <UserCheck size={15} className="text-amber-500" /> : <Phone size={15} className="text-green-500" />}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-foreground font-medium">
-                        {leadInfo?.name || "Selecciona una conversación"}
-                      </span>
-                      {leadInfo?.needs_advisor && (
-                        <span data-testid="hot-lead-header-bell" className="hot-lead-bell" title="Lead caliente - asigna un asesor para cerrar la venta">
-                          <Bell size={14} className="text-amber-500" />
-                        </span>
-                      )}
-                      {leadInfo?.funnel_stage && (
-                        <Badge variant="outline" className="text-[10px] h-5 px-2 leading-none inline-flex items-center whitespace-nowrap" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
-                          {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
-                        </Badge>
-                      )}
-                      {botPaused && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-medium animate-pulse">BOT PAUSADO</span>
-                      )}
-                    </div>
-                  </div>
+                  {!leadInfo && (
+                    <span className="text-sm text-muted-foreground">Selecciona una conversación</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   {activeLeadId && (
@@ -605,6 +588,23 @@ export default function ChatPage() {
               {/* Customer Context Card - Block 8 */}
               {leadInfo && activeSession && (
                 <div data-testid="customer-context-card" className="mt-2 p-2.5 rounded-lg bg-muted/40 border border-border/50">
+                  {/* Row 1: Name + stage + status badges */}
+                  <div className="flex items-center gap-2 flex-wrap mb-2 pb-2 border-b border-border/30">
+                    <span data-testid="chat-header-lead-name" className="text-sm text-foreground font-semibold">{leadInfo.name || "Sin nombre"}</span>
+                    {leadInfo.needs_advisor && (
+                      <span data-testid="hot-lead-header-bell" className="hot-lead-bell" title="Lead caliente - asigna un asesor para cerrar la venta">
+                        <Bell size={13} className="text-amber-500" />
+                      </span>
+                    )}
+                    {leadInfo.funnel_stage && (
+                      <Badge data-testid="chat-header-stage-badge" variant="outline" className="text-[10px] h-5 px-2 leading-none inline-flex items-center whitespace-nowrap" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
+                        {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
+                      </Badge>
+                    )}
+                    {botPaused && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-medium animate-pulse">BOT PAUSADO</span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px]">
                     {leadInfo.whatsapp && (
                       <div><span className="text-muted-foreground">Tel:</span> <span className="text-foreground font-medium">{leadInfo.whatsapp}</span></div>
