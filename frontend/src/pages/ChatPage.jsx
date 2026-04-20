@@ -299,10 +299,54 @@ export default function ChatPage() {
     setSending(false);
   };
 
+  // Compress image client-side when > 2MB: downscale to max 1920px on longest edge and re-encode as JPEG q=0.85.
+  // Returns the original file untouched if it is not an image or it is already small.
+  const compressIfImage = (file) => new Promise((resolve) => {
+    const TWO_MB = 2 * 1024 * 1024;
+    if (!file.type.startsWith("image/") || file.type === "image/gif" || file.size <= TWO_MB) {
+      resolve(file); return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1920;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(file); return; }
+          const newName = (file.name.replace(/\.[^/.]+$/, "") || "imagen") + ".jpg";
+          const compressed = new File([blob], newName, { type: "image/jpeg" });
+          resolve(compressed);
+        }, "image/jpeg", 0.85);
+      };
+      img.onerror = () => resolve(file);
+      img.src = reader.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+
   const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
+    const rawFile = e.target.files?.[0];
     if (e.target) e.target.value = "";
-    if (!file || !activeLeadId) return;
+    if (!rawFile || !activeLeadId) return;
+    // Optional client-side compression for big images
+    const originalSize = rawFile.size;
+    const file = await compressIfImage(rawFile);
+    if (file !== rawFile) {
+      const origKb = Math.round(originalSize / 1024);
+      const newKb = Math.round(file.size / 1024);
+      toast.info(`Imagen comprimida: ${origKb}KB → ${newKb}KB`);
+    }
     // Accept images, PDFs/documents, audio and video. WhatsApp Cloud API limits enforced server-side.
     const caption = input.trim();
     setInput("");
