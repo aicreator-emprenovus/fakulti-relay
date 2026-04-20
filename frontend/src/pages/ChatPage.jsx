@@ -499,21 +499,9 @@ export default function ChatPage() {
 
   return (
     <div data-testid="chat-page" className="animate-fade-in-up">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground font-heading">WhatsApp Bot</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1.5">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs font-medium text-green-600">EN VIVO</span>
-          </div>
-        </div>
-      </div>
-
       <AlertPanel alerts={alerts} onResolve={resolveAlert} onTakeOver={takeOverConversation} />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "180px" : "120px"})` }}>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "120px" : "60px"})` }}>
         {/* Sessions Sidebar */}
         <Card className="bg-card border-border rounded-2xl md:col-span-1 hidden md:block overflow-hidden">
           <CardContent className="p-3 h-full flex flex-col">
@@ -588,7 +576,7 @@ export default function ChatPage() {
               {/* Customer Context Card - Block 8 */}
               {leadInfo && activeSession && (
                 <div data-testid="customer-context-card" className="mt-2 p-2.5 rounded-lg bg-muted/40 border border-border/50">
-                  {/* Row 1: Name + stage + status badges */}
+                  {/* Row 1: Name + stage + product + status badges */}
                   <div className="flex items-center gap-2 flex-wrap mb-2 pb-2 border-b border-border/30">
                     <span data-testid="chat-header-lead-name" className="text-sm text-foreground font-semibold">{leadInfo.name || "Sin nombre"}</span>
                     {leadInfo.needs_advisor && (
@@ -599,6 +587,11 @@ export default function ChatPage() {
                     {leadInfo.funnel_stage && (
                       <Badge data-testid="chat-header-stage-badge" variant="outline" className="text-[10px] h-5 px-2 leading-none inline-flex items-center whitespace-nowrap" style={{ borderColor: STAGE_CONFIG[leadInfo.funnel_stage]?.color, color: STAGE_CONFIG[leadInfo.funnel_stage]?.color }}>
                         {STAGE_CONFIG[leadInfo.funnel_stage]?.label}
+                      </Badge>
+                    )}
+                    {leadInfo.product_interest && (
+                      <Badge data-testid="chat-header-product-badge" variant="outline" className="text-[10px] h-5 px-2 leading-none inline-flex items-center whitespace-nowrap border-blue-400/40 text-blue-400">
+                        Producto: {leadInfo.product_interest}
                       </Badge>
                     )}
                     {botPaused && (
@@ -620,9 +613,6 @@ export default function ChatPage() {
                     )}
                     {leadInfo.channel && (
                       <div><span className="text-muted-foreground">Canal:</span> <span className="text-emerald-500 font-medium">{leadInfo.channel}</span></div>
-                    )}
-                    {leadInfo.product_interest && (
-                      <div><span className="text-muted-foreground">Producto:</span> <span className="text-blue-400 font-medium">{leadInfo.product_interest}</span></div>
                     )}
                     {leadInfo.assigned_advisor_name && (
                       <div><span className="text-muted-foreground">Asesor:</span> <span className="text-orange-500 font-medium">{leadInfo.assigned_advisor_name}</span></div>
