@@ -136,6 +136,10 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
     # outdated base prices. Specialized product bots inject the exact prices_response
     # block for price questions.
     product_info = "\n".join([f"- {p['name']} - {p.get('description', '')}" for p in products])
+    primary_product_name = ""
+    if products:
+        # Use the first active product as the "primary product" the bot focuses on.
+        primary_product_name = products[0].get("name", "").strip()
 
     session_id = f"wa_{phone}"
     # Respect bot_context_reset_at: if present, bot only sees messages AFTER that
@@ -375,6 +379,8 @@ Habla como persona real, no como robot. Frases cortas.
 12. FORMAS DE PAGO: cuando el cliente confirme el total y quiera pagar, pregunta: ¿Prefieres pagar por transferencia o con tarjeta de credito?
     - Si elige TRANSFERENCIA o DEPOSITO -> envia textualmente el bloque de datos bancarios (PRODUBANCO) y luego solicita comprobante + direccion + facturacion.
     - Si elige TARJETA DE CREDITO o TARJETA -> responde TEXTUALMENTE: "Perfecto, en un momento te comparto el link para pago con tarjeta de credito. Dame unos minutos por favor" NO envies datos bancarios ni bloque de direccion/facturacion en este caso.
+13. REGLA CRITICA - PRODUCTO UNICO EN ESTE MOMENTO: el unico producto activo para vender es "{primary_product_name or "Bone Broth Hidrolizado"}". NUNCA preguntes "¿te interesa X o querias info de otro producto?". NUNCA ofrezcas otros productos. Si el cliente muestra interes, asume que es por {primary_product_name or "Bone Broth Hidrolizado"} y avanza el flujo (precios si pregunta, o cantidad). Si el cliente pregunta por otro producto no listado, responde: "Por ahora estamos atendiendo pedidos de {primary_product_name or "Bone Broth Hidrolizado"}. ¿Te gustaria conocer mas sobre este producto?"
+14. NUNCA incluyas marcadores de sistema tipo [UPDATE_LEAD:...] [LEAD_NAME:...] [STAGE:...] en medio del mensaje visible al cliente. Estos marcadores van al FINAL del mensaje y siempre con un valor concreto. Si no tienes valor, OMITE el marcador completamente (no pongas [UPDATE_LEAD:product_interest=] vacio).
 
 {f"REGLAS DE COMPORTAMIENTO:{chr(10)}{behavior_instructions}" if behavior_instructions else ""}
 
@@ -421,21 +427,24 @@ EXTRACCION DE DATOS (al final si aplica):
         await db.leads.update_one({"id": lead_id}, {"$set": {"name": detected_name, "last_interaction": datetime.now(timezone.utc).isoformat()}})
         await db.chat_sessions_meta.update_one({"session_id": session_id}, {"$set": {"lead_name": detected_name}}, upsert=True)
         logger.info(f"WhatsApp lead name detected: {detected_name} for {phone}")
-    reply = re.sub(r'\[LEAD_NAME:[^\]]+\]', '', reply)
+    # Strip name markers (including empty ones like [LEAD_NAME:])
+    reply = re.sub(r'\[LEAD_NAME:[^\]]*\]', '', reply)
 
-    # Parse lead data updates
-    update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]+)\]', reply)
+    # Parse lead data updates (allow empty values — we simply ignore those but still strip)
+    update_matches = re.findall(r'\[UPDATE_LEAD:(\w+)=([^\]]*)\]', reply)
     if update_matches:
         update_fields = {}
         allowed_fields = {"city", "product_interest", "email", "ci_ruc", "address", "quantity_requested"}
         for field, value in update_matches:
-            if field in allowed_fields:
-                update_fields[field] = value.strip()
+            v = (value or "").strip()
+            if field in allowed_fields and v:  # skip empty values
+                update_fields[field] = v
         if update_fields:
             update_fields["last_interaction"] = datetime.now(timezone.utc).isoformat()
             await db.leads.update_one({"id": lead_id}, {"$set": update_fields})
             logger.info(f"WhatsApp lead {lead_id} updated: {update_fields}")
-    reply = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]+\]', '', reply)
+    # Strip update markers (including empty ones like [UPDATE_LEAD:field=])
+    reply = re.sub(r'\[UPDATE_LEAD:\w+=[^\]]*\]', '', reply)
 
     # Parse stage
     stage_match = re.search(r'\[STAGE:(\w+)\]', reply)
@@ -465,7 +474,11 @@ EXTRACCION DE DATOS (al final si aplica):
                         })
                         logger.info(f"Hot lead notification: {lead_name_for_notif} reached {new_stage}")
                 await db.leads.update_one({"id": lead_id}, {"$set": update_data})
-    reply = re.sub(r'\[STAGE:\w+\]', '', reply).strip()
+    reply = re.sub(r'\[STAGE:\w*\]', '', reply).strip()
+
+    # Defensive final sweep: strip any remaining internal sentinels that may have leaked
+    # (e.g. GPT invented a [TAG:] marker we don't expect). Customers must never see brackets.
+    reply = re.sub(r'\[(?:LEAD_NAME|UPDATE_LEAD|STAGE|HANDOVER|BOT_[A-Z_]+)[^\]]*\]', '', reply).strip()
 
     # Handover detection
     msg_lower = message_text.strip().lower()
