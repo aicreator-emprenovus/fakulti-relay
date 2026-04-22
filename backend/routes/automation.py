@@ -35,6 +35,7 @@ async def update_automation_rule(rule_id: str, req: AutomationRuleCreate, user=D
 
 
 @router.patch("/automation/rules/{rule_id}/toggle")
+@router.post("/automation/rules/{rule_id}/toggle")
 async def toggle_automation_rule(rule_id: str, user=Depends(get_current_user)):
     rule = await db.automation_rules.find_one({"id": rule_id}, {"_id": 0})
     if not rule:

@@ -82,9 +82,17 @@ export default function ConfigPage() {
 
   const toggleRule = async (id) => {
     try {
-      const res = await axios.patch(`${API}/automation/rules/${id}/toggle`);
+      // Try POST first (universally supported through ingresses); falls back to PATCH if needed.
+      let res;
+      try {
+        res = await axios.post(`${API}/automation/rules/${id}/toggle`);
+      } catch (e) {
+        res = await axios.patch(`${API}/automation/rules/${id}/toggle`);
+      }
       setRules(prev => prev.map(r => r.id === id ? { ...r, active: res.data.active } : r));
-    } catch { toast.error("Error"); }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || `Error al cambiar estado: ${err?.message || ""}`);
+    }
   };
 
   const deleteRule = async (id) => {
