@@ -321,12 +321,10 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
         ])
 
         missing_fields = []
-        if not lead_name:
-            missing_fields.append("nombre y apellido")
+        # IMPORTANT: do NOT add "email" or "nombre y apellido" here — both are collected
+        # ONLY in the post-payment billing block, NEVER proactively by the bot.
         if not existing_lead.get("city"):
             missing_fields.append("ciudad")
-        if not existing_lead.get("email"):
-            missing_fields.append("email")
         if not existing_lead.get("product_interest"):
             missing_fields.append("producto de interes")
 
@@ -342,7 +340,11 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
 
         missing_instruction = ""
         if missing_fields:
-            missing_instruction = f"\nDATOS QUE AUN FALTAN POR RECOPILAR: {', '.join(missing_fields)}. Recopilalos de forma natural durante la conversacion, uno a la vez, sin parecer formulario."
+            missing_instruction = (
+                f"\nDATOS QUE AUN FALTAN POR RECOPILAR: {', '.join(missing_fields)}. "
+                f"Recopilalos de forma natural durante la conversacion, uno a la vez, sin parecer formulario. "
+                f"PROHIBIDO pedir email, correo, nombre completo, CI, RUC o datos de facturacion durante el flujo -> esos datos se solicitan UNICAMENTE en el bloque post-pago."
+            )
 
         first_contact = "\nEste es un lead NUEVO. Saluda con un emoji y pregunta el nombre del cliente." if not lead_name else ""
 
@@ -364,7 +366,7 @@ Habla como persona real, no como robot. Frases cortas.
 7. Maximo 1-2 emojis por mensaje.
 8. ENTREGAS: TODA compra se envia en UNA SOLA ENTREGA. NUNCA preguntes si quiere la entrega en una sola parte o en entregas parciales. NUNCA ofrezcas entregas parciales ni fraccionadas. Asume siempre entrega unica.
 9. ENVIO A DOMICILIO: Envio GRATIS si la compra es >= $35 USD. Si es < $35, el envio cuesta $4 USD adicionales. Menciona este costo solo si aplica antes de confirmar el total.
-10. NO PEDIR DIRECCION NI FACTURACION ANTES DEL PAGO: la direccion (sector, calle, referencia) y los datos de facturacion (CI/RUC, correo, nombre) se solicitan UNICAMENTE despues de compartir los datos de transferencia. NUNCA los pidas antes. Si el cliente los ofrece antes, guardalos en silencio y continua.
+10. NO PEDIR DIRECCION NI FACTURACION ANTES DEL PAGO: la direccion (sector, calle, referencia), CORREO/EMAIL, NOMBRE COMPLETO, CI/RUC y cualquier otro dato de facturacion se solicitan UNICAMENTE en el bloque post-pago, DESPUES de compartir los datos de transferencia. NUNCA los pidas antes. NUNCA pidas email "para enviarte info del producto" o similares. Si el cliente los ofrece antes, guardalos en silencio y continua.
 11. SALUDO INICIAL (solo primera interaccion): usa EXACTAMENTE este texto:
    "¡Hola! 👋 Te damos la bienvenida a Laboratorios Fakulti®
    
