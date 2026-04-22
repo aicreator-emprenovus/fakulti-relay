@@ -293,6 +293,22 @@ async def startup():
         await db.automation_rules.insert_many(v2_rules)
         logger.info(f"Automation rules v2 seeded ({len(v2_rules)} new rules)")
 
+    # === Seed v2.1 rules (additive) — formas de pago transferencia/tarjeta ===
+    v21_marker = await db.automation_rules.find_one({"name": "[v2.1] Forma de pago: transferencia o tarjeta de credito"}, {"_id": 0, "id": 1})
+    if not v21_marker:
+        last_order_doc = await db.automation_rules.find_one({}, {"_id": 0, "order": 1}, sort=[("order", -1)])
+        base_order = (last_order_doc.get("order") if last_order_doc else 0) + 1
+        v21_rules = [
+            {"id": str(uuid.uuid4()), "name": "[v2.1] Forma de pago: transferencia o tarjeta de credito", "trigger_type": "analisis_conversacion", "trigger_value": "total_confirmado", "action_type": "respuesta_ia", "action_value": "Cuando el total este confirmado, pregunta al cliente: ¿Prefieres pagar por transferencia o con tarjeta de credito?", "description": "Ofrece ambas formas de pago al momento del cierre.", "active": True},
+            {"id": str(uuid.uuid4()), "name": "[v2.1] Pago con TRANSFERENCIA: enviar datos PRODUBANCO", "trigger_type": "intencion_ia", "trigger_value": "transferencia,deposito,deposito bancario,transferir,banco", "action_type": "respuesta_ia", "action_value": "Envia textualmente el bloque deposit_info del bot_config (PRODUBANCO, HEALTHY COMMUNITY HEALTHAFFILIATE S.A.S, Cuenta Corriente 02005341538, RUC 0591759868001, Correo cobros@hycinternacional.com), seguido del bloque post_payment_data_request (direccion + facturacion).", "description": "Flujo de pago por transferencia.", "active": True},
+            {"id": str(uuid.uuid4()), "name": "[v2.1] Pago con TARJETA: derivar a agente humano", "trigger_type": "intencion_ia", "trigger_value": "tarjeta,tarjeta de credito,credito,pago con tarjeta,tarjeta debito,visa,mastercard", "action_type": "respuesta_ia_y_handover", "action_value": "Responde TEXTUALMENTE: 'Perfecto, en un momento un asesor te compartira el link para pago con tarjeta de credito. Te transfiero con un asesor.' Esto dispara automaticamente la alerta de handover. NO envies datos bancarios ni el bloque de direccion/facturacion en este caso.", "description": "Pago con tarjeta requiere intervencion humana (link de pago).", "active": True},
+        ]
+        for i, r in enumerate(v21_rules):
+            r["order"] = base_order + i
+            r["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.automation_rules.insert_many(v21_rules)
+        logger.info(f"Automation rules v2.1 seeded ({len(v21_rules)} new rules for payment methods)")
+
     # Seed default configs
     if not await db.whatsapp_config.find_one({"id": "main"}):
         await db.whatsapp_config.insert_one({"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios"})
@@ -424,7 +440,7 @@ async def startup():
             await db.products.update_one({"id": bone_broth["id"]}, {"$set": {"name": "Bone Broth Hidrolizado", "code": "BONEBROTH"}})
             logger.info(f"Renamed product '{bone_broth['name']}' -> 'Bone Broth Hidrolizado'")
         bc = bone_broth.get("bot_config") or {}
-        new_flow_marker = "Laboratorios Fakulti" in (bc.get("sales_flow") or "") and "PRODUBANCO" in (bc.get("sales_flow") or "")
+        new_flow_marker = "Laboratorios Fakulti" in (bc.get("sales_flow") or "") and "PRODUBANCO" in (bc.get("sales_flow") or "") and "tarjeta de credito" in (bc.get("sales_flow") or "").lower()
         needs_update = not bc.get("sales_flow") or len(bc.get("personality", "")) < 80 or "bombro" in json.dumps(bc).lower() or not bc.get("prices_response") or not new_flow_marker or not bc.get("flavor_response")
         if needs_update:
             prices_response_text = (
@@ -499,12 +515,15 @@ async def startup():
                     "PASO 5 - CONFIRMAR CANTIDAD Y TOTAL\n"
                     "Cuando el cliente indique cuantas unidades o cajas quiere, CALCULA el total usando los precios del PASO 3.\n"
                     "Confirma: Son X bolsas/cajas por $Y en total (incluyendo envio si aplica).\n\n"
-                    "PASO 6 - DATOS DE TRANSFERENCIA\n"
-                    "Cuando el total este confirmado, envia EXACTAMENTE este bloque (sin agregar ni cambiar nada):\n\n"
+                    "PASO 6 - FORMA DE PAGO Y TRANSFERENCIA\n"
+                    "Cuando el total este confirmado, pregunta: ¿Como prefieres pagar: por transferencia o con tarjeta de credito?\n"
+                    "- Si el cliente elige TRANSFERENCIA o DEPOSITO: envia EXACTAMENTE este bloque (sin agregar ni cambiar nada):\n\n"
                     + deposit_text + "\n\n"
-                    "PASO 7 - SOLICITAR COMPROBANTE Y DATOS POST-PAGO\n"
-                    "Inmediatamente despues del PASO 6, envia EXACTAMENTE este bloque como segundo mensaje (o como parte del mismo bloque):\n\n"
+                    "- Si el cliente elige TARJETA DE CREDITO o TARJETA: responde TEXTUALMENTE: \"Perfecto, en un momento un asesor te compartira el link para pago con tarjeta de credito. Te transfiero con un asesor.\" -> NO envies datos de transferencia en este caso.\n\n"
+                    "PASO 7 - SOLICITAR COMPROBANTE Y DATOS POST-PAGO (solo flujo TRANSFERENCIA)\n"
+                    "SOLO si el cliente eligio transferencia, inmediatamente despues del PASO 6 envia EXACTAMENTE este bloque como segundo mensaje (o parte del mismo):\n\n"
                     + post_payment_text + "\n\n"
+                    "Si el cliente eligio TARJETA, NO envies el bloque de direccion/facturacion: el asesor humano se encargara del resto.\n\n"
                     "REGLA CRITICA:\n"
                     "- NO pidas direccion, sector, calle, CI, RUC, correo, ni datos de facturacion en ningun paso anterior al 7. El cliente los entregara UNICAMENTE despues de ver los datos de transferencia.\n"
                     "- Si el cliente ofrece esos datos voluntariamente antes, guardalos en silencio (sin preguntar mas) y continua el flujo.\n\n"

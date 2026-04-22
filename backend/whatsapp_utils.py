@@ -23,6 +23,9 @@ BOT_TRANSFER_PHRASES = [
     "te contactara un asesor", "te contactara un asesor",
     "asesor se pondra en contacto", "asesor se pondra en contacto",
     "conecto con un asesor", "te conecto con", "conectar con un asesor",
+    # Card-payment handoff trigger: bot compartirá link de pago con tarjeta → human takes over
+    "link para pago con tarjeta", "link para que puedas pagar con tarjeta",
+    "link de pago con tarjeta", "link para pagar con tarjeta",
     "asesor humano"
 ]
 
