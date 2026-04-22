@@ -396,7 +396,7 @@ async def startup():
             logger.info(f"Renamed product '{bone_broth['name']}' -> 'Bone Broth Hidrolizado'")
         bc = bone_broth.get("bot_config") or {}
         new_flow_marker = "Laboratorios Fakulti" in (bc.get("sales_flow") or "") and "PRODUBANCO" in (bc.get("sales_flow") or "")
-        needs_update = not bc.get("sales_flow") or len(bc.get("personality", "")) < 80 or "bombro" in json.dumps(bc).lower() or not bc.get("prices_response") or not new_flow_marker
+        needs_update = not bc.get("sales_flow") or len(bc.get("personality", "")) < 80 or "bombro" in json.dumps(bc).lower() or not bc.get("prices_response") or not new_flow_marker or not bc.get("flavor_response")
         if needs_update:
             prices_response_text = (
                 "Bone Broth Hidrolizado Bolsa Doypack 120 gr\n"
@@ -436,10 +436,15 @@ async def startup():
             clean_config = {
                 "personality": "Asesor humano de Laboratorios Fakulti, especializado en Bone Broth Hidrolizado. Experto en nutricion, colageno y bienestar integral. Cercano, confiable, cientifico pero accesible.",
                 "key_benefits": "Colageno de alta absorcion tipo I, II y III. Mejora digestion y salud intestinal. Soporte articular y oseo. Fortalece cabello, unas y piel. Rico en aminoacidos esenciales. Producto unico en Ecuador. Biotecnologia avanzada.",
-                "usage_info": "Un sachet al dia. Diluir en agua caliente o fria. Se puede mezclar con jugos o batidos. Apto para toda la familia. Sobre el sabor: nuestro Caldo de Huesos Hidrolizado Fakulti tiene sabor neutro gracias a los procesos biotecnologicos, para que tu experiencia sea mas agradable y puedas consumirlo de manera versatil en preparaciones de dulce o sal. Solamente recuerda tomarlo en su totalidad una vez preparado porque no contiene preservantes ni quimicos y podria contaminarse o perder sus propiedades.",
+                "usage_info": "Un sachet al dia. Diluir en agua caliente o fria. Se puede mezclar con jugos o batidos. Apto para toda la familia.",
                 "restrictions": "No prometer curas. No afirmar que reemplaza tratamientos medicos. REGLA ABSOLUTA: NO inventes NADA. Si no tienes la informacion, responde: No tengo esa informacion, te comunico con un asesor. NUNCA uses la palabra Bombro. El producto se llama Bone Broth Hidrolizado o Caldo de Huesos Hidrolizado Fakulti.",
-                "faqs": "Se toma un sachet al dia. Apto para toda la familia. No contiene azucar anadida. Es libre de gluten. Se puede tomar frio o caliente. Resultados visibles en 2-4 semanas de uso continuo. Sobre el sabor: tiene sabor neutro gracias a procesos biotecnologicos, se puede consumir en preparaciones de dulce o sal.",
+                "faqs": "Se toma un sachet al dia. Apto para toda la familia. No contiene azucar anadida. Es libre de gluten. Se puede tomar frio o caliente. Resultados visibles en 2-4 semanas de uso continuo.",
                 "prices_response": prices_response_text,
+                "flavor_response": (
+                    "Te comento que nuestro Caldo de Huesos Hidrolizado Fakulti tiene sabor neutro gracias a los procesos biotecnologicos, "
+                    "para que tu experiencia sea mas agradable y puedas consumirlo de manera versatil en preparaciones de dulce o sal. "
+                    "Solamente recuerda tomarlo en su totalidad una vez preparado porque no contiene preservantes ni quimicos y podria contaminarse o perder sus propiedades."
+                ),
                 "greeting_message": greeting_text,
                 "deposit_info": deposit_text,
                 "post_payment_data_request": post_payment_text,

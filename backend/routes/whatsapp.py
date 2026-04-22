@@ -118,7 +118,10 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
         logger.error(f"Failed to save incoming WA user message for {phone}: {_e}")
 
     products = await db.products.find({"active": True}, {"_id": 0}).to_list(100)
-    product_info = "\n".join([f"- {p['name']}: ${p['price']} - {p.get('description', '')}" for p in products])
+    # product_info: product names + descriptions WITHOUT prices to avoid GPT quoting
+    # outdated base prices. Specialized product bots inject the exact prices_response
+    # block for price questions.
+    product_info = "\n".join([f"- {p['name']} - {p.get('description', '')}" for p in products])
 
     session_id = f"wa_{phone}"
     # Respect bot_context_reset_at: if present, bot only sees messages AFTER that
