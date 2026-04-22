@@ -62,15 +62,29 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
     if existing_lead and existing_lead.get("bot_paused"):
         session_id = f"wa_{phone}"
         now = datetime.now(timezone.utc).isoformat()
-        await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id, "role": "user", "content": message_text, "timestamp": now, "source": "whatsapp"})
+        user_msg_doc = {
+            "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id,
+            "role": "user", "content": message_text, "timestamp": now, "source": "whatsapp"
+        }
+        if wa_msg_id:
+            user_msg_doc["wa_msg_id"] = wa_msg_id
+        await db.chat_messages.insert_one(user_msg_doc)
         await db.chat_sessions_meta.update_one(
             {"session_id": session_id},
             {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": lead_name, "source": "whatsapp", "last_activity": now}},
             upsert=True
         )
         await db.leads.update_one({"id": lead_id}, {"$set": {"last_interaction": now}})
-        logger.info(f"Bot paused for lead {lead_id} ({phone}) - message stored, no auto-reply")
-        return "[BOT_PAUSED] Mensaje recibido. Un asesor humano tiene el control.", lead_id
+        # Publish to SSE so the advisor sees the message instantly
+        try:
+            from realtime import broker
+            await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in user_msg_doc.items() if k != "_id"}})
+        except Exception:
+            pass
+        logger.info(f"Bot paused for lead {lead_id} ({phone}) - message stored, NO auto-reply sent")
+        # Return empty reply -> webhook handler will NOT send anything to customer.
+        # The advisor takes full control and writes manually.
+        return "", lead_id
 
     if is_new:
         new_lead = {
@@ -602,6 +616,16 @@ async def whatsapp_incoming(request: Request):
                                 logger.error(f"Fallback user-msg save failed for {phone}: {_e}")
                             continue
                         response_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+
+                        # Empty reply (e.g. bot is paused / advisor took control) =>
+                        # skip sending and persisting any bot message.
+                        if not (reply or "").strip():
+                            logger.info(f"Empty bot reply for {phone} (bot paused or silent) - nothing sent")
+                            continue
+                        # Also skip any internal sentinel that should never reach the customer
+                        if reply.strip().startswith("[BOT_") or reply.strip().startswith("[SILENT"):
+                            logger.warning(f"Internal sentinel '{reply[:30]}' suppressed for {phone}")
+                            continue
 
                         # FIX #4: avoid sending two near-identical bot messages within 10s
                         # (protects against Meta retrying the webhook or GPT generating duplicates)
