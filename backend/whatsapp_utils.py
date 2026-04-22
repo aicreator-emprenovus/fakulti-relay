@@ -97,6 +97,44 @@ async def send_whatsapp_image(to_phone: str, image_url: str, caption: str = ""):
         return False
 
 
+async def download_whatsapp_media(media_id: str):
+    """Download media file from Meta by media_id. Returns (bytes, mime_type, sha256) or (None, None, None) on failure."""
+    config = await get_whatsapp_config()
+    token = config.get("access_token")
+    if not token or not media_id:
+        return None, None, None
+    try:
+        async with httpx.AsyncClient() as c:
+            # Step 1: get temporary download URL + mime_type from Meta
+            meta_resp = await c.get(
+                f"{WHATSAPP_API_URL}/{media_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=15,
+            )
+            if meta_resp.status_code != 200:
+                logger.error(f"WA media metadata error {meta_resp.status_code}: {meta_resp.text[:200]}")
+                return None, None, None
+            data = meta_resp.json()
+            download_url = data.get("url")
+            mime_type = data.get("mime_type", "")
+            sha256 = data.get("sha256", "")
+            if not download_url:
+                return None, None, None
+            # Step 2: download actual bytes (must authenticate with same token)
+            file_resp = await c.get(
+                download_url,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=60,
+            )
+            if file_resp.status_code != 200:
+                logger.error(f"WA media download error {file_resp.status_code}")
+                return None, None, None
+            return file_resp.content, mime_type, sha256
+    except Exception as e:
+        logger.error(f"WA media download exception: {e}")
+        return None, None, None
+
+
 async def upload_whatsapp_media(file_bytes: bytes, content_type: str, filename: str):
     """Upload media to Meta Cloud API and return media_id. Works in any environment
     because the file goes directly to Meta (no public URL required)."""

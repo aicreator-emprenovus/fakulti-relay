@@ -12,7 +12,7 @@ from utils import normalize_phone_ec, find_lead_by_phone, FUNNEL_STAGES
 from whatsapp_utils import (
     get_whatsapp_config, send_whatsapp_message, send_whatsapp_image,
     send_whatsapp_template, WHATSAPP_API_URL, HANDOVER_KEYWORDS,
-    BOT_TRANSFER_PHRASES, BOT_TIMEOUT_SECONDS
+    BOT_TRANSFER_PHRASES, BOT_TIMEOUT_SECONDS, download_whatsapp_media
 )
 from bot_logic import build_product_bot_prompt
 from models import WhatsAppMessage
@@ -45,7 +45,7 @@ async def detect_channel_from_message(message_text: str, lead_id: str):
     return False
 
 
-async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: str = ""):
+async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: str = "", incoming_media: dict = None):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
 
     phone = normalize_phone_ec(phone)
@@ -68,6 +68,14 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
         }
         if wa_msg_id:
             user_msg_doc["wa_msg_id"] = wa_msg_id
+        if incoming_media and incoming_media.get("media_url"):
+            user_msg_doc["media_url"] = incoming_media["media_url"]
+            user_msg_doc["media_type"] = incoming_media.get("media_type", "")
+            if incoming_media.get("media_type") == "image":
+                user_msg_doc["image_url"] = incoming_media["media_url"]
+            if incoming_media.get("filename"):
+                user_msg_doc["filename"] = incoming_media["filename"]
+            user_msg_doc["message_type"] = incoming_media.get("media_type", "")
         await db.chat_messages.insert_one(user_msg_doc)
         await db.chat_sessions_meta.update_one(
             {"session_id": session_id},
@@ -121,6 +129,14 @@ async def process_whatsapp_incoming(phone: str, message_text: str, wa_msg_id: st
         }
         if wa_msg_id:
             user_msg_doc["wa_msg_id"] = wa_msg_id
+        if incoming_media and incoming_media.get("media_url"):
+            user_msg_doc["media_url"] = incoming_media["media_url"]
+            user_msg_doc["media_type"] = incoming_media.get("media_type", "")
+            if incoming_media.get("media_type") == "image":
+                user_msg_doc["image_url"] = incoming_media["media_url"]
+            if incoming_media.get("filename"):
+                user_msg_doc["filename"] = incoming_media["filename"]
+            user_msg_doc["message_type"] = incoming_media.get("media_type", "")
         await db.chat_messages.insert_one(user_msg_doc)
         await db.chat_sessions_meta.update_one(
             {"session_id": session_id_early},
@@ -587,16 +603,57 @@ async def whatsapp_incoming(request: Request):
                         logger.info(f"Skipping duplicate WA webhook for msg id={wamid}")
                         continue
 
+                # Track media metadata when the customer sends non-text content so
+                # we can render it inline in the CRM chat.
+                incoming_media_url = ""
+                incoming_media_type = ""
+                incoming_filename = ""
+
                 if msg_type == "text":
                     text = msg.get("text", {}).get("body", "")
-                elif msg_type == "image":
-                    text = msg.get("image", {}).get("caption", "") or "[El cliente envio una imagen]"
-                elif msg_type == "audio":
-                    text = "[El cliente envio un audio]"
-                elif msg_type == "video":
-                    text = msg.get("video", {}).get("caption", "") or "[El cliente envio un video]"
-                elif msg_type == "document":
-                    text = f"[El cliente envio un documento: {msg.get('document', {}).get('filename', 'archivo')}]"
+                elif msg_type in ("image", "audio", "video", "document"):
+                    media_obj = msg.get(msg_type, {}) or {}
+                    caption = media_obj.get("caption", "") if msg_type in ("image", "video", "document") else ""
+                    media_id = media_obj.get("id", "")
+                    provided_filename = media_obj.get("filename", "") if msg_type == "document" else ""
+                    # Pre-label (in case download fails we still keep the conversation)
+                    label_map = {
+                        "image": "[El cliente envio una imagen]",
+                        "audio": "[El cliente envio un audio]",
+                        "video": "[El cliente envio un video]",
+                        "document": f"[El cliente envio un documento: {provided_filename or 'archivo'}]",
+                    }
+                    text = caption or label_map[msg_type]
+                    # Download the binary from Meta and store locally
+                    if media_id:
+                        try:
+                            import pathlib as _pl
+                            content_bytes, mime, _sha = await download_whatsapp_media(media_id)
+                            if content_bytes:
+                                ext_by_mime = {
+                                    "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+                                    "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/wav": ".wav", "audio/webm": ".webm", "audio/opus": ".opus",
+                                    "video/mp4": ".mp4", "video/3gpp": ".3gp", "video/quicktime": ".mov",
+                                    "application/pdf": ".pdf",
+                                }
+                                ext = ext_by_mime.get((mime or "").lower(), "")
+                                if not ext and provided_filename and "." in provided_filename:
+                                    ext = "." + provided_filename.rsplit(".", 1)[-1].lower()
+                                if not ext:
+                                    ext = {"image": ".jpg", "audio": ".ogg", "video": ".mp4", "document": ".bin"}[msg_type]
+                                uploads_dir = _pl.Path(__file__).resolve().parent.parent / "uploads"
+                                uploads_dir.mkdir(exist_ok=True)
+                                saved_name = f"in_{uuid.uuid4().hex}{ext}"
+                                with open(uploads_dir / saved_name, "wb") as f:
+                                    f.write(content_bytes)
+                                incoming_media_url = f"/api/uploads/{saved_name}"
+                                incoming_media_type = msg_type
+                                incoming_filename = provided_filename or saved_name
+                                logger.info(f"WA incoming {msg_type} saved: {saved_name} ({len(content_bytes)} bytes) from {phone}")
+                            else:
+                                logger.warning(f"WA incoming {msg_type} could not be downloaded (media_id={media_id})")
+                        except Exception as e:
+                            logger.exception(f"WA incoming media save error: {e}")
                 elif msg_type == "sticker":
                     text = "[El cliente envio un sticker]"
                 elif msg_type == "location":
@@ -613,7 +670,14 @@ async def whatsapp_incoming(request: Request):
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
                         start_time = datetime.now(timezone.utc)
                         try:
-                            reply, lead_id = await process_whatsapp_incoming(phone, text, wamid)
+                            reply, lead_id = await process_whatsapp_incoming(
+                                phone, text, wamid,
+                                incoming_media={
+                                    "media_url": incoming_media_url,
+                                    "media_type": incoming_media_type,
+                                    "filename": incoming_filename,
+                                } if incoming_media_url else None,
+                            )
                         except Exception as e:
                             logger.exception(f"process_whatsapp_incoming failed for {phone}: {e}")
                             # Still save the inbound user message so the CRM shows the conversation
