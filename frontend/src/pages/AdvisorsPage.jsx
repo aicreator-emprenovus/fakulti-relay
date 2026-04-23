@@ -356,7 +356,7 @@ export default function AdvisorsPage() {
             </div>
             <div>
               <Label className="text-muted-foreground text-xs">Especialización</Label>
-              <Input value={form.specialization} onChange={e => setForm(f => ({ ...f, specialization: e.target.value }))} className="bg-muted border-input" placeholder="Bombro, Gomitas..." />
+              <Input value={form.specialization} onChange={e => setForm(f => ({ ...f, specialization: e.target.value }))} className="bg-muted border-input" placeholder="Bone Broth, Gomitas..." />
             </div>
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)}>Cancelar</Button>

@@ -204,7 +204,7 @@ export default function QRCampaignsPage() {
           <div className="space-y-4">
             <div>
               <Label className="text-muted-foreground text-xs">Nombre *</Label>
-              <Input data-testid="campaign-name" value={campaignForm.name} onChange={e => setCampaignForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej: TV - Anuncio Bombro" className="bg-muted border-input" />
+              <Input data-testid="campaign-name" value={campaignForm.name} onChange={e => setCampaignForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej: TV - Anuncio Bone Broth" className="bg-muted border-input" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
