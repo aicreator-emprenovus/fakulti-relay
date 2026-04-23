@@ -668,6 +668,77 @@ async def whatsapp_incoming(request: Request):
 
                 if phone and text:
                         logger.info(f"WhatsApp incoming from {phone}: {text[:50]}...")
+
+                        # RULE: any attachment (image/audio/video/document/sticker/location/contacts)
+                        # triggers immediate human handover. Bot does NOT respond anything.
+                        ATTACHMENT_TYPES = {"image", "audio", "video", "document", "sticker", "location", "contacts"}
+                        if msg_type in ATTACHMENT_TYPES:
+                            try:
+                                # Ensure lead exists + get lead_id (normalize, find or create)
+                                existing_lead = await find_lead_by_phone(phone)
+                                if not existing_lead:
+                                    new_lead = {
+                                        "id": str(uuid.uuid4()), "name": "", "whatsapp": phone,
+                                        "city": "", "email": "", "product_interest": "", "source": "WhatsApp",
+                                        "status": "nuevo", "funnel_stage": "nuevo",
+                                        "last_interaction": datetime.now(timezone.utc).isoformat(),
+                                        "created_at": datetime.now(timezone.utc).isoformat(),
+                                    }
+                                    await db.leads.insert_one(new_lead)
+                                    lead_id = new_lead["id"]
+                                    lead_name_local = ""
+                                else:
+                                    lead_id = existing_lead["id"]
+                                    lead_name_local = existing_lead.get("name", "")
+
+                                session_id = f"wa_{phone}"
+                                now = datetime.now(timezone.utc).isoformat()
+                                user_msg_doc = {
+                                    "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id,
+                                    "role": "user", "content": text, "timestamp": now, "source": "whatsapp"
+                                }
+                                if wamid:
+                                    user_msg_doc["wa_msg_id"] = wamid
+                                if incoming_media_url:
+                                    user_msg_doc["media_url"] = incoming_media_url
+                                    user_msg_doc["media_type"] = incoming_media_type or msg_type
+                                    user_msg_doc["message_type"] = incoming_media_type or msg_type
+                                    if (incoming_media_type or msg_type) == "image":
+                                        user_msg_doc["image_url"] = incoming_media_url
+                                    if incoming_filename:
+                                        user_msg_doc["filename"] = incoming_filename
+                                await db.chat_messages.insert_one(user_msg_doc)
+                                await db.chat_sessions_meta.update_one(
+                                    {"session_id": session_id},
+                                    {"$set": {"session_id": session_id, "lead_id": lead_id, "lead_name": lead_name_local or phone, "source": "whatsapp", "last_activity": now}},
+                                    upsert=True
+                                )
+                                # Pause bot + mark lead needs_advisor
+                                await db.leads.update_one(
+                                    {"id": lead_id},
+                                    {"$set": {"bot_paused": True, "needs_advisor": True, "last_interaction": now}}
+                                )
+                                # Create handover alert (if no pending one)
+                                pending = await db.handover_alerts.find_one({"lead_id": lead_id, "status": "pending"}, {"_id": 0, "id": 1})
+                                if not pending:
+                                    await db.handover_alerts.insert_one({
+                                        "id": str(uuid.uuid4()), "lead_id": lead_id,
+                                        "reason": f"cliente_envio_{msg_type}",
+                                        "trigger_message": text[:200],
+                                        "status": "pending",
+                                        "created_at": now,
+                                    })
+                                # Publish via SSE so CRM updates instantly
+                                try:
+                                    from realtime import broker
+                                    await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in user_msg_doc.items() if k != "_id"}})
+                                except Exception:
+                                    pass
+                                logger.info(f"Attachment {msg_type} from {phone} -> auto-handover to human, bot SILENT")
+                            except Exception as e:
+                                logger.exception(f"Auto-handover on attachment failed: {e}")
+                            continue  # skip bot response entirely
+
                         start_time = datetime.now(timezone.utc)
                         try:
                             reply, lead_id = await process_whatsapp_incoming(

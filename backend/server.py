@@ -309,6 +309,17 @@ async def startup():
         await db.automation_rules.insert_many(v21_rules)
         logger.info(f"Automation rules v2.1 seeded ({len(v21_rules)} new rules for payment methods)")
 
+    # === Seed v2.2 rule — cliente envia adjunto -> handover inmediato ===
+    v22_marker = await db.automation_rules.find_one({"name": "[v2.2] Cliente envia archivo: handover inmediato (bot silencioso)"}, {"_id": 0, "id": 1})
+    if not v22_marker:
+        last_order_doc = await db.automation_rules.find_one({}, {"_id": 0, "order": 1}, sort=[("order", -1)])
+        base_order = (last_order_doc.get("order") if last_order_doc else 0) + 1
+        v22_rules = [
+            {"id": str(uuid.uuid4()), "name": "[v2.2] Cliente envia archivo: handover inmediato (bot silencioso)", "trigger_type": "comportamiento_bot", "trigger_value": "archivo_recibido", "action_type": "handover_silencioso", "action_value": "Cuando el cliente adjunte cualquier archivo (imagen, audio, video, documento, sticker, ubicacion o contacto), el bot NO responde absolutamente nada. Se guarda el archivo, se crea alerta de handover, se pausa el bot y se deriva inmediatamente a un agente humano sin importar la etapa de la conversacion.", "description": "Evita que el bot intente interpretar comprobantes, imagenes, audios u otros adjuntos.", "active": True, "order": base_order, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.automation_rules.insert_many(v22_rules)
+        logger.info("Automation rule v2.2 seeded (handover on attachment)")
+
     # Seed default configs
     if not await db.whatsapp_config.find_one({"id": "main"}):
         await db.whatsapp_config.insert_one({"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios"})
