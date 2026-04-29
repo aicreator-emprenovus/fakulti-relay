@@ -547,8 +547,8 @@ export default function ChatPage() {
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
             {/* Header with Customer Context Card */}
             <div className="p-3 border-b border-input">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${botPaused ? "bg-amber-500/10" : "bg-green-500/10"}`}>
                     {botPaused ? <UserCheck size={15} className="text-amber-500" /> : <Phone size={15} className="text-green-500" />}
                   </div>
@@ -556,7 +556,7 @@ export default function ChatPage() {
                     <span className="text-sm text-muted-foreground">Selecciona una conversación</span>
                   )}
                 </div>
-                <div className="flex items-center gap-1 flex-wrap justify-end max-w-[70%]">
+                <div className="flex items-center gap-1 flex-wrap flex-1 justify-start">
                   {activeLeadId && (
                     <>
                       {botPaused ? (
