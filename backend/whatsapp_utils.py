@@ -37,7 +37,8 @@ async def get_whatsapp_config():
     return config or {
         "id": "main", "phone_number_id": "", "access_token": "",
         "verify_token": "fakulti-whatsapp-verify-token",
-        "business_name": "Fakulti Laboratorios"
+        "business_name": "Fakulti Laboratorios",
+        "catalog_id": ""
     }
 
 
@@ -233,6 +234,49 @@ async def send_whatsapp_media(to_phone: str, media_type: str, media_url: str, ca
     except Exception as e:
         logger.error(f"WA {media_type} send exception: {e}")
         return False
+
+
+async def send_whatsapp_catalog_message(to_phone: str, body_text: str = "", footer_text: str = "", thumbnail_retailer_id: str = ""):
+    """Send a WhatsApp 'catalog_message' that renders a 'Ver catálogo' button in the chat.
+    The catalog itself is the one connected to the WABA in Meta Business Settings.
+    No catalog_id is required in the payload (Meta resolves it from the WABA link).
+    Returns (success: bool, error: str)."""
+    config = await get_whatsapp_config()
+    if not config.get("phone_number_id") or not config.get("access_token"):
+        logger.warning("WhatsApp not configured, skipping catalog send")
+        return False, "WhatsApp no configurado"
+    url = f"{WHATSAPP_API_URL}/{config['phone_number_id']}/messages"
+    headers = {"Authorization": f"Bearer {config['access_token']}", "Content-Type": "application/json"}
+    international = phone_to_international(to_phone)
+    action = {"name": "catalog_message"}
+    if thumbnail_retailer_id:
+        action["parameters"] = {"thumbnail_product_retailer_id": thumbnail_retailer_id}
+    interactive = {
+        "type": "catalog_message",
+        "body": {"text": body_text or "Mira nuestro catálogo de productos Fakulti 👇"},
+        "action": action,
+    }
+    if footer_text:
+        interactive["footer"] = {"text": footer_text}
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": international,
+        "type": "interactive",
+        "interactive": interactive,
+    }
+    try:
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(url, json=payload, headers=headers, timeout=20)
+            if resp.status_code in (200, 201):
+                logger.info(f"WA catalog_message sent to {international}")
+                return True, ""
+            err_text = resp.text[:300]
+            logger.error(f"WA catalog send error {resp.status_code}: {err_text}")
+            return False, f"Meta {resp.status_code}: {err_text[:200]}"
+    except Exception as e:
+        logger.error(f"WA catalog send exception: {e}")
+        return False, str(e)
 
 
 async def send_whatsapp_template(to_phone: str, template_name: str, language: str = "es", parameters: list = None, image_url: str = None):

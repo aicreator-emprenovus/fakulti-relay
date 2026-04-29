@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
-  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw, Paperclip
+  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw, Paperclip, BookOpen
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -495,6 +495,23 @@ export default function ChatPage() {
     setInput(text);
   };
 
+  const sendCatalog = async () => {
+    if (!activeLeadId) return;
+    if (!window.confirm("¿Enviar el catálogo Fakulti al cliente vía WhatsApp?\n\nEl cliente recibirá un mensaje con un botón 'Ver catálogo' que abre el catálogo conectado a la WABA en Meta.")) return;
+    try {
+      const fd = new FormData();
+      fd.append("lead_id", activeLeadId);
+      fd.append("body_text", "Mira nuestro catálogo de productos Fakulti. Toca *Ver catálogo* para explorar todo lo que tenemos para ti 👇");
+      fd.append("footer_text", "Fakulti Laboratorios");
+      await axios.post(`${API}/chat/whatsapp-reply-catalog`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Catálogo enviado");
+      const res = await axios.get(`${API}/chat/history/${activeSession}`);
+      setMessages(res.data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Error al enviar catálogo");
+    }
+  };
+
   const pendingAlertCount = alerts.filter(a => a.status === "pending").length;
 
   return (
@@ -539,7 +556,7 @@ export default function ChatPage() {
                     <span className="text-sm text-muted-foreground">Selecciona una conversación</span>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap justify-end max-w-[70%]">
                   {activeLeadId && (
                     <>
                       {botPaused ? (
@@ -556,6 +573,9 @@ export default function ChatPage() {
                       </Button>
                       <Button data-testid="reset-bot-context-btn" variant="outline" size="sm" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 h-8 text-xs" onClick={resetBotContext} title="Resetea el contexto del bot — el historial sigue visible pero el bot lo ignora y empieza fresco">
                         <RotateCcw size={12} className="mr-1" /> Resetear Bot
+                      </Button>
+                      <Button data-testid="send-catalog-btn" variant="outline" size="sm" className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8 text-xs" onClick={sendCatalog} title="Envía un mensaje interactivo con el botón 'Ver catálogo' al cliente">
+                        <BookOpen size={12} className="mr-1" /> Enviar Catálogo
                       </Button>
                     </>
                   )}

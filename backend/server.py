@@ -322,7 +322,7 @@ async def startup():
 
     # Seed default configs
     if not await db.whatsapp_config.find_one({"id": "main"}):
-        await db.whatsapp_config.insert_one({"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios"})
+        await db.whatsapp_config.insert_one({"id": "main", "phone_number_id": "", "access_token": "", "verify_token": "fakulti-whatsapp-verify-token", "business_name": "Fakulti Laboratorios", "catalog_id": ""})
     if not await db.ai_config.find_one({"id": "main"}):
         await db.ai_config.insert_one({"id": "main", "intent_analysis": True, "lead_classification": True, "product_recommendation": True, "suggested_responses": True})
 

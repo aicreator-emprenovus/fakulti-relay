@@ -43,7 +43,7 @@ export default function ConfigPage() {
   const [showForm, setShowForm] = useState(false);
   const [editRule, setEditRule] = useState(null);
   const [form, setForm] = useState({ name: "", trigger_type: "nuevo_lead", trigger_value: "", action_type: "enviar_mensaje", action_value: "", description: "", active: true });
-  const [waForm, setWaForm] = useState({ phone_number_id: "", access_token: "", verify_token: "", business_name: "" });
+  const [waForm, setWaForm] = useState({ phone_number_id: "", access_token: "", verify_token: "", business_name: "", catalog_id: "" });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
@@ -57,7 +57,7 @@ export default function ConfigPage() {
     ]).then(([r, w, a]) => {
       setRules(r.data);
       setWaConfig(w.data);
-      setWaForm({ phone_number_id: w.data.phone_number_id || "", access_token: w.data.access_token || "", verify_token: w.data.verify_token || "", business_name: w.data.business_name || "" });
+      setWaForm({ phone_number_id: w.data.phone_number_id || "", access_token: w.data.access_token || "", verify_token: w.data.verify_token || "", business_name: w.data.business_name || "", catalog_id: w.data.catalog_id || "" });
       setAiConfig(a.data);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -373,6 +373,17 @@ export default function ConfigPage() {
                 <div>
                   <Label className="text-xs text-muted-foreground">Nombre del Negocio</Label>
                   <Input value={waForm.business_name} onChange={e => setWaForm(f => ({ ...f, business_name: e.target.value }))} className="bg-muted/50 border-input text-foreground" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Catalog ID (Meta Commerce)</Label>
+                  <Input
+                    data-testid="catalog-id-input"
+                    value={waForm.catalog_id}
+                    onChange={e => setWaForm(f => ({ ...f, catalog_id: e.target.value }))}
+                    placeholder="Ej: 1518830646561816"
+                    className="bg-muted/50 border-input text-foreground"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">ID del catálogo conectado a la WABA en Business Settings → WhatsApp → Catálogo conectado. Se usa para diagnóstico y futuras integraciones; el botón "Ver catálogo" funciona automáticamente con el catálogo vinculado a la WABA.</p>
                 </div>
                 <div className="flex gap-2">
                   <Button data-testid="save-wa-config" onClick={saveWaConfig} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Guardar Configuración</Button>

@@ -138,9 +138,33 @@ async def diagnose_wa(user=Depends(get_current_user)):
         "detail": f"URL: {expected_webhook} | Verify Token: {verify_token}"
     })
 
+    # Check 6: Catálogo de productos vinculado a la WABA
+    catalog_info = None
+    if waba_id:
+        try:
+            async with httpx.AsyncClient() as c:
+                r = await c.get(f"{WHATSAPP_API_URL}/{waba_id}/product_catalogs", headers=headers, timeout=10)
+                if r.status_code == 200:
+                    catalogs = r.json().get("data", [])
+                    if catalogs:
+                        catalog_info = catalogs[0]
+                        catalog_names = [f"{cat.get('name')} (id={cat.get('id')})" for cat in catalogs]
+                        configured_cat = config.get("catalog_id", "")
+                        match_note = ""
+                        if configured_cat:
+                            ids_in_meta = [str(cat.get("id")) for cat in catalogs]
+                            match_note = " | configurado coincide" if configured_cat in ids_in_meta else " | ⚠️ catalog_id configurado NO coincide con el conectado en Meta"
+                        checks.append({"name": "Catálogo vinculado a la WABA", "ok": True, "detail": f"{', '.join(catalog_names)}{match_note}"})
+                    else:
+                        checks.append({"name": "Catálogo vinculado a la WABA", "ok": False, "detail": "Ninguno. Conecta un catálogo en Business Settings → WhatsApp Accounts → Catálogo conectado."})
+                else:
+                    checks.append({"name": "Catálogo vinculado a la WABA", "ok": False, "detail": f"HTTP {r.status_code} - {r.text[:200]}"})
+        except Exception as e:
+            checks.append({"name": "Catálogo vinculado a la WABA", "ok": False, "detail": str(e)})
+
     all_ok = all(c["ok"] for c in checks)
     summary = "Todo OK. Si aún no recibes mensajes, revisa que en Meta App Dashboard → WhatsApp → Configuration, el Callback URL y Verify Token coincidan exactamente, y que el campo 'messages' esté marcado." if all_ok else "Hay checks fallidos. Revisa el detalle de cada uno."
-    return {"checks": checks, "summary": summary, "waba_id": waba_id}
+    return {"checks": checks, "summary": summary, "waba_id": waba_id, "catalog": catalog_info}
 
 
 @router.get("/config/ai")

@@ -11,7 +11,7 @@ from database import db
 from auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
 from models import ChatMessageRequest, CRMWhatsAppReply
 from utils import FUNNEL_STAGES
-from whatsapp_utils import send_whatsapp_message, send_whatsapp_image, send_whatsapp_media, upload_whatsapp_media, send_whatsapp_media_by_id
+from whatsapp_utils import send_whatsapp_message, send_whatsapp_image, send_whatsapp_media, upload_whatsapp_media, send_whatsapp_media_by_id, send_whatsapp_catalog_message
 from bot_logic import build_product_bot_prompt
 from realtime import broker
 
@@ -481,6 +481,49 @@ async def crm_whatsapp_reply(req: CRMWhatsAppReply, user=Depends(get_current_use
     )
     await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
     return {"message": "Mensaje enviado", "delivered": sent}
+
+
+@router.post("/chat/whatsapp-reply-catalog")
+async def crm_whatsapp_reply_catalog(
+    lead_id: str = Form(...),
+    body_text: str = Form(""),
+    footer_text: str = Form(""),
+    thumbnail_retailer_id: str = Form(""),
+    user=Depends(get_current_user),
+):
+    """Advisor manually sends an interactive 'catalog_message' (with the 'Ver catálogo' button)
+    to the lead via WhatsApp. The catalog used is the one connected to the WABA in Meta."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    phone = lead.get("whatsapp", "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Lead no tiene numero de WhatsApp")
+
+    body = (body_text or "").strip() or "Mira nuestro catálogo de productos Fakulti 👇"
+    sent, err = await send_whatsapp_catalog_message(phone, body, footer_text, thumbnail_retailer_id)
+    if not sent:
+        detail = err or "Error al enviar catálogo"
+        raise HTTPException(status_code=500, detail=detail)
+
+    session_id = f"wa_{phone}"
+    now = datetime.now(timezone.utc).isoformat()
+    advisor_msg_doc = {
+        "id": str(uuid.uuid4()), "session_id": session_id, "lead_id": lead_id,
+        "role": "assistant", "content": f"📚 Catálogo enviado: {body}",
+        "timestamp": now, "source": "whatsapp", "sent_by": "crm_agent",
+        "delivered": sent, "message_kind": "catalog",
+    }
+    await db.chat_messages.insert_one(advisor_msg_doc)
+    await db.chat_sessions_meta.update_one(
+        {"session_id": session_id},
+        {"$set": {"last_activity": now}},
+        upsert=True
+    )
+    await broker.publish(session_id, {"type": "message", "message": {k: v for k, v in advisor_msg_doc.items() if k != "_id"}})
+    return {"message": "Catálogo enviado", "delivered": sent}
+
+
 
 
 @router.post("/chat/whatsapp-reply-image")

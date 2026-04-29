@@ -48,3 +48,14 @@ Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca 
 - [x] Excel export/import for automation rules
 - [x] server.py refactoring: 4647 -> 337 lines (15 route modules)
 - [x] Products & Bots: Export/Import Excel + Delete All buttons
+- [x] Real-time chat via Server-Sent Events (SSE)
+- [x] Audit Log (Historial) section for Admin
+- [x] Multimedia attachments via Meta media_id (send & receive)
+- [x] Auto-handover when user sends attachment or asks credit-card payment
+- [x] Meta Catalog integration (Phase 1 - manual): "Enviar Catálogo" button in chat header sends `interactive: catalog_message` (Ver catálogo button) — uses catalog connected to WABA. catalog_id field added in WhatsApp config panel + diagnose endpoint validates linked catalog. Catalog ID configurado: `1518830646561816`. (2026-04-29)
+
+## Backlog
+- [ ] Phase 2 catalog: send specific products via `interactive: product` / `product_list` (requires `catalog_id` + `retailer_id` in payload).
+- [ ] Component splitting in frontend (ChatPage, LeadsPage, ConfigPage).
+- [ ] Type hints across backend Python.
+- [ ] Weekly automated email reports for advisors.

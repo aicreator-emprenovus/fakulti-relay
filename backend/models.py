@@ -110,6 +110,7 @@ class WhatsAppConfigUpdate(BaseModel):
     access_token: Optional[str] = ""
     verify_token: Optional[str] = "fakulti-whatsapp-verify-token"
     business_name: Optional[str] = "Fakulti Laboratorios"
+    catalog_id: Optional[str] = ""
 
 class AIConfigUpdate(BaseModel):
     intent_analysis: Optional[bool] = True
