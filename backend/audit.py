@@ -28,8 +28,6 @@ _LABELS = [
     ("POST", r"^/api/chat/message$", "Respuesta en chat IA"),
     ("POST", r"^/api/chat/whatsapp-reply$", "Respuesta manual por WhatsApp"),
     ("POST", r"^/api/chat/whatsapp-reply-catalog$", "Envío de catálogo por WhatsApp"),
-    ("DELETE", r"^/api/chat/sessions/[^/]+$", "Eliminación de conversación"),
-    ("DELETE", r"^/api/chat/messages/[^/]+$", "Eliminación de mensaje"),
     ("PUT", r"^/api/chat/alerts/[^/]+/resolve$", "Resolución de alerta"),
     ("POST", r"^/api/campaigns$", "Creación de campaña"),
     ("PUT", r"^/api/campaigns/[^/]+$", "Actualización de campaña"),

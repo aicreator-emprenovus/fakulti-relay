@@ -56,6 +56,11 @@ Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca 
 - [x] Lead stage protection: Leads in "cliente_nuevo" (Leads ganados) and "cliente_activo" (Cartera activa) can NEVER be auto-moved to "perdido" by the bot or automation rules (`sin_respuesta`). Only human advisors can move them manually. Implemented in `routes/whatsapp.py`, `routes/chat.py`, `routes/automation.py` (both run-now + scheduler) using `PROTECTED_FROM_AUTO_LOST` constant in `utils.py`. Validated end-to-end. (2026-05-05)
 - [x] Admin user management ("Administradores" menu): admin can create/edit/delete other admins + reset their password from `/admins`. Seed admin (`admin@fakulti.com`) is protected — cannot be deleted nor have its password changed by anyone. Implemented in `routes/admins.py`, `models.AdminCreate`, frontend `AdminsPage.jsx`, sidebar entry above "Asesores". (2026-05-05)
 - [x] Audit log redesign: `Historial de actividad` now uses dropdowns instead of free-text inputs (populated from `/api/audit-logs/users` and `/api/audit-logs/actions`). Removed columns "Ruta", "IP", "Estado" — replaced with single "Detalle" column showing affected entity name (lead, asesor, administrador, producto, campaña, regla) using new `entity_type/entity_id/entity_name` fields enriched by audit middleware. (2026-05-05)
+- [x] Chat improvements (2026-05-05):
+  - Removed "Eliminar Chat" button + `DELETE /api/chat/sessions/{id}` endpoint.
+  - Removed individual message delete (X overlay) + `DELETE /api/chat/messages/{id}` endpoint.
+  - Added BOT / Humano / Todos filter row under "Conversaciones" sidebar (uses `bot_paused` flag).
+  - Fixed chat-page height: outer div now uses `h-full flex flex-col` and inner grid uses `flex-1 min-h-0` instead of hardcoded `100vh - 60px`. Chat now fills available space without producing the "bounce/rebote" when scrolling between header and input.
 
 ## Backlog
 - [ ] Phase 2 catalog: send specific products via `interactive: product` / `product_list` (requires `catalog_id` + `retailer_id` in payload).

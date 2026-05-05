@@ -9,7 +9,7 @@ import { Badge } from "../components/ui/badge";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
-  Send, Trash2, X, Phone, Clock, AlertTriangle, Activity,
+  Send, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
   Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw, Paperclip, BookOpen
 } from "lucide-react";
@@ -385,29 +385,6 @@ export default function ChatPage() {
     setSending(false);
   };
 
-  const deleteMessage = async (msgId, index) => {
-    if (!msgId) { setMessages(prev => prev.filter((_, i) => i !== index)); return; }
-    try {
-      await axios.delete(`${API}/chat/messages/${msgId}`);
-      setMessages(prev => prev.filter(m => m.id !== msgId));
-      toast.success("Mensaje eliminado");
-    } catch { toast.error("Error al eliminar mensaje"); }
-  };
-
-  const deleteConversation = async () => {
-    if (!activeSession || !window.confirm("¿Eliminar toda la conversación?")) return;
-    try {
-      await axios.delete(`${API}/chat/sessions/${activeSession}`);
-      setMessages([]);
-      setActiveSession(null);
-      setActiveLeadId(null);
-      setLeadInfo(null);
-      setBotPaused(false);
-      fetchSessions();
-      toast.success("Conversación eliminada");
-    } catch { toast.error("Error al eliminar conversación"); }
-  };
-
   const resetBotContext = async () => {
     if (!activeLeadId) return;
     if (!window.confirm("¿Resetear el contexto del bot?\n\nEl bot ignorará el historial previo y empezará fresco.\nLos mensajes anteriores seguirán visibles en el CRM.\nSe limpiarán: cantidad, dirección, CI/RUC y producto de interés.")) return;
@@ -514,27 +491,76 @@ export default function ChatPage() {
 
   const pendingAlertCount = alerts.filter(a => a.status === "pending").length;
 
+  // Filter for sessions panel: 'all' | 'bot' | 'human'
+  const [conversationFilter, setConversationFilter] = useState("all");
+  const filteredSessions = sessions.filter(s => {
+    if (conversationFilter === "bot") return !s.bot_paused;
+    if (conversationFilter === "human") return s.bot_paused;
+    return true;
+  });
+  const botCount = sessions.filter(s => !s.bot_paused).length;
+  const humanCount = sessions.filter(s => s.bot_paused).length;
+
   return (
-    <div data-testid="chat-page" className="animate-fade-in-up">
+    <div data-testid="chat-page" className="animate-fade-in-up h-full flex flex-col">
       <AlertPanel alerts={alerts} onResolve={resolveAlert} onTakeOver={takeOverConversation} />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" style={{ height: `calc(100vh - ${pendingAlertCount > 0 ? "120px" : "60px"})` }}>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-h-0">
         {/* Sessions Sidebar */}
         <Card className="bg-card border-border rounded-2xl md:col-span-1 hidden md:block overflow-hidden">
           <CardContent className="p-3 h-full flex flex-col">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-semibold">
-              Conversaciones ({sessions.length})
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2 font-semibold">
+              Conversaciones ({filteredSessions.length}{conversationFilter !== "all" ? ` / ${sessions.length}` : ""})
             </p>
-            <ScrollArea className="flex-1">
+            <div className="flex gap-1 mb-3" data-testid="conversation-filter-row">
+              <button
+                data-testid="filter-all"
+                onClick={() => setConversationFilter("all")}
+                className={`flex-1 text-[10px] py-1 rounded-md font-medium transition-colors ${
+                  conversationFilter === "all"
+                    ? "bg-foreground text-background"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                Todos ({sessions.length})
+              </button>
+              <button
+                data-testid="filter-bot"
+                onClick={() => setConversationFilter("bot")}
+                className={`flex-1 text-[10px] py-1 rounded-md font-medium transition-colors flex items-center justify-center gap-1 ${
+                  conversationFilter === "bot"
+                    ? "bg-green-500/20 text-green-700 border border-green-500/30"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <Phone size={10} /> BOT ({botCount})
+              </button>
+              <button
+                data-testid="filter-human"
+                onClick={() => setConversationFilter("human")}
+                className={`flex-1 text-[10px] py-1 rounded-md font-medium transition-colors flex items-center justify-center gap-1 ${
+                  conversationFilter === "human"
+                    ? "bg-amber-500/20 text-amber-700 border border-amber-500/30"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <UserCheck size={10} /> Humano ({humanCount})
+              </button>
+            </div>
+            <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-1.5">
-                {sessions.map(s => (
+                {filteredSessions.map(s => (
                   <SessionItem key={s.session_id} s={s} isActive={activeSession === s.session_id} onClick={() => loadSession(s)} />
                 ))}
-                {sessions.length === 0 && (
+                {filteredSessions.length === 0 && (
                   <div className="text-center py-8">
                     <Phone size={24} className="text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground text-xs">Sin conversaciones</p>
-                    <p className="text-muted-foreground text-[10px] mt-1">Las conversaciones aparecen cuando un cliente escribe al bot</p>
+                    <p className="text-muted-foreground text-xs">
+                      {sessions.length === 0 ? "Sin conversaciones" : "Sin conversaciones para este filtro"}
+                    </p>
+                    {sessions.length === 0 && (
+                      <p className="text-muted-foreground text-[10px] mt-1">Las conversaciones aparecen cuando un cliente escribe al bot</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -578,11 +604,6 @@ export default function ChatPage() {
                         <BookOpen size={12} className="mr-1" /> Enviar Catálogo
                       </Button>
                     </>
-                  )}
-                  {activeSession && messages.length > 0 && (
-                    <Button data-testid="delete-conversation-btn" variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8 text-xs" onClick={deleteConversation}>
-                      <Trash2 size={12} className="mr-1" /> Eliminar Chat
-                    </Button>
                   )}
                   {activeSession && messages.length > 0 && (
                     <Button data-testid="analyze-btn" variant="outline" size="sm" disabled={analyzing}
@@ -803,13 +824,6 @@ export default function ChatPage() {
                             )}
                           </div>
                         </div>
-                        <button
-                          data-testid={`delete-msg-${i}`}
-                          onClick={() => deleteMessage(msg.id, i)}
-                          className="absolute -top-2 -right-2 hidden group-hover:flex w-5 h-5 rounded-full bg-red-500/90 text-white items-center justify-center text-xs hover:bg-red-600 transition-all"
-                        >
-                          <X size={10} />
-                        </button>
                       </div>
                       {isUser && (
                         <div className="w-7 h-7 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-1">

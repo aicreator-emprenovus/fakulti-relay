@@ -234,21 +234,6 @@ Incluye SIEMPRE el tag [STAGE:] al final."""
     return {"response": assistant_content, "session_id": req.session_id, "lead": lead_info}
 
 
-@router.delete("/chat/messages/{message_id}")
-async def delete_chat_message(message_id: str, user=Depends(get_current_user)):
-    result = await db.chat_messages.delete_one({"id": message_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Mensaje no encontrado")
-    return {"message": "Mensaje eliminado"}
-
-
-@router.delete("/chat/sessions/{session_id}")
-async def delete_chat_session(session_id: str, user=Depends(get_current_user)):
-    result = await db.chat_messages.delete_many({"session_id": session_id})
-    await db.chat_sessions_meta.delete_one({"session_id": session_id})
-    return {"message": f"Conversacion eliminada ({result.deleted_count} mensajes)"}
-
-
 @router.get("/chat/history/{session_id}")
 async def get_chat_history(session_id: str, user=Depends(get_current_user)):
     messages = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("timestamp", 1).to_list(100)
