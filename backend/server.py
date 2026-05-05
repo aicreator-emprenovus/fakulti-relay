@@ -28,9 +28,10 @@ from routes import (
     config as config_routes,
     campaigns as campaigns_routes,
     audit as audit_routes,
+    admins as admins_routes,
 )
 from routes.automation import process_automation_rules_background
-from audit import log_event, friendly_label
+from audit import log_event, friendly_label, resolve_entity
 import jwt as _jwt
 from auth import JWT_SECRET, JWT_ALGORITHM
 
@@ -53,10 +54,18 @@ _AUDIT_SKIP_PATHS = (
 
 @app.middleware("http")
 async def audit_middleware(request, call_next):
+    method = request.method
+    path = request.url.path
+    # Capture entity name BEFORE the response, especially for DELETE (entity will not exist after).
+    pre_entity_type, pre_entity_id, pre_entity_name = "", "", ""
+    if method in _AUDIT_METHODS and method in ("DELETE", "PUT"):
+        try:
+            pre_entity_type, pre_entity_id, pre_entity_name = await resolve_entity(path)
+        except Exception:
+            pass
+
     response = await call_next(request)
     try:
-        method = request.method
-        path = request.url.path
         if method not in _AUDIT_METHODS:
             return response
         # Skip noisy internal endpoints except DELETE / high-value ones
@@ -65,7 +74,7 @@ async def audit_middleware(request, call_next):
         # Login is logged explicitly inside its route handler to get real user info
         if path == "/api/auth/login":
             return response
-        # Extract user from bearer token if present (skip for login endpoint)
+        # Extract user from bearer token if present
         user = None
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
@@ -75,18 +84,25 @@ async def audit_middleware(request, call_next):
                 user = await __import__("database").db.admin_users.find_one({"id": payload.get("user_id")}, {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1})
             except Exception:
                 user = None
-        # For successful login, enrich user info from request body
         status = getattr(response, "status_code", 0)
-        details = ""
-        if path == "/api/auth/login" and status == 200:
-            # We can't easily read body here, but the email is already in the subsequent
-            # response. Keep it simple: log anonymous login success — email lookup will
-            # happen via post-login audit in the route.
-            pass
         action = friendly_label(method, path)
         ip = (request.client.host if request.client else "") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
         ua = request.headers.get("user-agent", "")
-        await log_event(action=action, user=user, details=details, ip=ip, path=path, method=method, status=status, user_agent=ua)
+        # Use pre-fetched entity for DELETE/PUT; for POST resolve now (newly created entities have id in URL only after redirect — usually empty here).
+        entity_type, entity_id, entity_name = pre_entity_type, pre_entity_id, pre_entity_name
+        if not entity_name and method == "POST":
+            try:
+                entity_type, entity_id, entity_name = await resolve_entity(path)
+            except Exception:
+                pass
+        details = ""
+        if entity_name:
+            details = f"{entity_type or 'entidad'}: {entity_name}"
+        await log_event(
+            action=action, user=user, details=details, ip=ip, path=path, method=method,
+            status=status, user_agent=ua,
+            entity_type=entity_type, entity_id=entity_id, entity_name=entity_name,
+        )
     except Exception as e:
         logger.warning(f"Audit middleware error: {e}")
     return response
@@ -108,6 +124,7 @@ app.include_router(automation_routes.router)
 app.include_router(config_routes.router)
 app.include_router(campaigns_routes.router)
 app.include_router(audit_routes.router)
+app.include_router(admins_routes.router)
 
 
 @app.get("/api/health")

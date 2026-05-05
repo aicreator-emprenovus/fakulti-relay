@@ -48,6 +48,14 @@ class AdvisorCreate(BaseModel):
     status: Optional[str] = "disponible"
     specialization: Optional[str] = ""
 
+class AdminCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    whatsapp: Optional[str] = ""
+    status: Optional[str] = "disponible"
+    specialization: Optional[str] = ""
+
 class ProductCreate(BaseModel):
     name: str
     code: Optional[str] = ""

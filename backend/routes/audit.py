@@ -23,9 +23,14 @@ async def list_audit_logs(
 
     q = {}
     if user_email:
-        q["user_email"] = {"$regex": user_email, "$options": "i"}
+        # Exact match if value contains '@', otherwise regex (back-compat)
+        if "@" in user_email:
+            q["user_email"] = user_email
+        else:
+            q["user_email"] = {"$regex": user_email, "$options": "i"}
     if action:
-        q["action"] = {"$regex": action, "$options": "i"}
+        # Exact match preferred (dropdown sends full label); fall back to regex if not found
+        q["action"] = action
     if date_from or date_to:
         q["timestamp"] = {}
         if date_from:
@@ -59,3 +64,23 @@ async def audit_summary(user=Depends(get_current_user), hours: int = 24):
     ]
     rows = await db.audit_logs.aggregate(pipeline).to_list(30)
     return [{"user_email": r["_id"]["user"], "action": r["_id"]["action"], "count": r["count"], "last": r["last"]} for r in rows]
+
+
+@router.get("/audit-logs/users")
+async def audit_users(user=Depends(get_current_user)):
+    """List of registered users (admin + advisor + developer) for the audit-log filter dropdown."""
+    role = user.get("role", "admin")
+    if role not in ("admin", "developer"):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    users = await db.admin_users.find({}, {"_id": 0, "email": 1, "name": 1, "role": 1}).sort("role", 1).to_list(200)
+    return users
+
+
+@router.get("/audit-logs/actions")
+async def audit_actions(user=Depends(get_current_user)):
+    """List of distinct actions ever recorded (for the audit-log filter dropdown)."""
+    role = user.get("role", "admin")
+    if role not in ("admin", "developer"):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    actions = await db.audit_logs.distinct("action")
+    return sorted([a for a in actions if a])

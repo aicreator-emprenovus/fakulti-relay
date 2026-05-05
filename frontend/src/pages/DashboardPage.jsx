@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, DollarSign, ShoppingCart, Gamepad2, TrendingUp, UserCheck, Award, Target, AlertTriangle, History, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -270,7 +271,17 @@ function AuditLogSection() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [usersList, setUsersList] = useState([]);
+  const [actionsList, setActionsList] = useState([]);
   const pageSize = 25;
+
+  const ROLE_LABEL = { admin: "Administrador", advisor: "Asesor", developer: "Desarrollador" };
+
+  // Load filter options once
+  useEffect(() => {
+    axios.get(`${API}/audit-logs/users`).then(r => setUsersList(r.data || [])).catch(() => {});
+    axios.get(`${API}/audit-logs/actions`).then(r => setActionsList(r.data || [])).catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -297,6 +308,21 @@ function AuditLogSection() {
     } catch { return iso; }
   };
 
+  const renderDetail = (e) => {
+    const entityName = e.entity_name || "";
+    const entityType = e.entity_type || "";
+    if (entityName) {
+      return (
+        <span className="text-foreground">
+          <span className="text-muted-foreground capitalize">{entityType}: </span>
+          <span className="font-medium">{entityName}</span>
+        </span>
+      );
+    }
+    if (e.details) return <span className="text-muted-foreground">{e.details}</span>;
+    return <span className="text-muted-foreground/60">—</span>;
+  };
+
   return (
     <Card data-testid="audit-log-section" className="bg-card border-border rounded-2xl mt-6">
       <CardHeader className="pb-3">
@@ -313,10 +339,32 @@ function AuditLogSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <Input data-testid="audit-filter-email" placeholder="Filtrar por email de usuario" value={userEmail} onChange={e => { setUserEmail(e.target.value); setPage(1); }} className="text-xs h-8" />
-          <Input data-testid="audit-filter-action" placeholder="Filtrar por acción (ej. Eliminación)" value={action} onChange={e => { setAction(e.target.value); setPage(1); }} className="text-xs h-8" />
-          <Input data-testid="audit-filter-from" type="datetime-local" value={dateFrom} onChange={e => { setDateFrom(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
-          <Input data-testid="audit-filter-to" type="datetime-local" value={dateTo} onChange={e => { setDateTo(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
+          <Select value={userEmail || "__all__"} onValueChange={v => { setUserEmail(v === "__all__" ? "" : v); setPage(1); }}>
+            <SelectTrigger data-testid="audit-filter-email" className="h-8 text-xs">
+              <SelectValue placeholder="Filtrar por usuario" />
+            </SelectTrigger>
+            <SelectContent className="bg-card border-input">
+              <SelectItem value="__all__">Todos los usuarios</SelectItem>
+              {usersList.map(u => (
+                <SelectItem key={u.email} value={u.email}>
+                  {u.name || u.email} <span className="text-muted-foreground">({ROLE_LABEL[u.role] || u.role})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={action || "__all__"} onValueChange={v => { setAction(v === "__all__" ? "" : v); setPage(1); }}>
+            <SelectTrigger data-testid="audit-filter-action" className="h-8 text-xs">
+              <SelectValue placeholder="Filtrar por acción" />
+            </SelectTrigger>
+            <SelectContent className="bg-card border-input max-h-72">
+              <SelectItem value="__all__">Todas las acciones</SelectItem>
+              {actionsList.map(a => (
+                <SelectItem key={a} value={a}>{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input data-testid="audit-filter-from" type="datetime-local" value={dateFrom ? new Date(dateFrom).toISOString().slice(0, 16) : ""} onChange={e => { setDateFrom(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
+          <Input data-testid="audit-filter-to" type="datetime-local" value={dateTo ? new Date(dateTo).toISOString().slice(0, 16) : ""} onChange={e => { setDateTo(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
         </div>
         <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-xs">
@@ -325,31 +373,23 @@ function AuditLogSection() {
                 <th className="px-3 py-2 font-medium">Fecha / Hora</th>
                 <th className="px-3 py-2 font-medium">Usuario</th>
                 <th className="px-3 py-2 font-medium">Acción</th>
-                <th className="px-3 py-2 font-medium hidden md:table-cell">Ruta</th>
-                <th className="px-3 py-2 font-medium hidden lg:table-cell">IP</th>
-                <th className="px-3 py-2 font-medium">Estado</th>
+                <th className="px-3 py-2 font-medium">Detalle</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">Sin registros</td></tr>
+                <tr><td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">Sin registros</td></tr>
               ) : items.map((e, i) => (
                 <tr key={`${e.timestamp}-${i}`} data-testid={`audit-row-${i}`} className="border-t border-border/50 hover:bg-muted/20">
                   <td className="px-3 py-1.5 text-foreground whitespace-nowrap">{fmtDate(e.timestamp)}</td>
                   <td className="px-3 py-1.5">
                     <div className="flex flex-col">
                       <span className="text-foreground">{e.user_name || e.user_email || "anónimo"}</span>
-                      {e.user_email && e.user_email !== e.user_name && <span className="text-muted-foreground text-[10px]">{e.user_email}</span>}
+                      {e.user_email && e.user_email !== e.user_name && <span className="text-muted-foreground text-[10px]">{e.user_email} · {ROLE_LABEL[e.user_role] || e.user_role || ""}</span>}
                     </div>
                   </td>
                   <td className="px-3 py-1.5 text-foreground">{e.action}</td>
-                  <td className="px-3 py-1.5 text-muted-foreground font-mono text-[10px] hidden md:table-cell">{e.method} {e.path}</td>
-                  <td className="px-3 py-1.5 text-muted-foreground hidden lg:table-cell">{e.ip || "-"}</td>
-                  <td className="px-3 py-1.5">
-                    <Badge variant="outline" className={`text-[10px] ${e.status >= 200 && e.status < 300 ? "border-green-500/30 text-green-500" : e.status >= 400 ? "border-red-500/30 text-red-500" : "border-muted text-muted-foreground"}`}>
-                      {e.status || "-"}
-                    </Badge>
-                  </td>
+                  <td className="px-3 py-1.5">{renderDetail(e)}</td>
                 </tr>
               ))}
             </tbody>

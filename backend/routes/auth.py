@@ -99,10 +99,15 @@ async def generate_provisional_password(body: dict, user=Depends(get_current_use
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     role = user.get("role", "admin")
     target_role = target.get("role", "admin")
+    target_email = target.get("email", "")
+    if target_email == "admin@fakulti.com":
+        raise HTTPException(status_code=403, detail="El usuario principal admin@fakulti.com no puede tener su contraseña modificada")
     if role == "developer" and target_role not in ("admin", "advisor"):
         raise HTTPException(status_code=403, detail="Sin permisos")
-    if role == "admin" and target_role != "advisor":
-        raise HTTPException(status_code=403, detail="Solo puedes generar contrasenas para asesores")
+    if role == "admin" and target_role not in ("advisor", "admin"):
+        raise HTTPException(status_code=403, detail="Solo puedes generar contrasenas para asesores u otros administradores")
+    if role == "admin" and target_role == "admin" and target.get("id") == user.get("id"):
+        raise HTTPException(status_code=400, detail="Usa Cambiar contraseña en tu propio perfil")
     if role == "advisor":
         raise HTTPException(status_code=403, detail="Sin permisos")
     chars_upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -253,8 +258,13 @@ async def direct_password_reset(body: dict, user=Depends(get_current_user)):
     if not target:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     target_role = target.get("role", "admin")
-    if role != "admin" or target_role != "advisor":
-        raise HTTPException(status_code=403, detail="Solo el admin puede resetear contrasenas de asesores")
+    target_email = target.get("email", "")
+    if target_email == "admin@fakulti.com":
+        raise HTTPException(status_code=403, detail="El usuario principal admin@fakulti.com no puede tener su contraseña modificada")
+    if role != "admin" or target_role not in ("advisor", "admin"):
+        raise HTTPException(status_code=403, detail="Solo el admin puede resetear contrasenas de asesores u otros administradores")
+    if target_role == "admin" and target.get("id") == user.get("id"):
+        raise HTTPException(status_code=400, detail="Usa Cambiar contraseña en tu propio perfil")
     await db.admin_users.update_one(
         {"id": target_user_id},
         {"$set": {"password_hash": safe_hash_password(new_password), "must_change_password": True}}

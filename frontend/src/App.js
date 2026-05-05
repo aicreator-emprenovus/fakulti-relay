@@ -14,6 +14,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import ConfigPage from "@/pages/ConfigPage";
 import QRCampaignsPage from "@/pages/QRCampaignsPage";
 import AdvisorsPage from "@/pages/AdvisorsPage";
+import AdminsPage from "@/pages/AdminsPage";
 import CampaignsPage from "@/pages/CampaignsPage";
 import DevPanelPage from "@/pages/DevPanelPage";
 import DevAlertsPage from "@/pages/DevAlertsPage";
@@ -175,6 +176,7 @@ function AppContent() {
         <Route path="/chat" element={<ProtectedRoute><AdminLayout><ChatPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/qr-campaigns" element={<ProtectedRoute><AdminLayout><QRCampaignsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/advisors" element={<ProtectedRoute><AdminLayout><AdvisorsPage /></AdminLayout></ProtectedRoute>} />
+        <Route path="/admins" element={<ProtectedRoute><AdminLayout><AdminsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/campaigns" element={<ProtectedRoute><AdminLayout><CampaignsPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/config" element={<ProtectedRoute><AdminLayout><ConfigPage /></AdminLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><AdminLayout><SettingsPage /></AdminLayout></ProtectedRoute>} />

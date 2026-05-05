@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Code, Bell } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Code, Bell, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -11,6 +11,7 @@ const allNavItems = [
   { path: "/", icon: LayoutDashboard, label: "Dashboard", roles: ["admin", "advisor"] },
   { path: "/chat", icon: Phone, label: "WhatsApp Bot", roles: ["admin", "advisor"] },
   { path: "/leads", icon: Users, label: "Leads", roles: ["admin", "advisor"] },
+  { path: "/admins", icon: ShieldCheck, label: "Administradores", roles: ["admin"] },
   { path: "/advisors", icon: UserCheck, label: "Asesores", roles: ["admin"] },
   { path: "/campaigns", icon: Megaphone, label: "Campañas", roles: ["admin"] },
   { path: "/qr-campaigns", icon: QrCode, label: "QR y Canales", roles: ["admin"] },
