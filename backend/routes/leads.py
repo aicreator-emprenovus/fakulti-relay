@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 import uuid
 import logging
 from datetime import datetime, timezone
 from database import db
 from auth import get_current_user
 from models import LeadCreate, LeadUpdate, PurchaseAdd
+from utils import STAGE_LABELS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -142,8 +143,21 @@ async def add_purchase(lead_id: str, req: PurchaseAdd, user=Depends(get_current_
 
 
 @router.put("/leads/{lead_id}/stage")
-async def update_lead_stage(lead_id: str, stage: str = Query(...)):
+async def update_lead_stage(lead_id: str, request: Request, stage: str = Query(...)):
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "funnel_stage": 1, "name": 1, "whatsapp": 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    old_stage = lead.get("funnel_stage", "nuevo")
     await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": stage, "last_interaction": datetime.now(timezone.utc).isoformat()}})
+    # Stash detailed info for the audit middleware so the Historial shows
+    # "Lead {name}: {old} → {new}" instead of the generic entity row.
+    lead_label = lead.get("name") or lead.get("whatsapp") or lead_id[:8]
+    from_label = STAGE_LABELS.get(old_stage, old_stage)
+    to_label = STAGE_LABELS.get(stage, stage)
+    request.state.audit_details = f"Lead {lead_label}: {from_label} → {to_label}"
+    request.state.audit_entity_name = lead_label
+    request.state.audit_entity_type = "lead"
+    request.state.audit_entity_id = lead_id
     return {"message": f"Stage updated to {stage}"}
 
 

@@ -309,6 +309,11 @@ function AuditLogSection() {
   };
 
   const renderDetail = (e) => {
+    // Prefer the rich `details` (route handlers can override it with custom messages
+    // like "Lead Pedro Gómez: Chat → En Negociación").
+    if (e.details && e.details.trim()) {
+      return <span className="text-foreground">{e.details}</span>;
+    }
     const entityName = e.entity_name || "";
     const entityType = e.entity_type || "";
     if (entityName) {
@@ -319,7 +324,6 @@ function AuditLogSection() {
         </span>
       );
     }
-    if (e.details) return <span className="text-muted-foreground">{e.details}</span>;
     return <span className="text-muted-foreground/60">—</span>;
   };
 
@@ -367,12 +371,12 @@ function AuditLogSection() {
           <Input data-testid="audit-filter-to" type="datetime-local" value={dateTo ? new Date(dateTo).toISOString().slice(0, 16) : ""} onChange={e => { setDateTo(e.target.value ? new Date(e.target.value).toISOString() : ""); setPage(1); }} className="text-xs h-8" />
         </div>
         <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs table-fixed">
             <thead className="bg-muted/40">
               <tr className="text-left text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Fecha / Hora</th>
-                <th className="px-3 py-2 font-medium">Usuario</th>
-                <th className="px-3 py-2 font-medium">Acción</th>
+                <th className="px-3 py-2 font-medium w-44">Fecha / Hora</th>
+                <th className="px-3 py-2 font-medium w-56">Usuario</th>
+                <th className="px-3 py-2 font-medium w-32 break-words">Acción</th>
                 <th className="px-3 py-2 font-medium">Detalle</th>
               </tr>
             </thead>
@@ -380,16 +384,16 @@ function AuditLogSection() {
               {items.length === 0 ? (
                 <tr><td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">Sin registros</td></tr>
               ) : items.map((e, i) => (
-                <tr key={`${e.timestamp}-${i}`} data-testid={`audit-row-${i}`} className="border-t border-border/50 hover:bg-muted/20">
+                <tr key={`${e.timestamp}-${i}`} data-testid={`audit-row-${i}`} className="border-t border-border/50 hover:bg-muted/20 align-top">
                   <td className="px-3 py-1.5 text-foreground whitespace-nowrap">{fmtDate(e.timestamp)}</td>
                   <td className="px-3 py-1.5">
                     <div className="flex flex-col">
-                      <span className="text-foreground">{e.user_name || e.user_email || "anónimo"}</span>
-                      {e.user_email && e.user_email !== e.user_name && <span className="text-muted-foreground text-[10px]">{e.user_email} · {ROLE_LABEL[e.user_role] || e.user_role || ""}</span>}
+                      <span className="text-foreground truncate">{e.user_name || e.user_email || "anónimo"}</span>
+                      {e.user_email && e.user_email !== e.user_name && <span className="text-muted-foreground text-[10px] truncate">{e.user_email} · {ROLE_LABEL[e.user_role] || e.user_role || ""}</span>}
                     </div>
                   </td>
-                  <td className="px-3 py-1.5 text-foreground">{e.action}</td>
-                  <td className="px-3 py-1.5">{renderDetail(e)}</td>
+                  <td className="px-3 py-1.5 text-foreground whitespace-normal break-words leading-tight">{e.action}</td>
+                  <td className="px-3 py-1.5 whitespace-normal break-words">{renderDetail(e)}</td>
                 </tr>
               ))}
             </tbody>

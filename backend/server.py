@@ -98,6 +98,22 @@ async def audit_middleware(request, call_next):
         details = ""
         if entity_name:
             details = f"{entity_type or 'entidad'}: {entity_name}"
+        # Allow route handlers to override these by setting request.state.audit_*
+        try:
+            override_details = getattr(request.state, "audit_details", None)
+            if override_details:
+                details = override_details
+            override_etype = getattr(request.state, "audit_entity_type", None)
+            if override_etype:
+                entity_type = override_etype
+            override_eid = getattr(request.state, "audit_entity_id", None)
+            if override_eid:
+                entity_id = override_eid
+            override_ename = getattr(request.state, "audit_entity_name", None)
+            if override_ename:
+                entity_name = override_ename
+        except Exception:
+            pass
         await log_event(
             action=action, user=user, details=details, ip=ip, path=path, method=method,
             status=status, user_agent=ua,
