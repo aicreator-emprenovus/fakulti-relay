@@ -611,9 +611,12 @@ export default function ChatPage() {
                       <Button data-testid="reset-bot-context-btn" variant="outline" size="sm" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 h-8 text-xs px-2 md:px-3" onClick={resetBotContext} title="Resetear Bot — historial visible pero el bot lo ignora y empieza fresco">
                         <RotateCcw size={14} className="md:mr-1" /> <span className="hidden md:inline">Resetear Bot</span>
                       </Button>
-                      <Button data-testid="send-catalog-btn" variant="outline" size="sm" className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8 text-xs px-2 md:px-3" onClick={sendCatalog} title="Enviar Catálogo (botón 'Ver catálogo' al cliente)">
-                        <BookOpen size={14} className="md:mr-1" /> <span className="hidden md:inline">Enviar Catálogo</span>
-                      </Button>
+                      {/* Enviar Catálogo button - temporarily hidden by feature flag below */}
+                      {false && (
+                        <Button data-testid="send-catalog-btn" variant="outline" size="sm" className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8 text-xs px-2 md:px-3" onClick={sendCatalog} title="Enviar Catálogo (botón 'Ver catálogo' al cliente)">
+                          <BookOpen size={14} className="md:mr-1" /> <span className="hidden md:inline">Enviar Catálogo</span>
+                        </Button>
+                      )}
                     </>
                   )}
                   {activeSession && messages.length > 0 && (
