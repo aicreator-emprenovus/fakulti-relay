@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from database import db
 from auth import get_current_user
-from utils import normalize_phone_ec, find_lead_by_phone, FUNNEL_STAGES
+from utils import normalize_phone_ec, find_lead_by_phone, FUNNEL_STAGES, PROTECTED_FROM_AUTO_LOST
 from whatsapp_utils import (
     get_whatsapp_config, send_whatsapp_message, send_whatsapp_image,
     send_whatsapp_template, WHATSAPP_API_URL, HANDOVER_KEYWORDS,
@@ -468,28 +468,33 @@ EXTRACCION DE DATOS (al final si aplica):
         new_stage = stage_match.group(1).strip()
         if new_stage in FUNNEL_STAGES:
             current_stage = existing_lead.get("funnel_stage", "nuevo")
-            current_priority = FUNNEL_STAGES.index(current_stage) if current_stage in FUNNEL_STAGES else 0
-            new_priority = FUNNEL_STAGES.index(new_stage)
-            if new_stage == "perdido" or new_priority > current_priority:
-                update_data = {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}
-                if new_stage in ("en_negociacion", "cliente_nuevo") and not existing_lead.get("assigned_advisor"):
-                    update_data["needs_advisor"] = True
-                    existing_hot_notif = await db.advisor_notifications.find_one(
-                        {"lead_id": lead_id, "type": "hot_lead", "read": False}, {"_id": 0}
-                    )
-                    if not existing_hot_notif:
-                        lead_name_for_notif = existing_lead.get("name", phone)
-                        product_for_notif = existing_lead.get("product_interest", "")
-                        stage_label = "quiere comprar" if new_stage == "cliente_nuevo" else "en negociacion"
-                        await db.advisor_notifications.insert_one({
-                            "id": str(uuid.uuid4()), "advisor_id": "admin", "type": "hot_lead",
-                            "title": f"Lead caliente: {lead_name_for_notif} ({stage_label})",
-                            "message": f"{lead_name_for_notif} esta listo para compra{f' de {product_for_notif}' if product_for_notif else ''}. Asigna un asesor para cerrar la venta.",
-                            "lead_id": lead_id, "session_id": session_id, "read": False,
-                            "created_at": datetime.now(timezone.utc).isoformat()
-                        })
-                        logger.info(f"Hot lead notification: {lead_name_for_notif} reached {new_stage}")
-                await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+            # Guard: leads in "cliente_nuevo" (Leads ganados) or "cliente_activo" (Cartera activa)
+            # must NEVER be auto-moved to "perdido" by the bot. Only humans can do this manually.
+            if new_stage == "perdido" and current_stage in PROTECTED_FROM_AUTO_LOST:
+                logger.info(f"Blocked bot auto-transition {current_stage} -> perdido for lead {lead_id} (protected stage)")
+            else:
+                current_priority = FUNNEL_STAGES.index(current_stage) if current_stage in FUNNEL_STAGES else 0
+                new_priority = FUNNEL_STAGES.index(new_stage)
+                if new_stage == "perdido" or new_priority > current_priority:
+                    update_data = {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}
+                    if new_stage in ("en_negociacion", "cliente_nuevo") and not existing_lead.get("assigned_advisor"):
+                        update_data["needs_advisor"] = True
+                        existing_hot_notif = await db.advisor_notifications.find_one(
+                            {"lead_id": lead_id, "type": "hot_lead", "read": False}, {"_id": 0}
+                        )
+                        if not existing_hot_notif:
+                            lead_name_for_notif = existing_lead.get("name", phone)
+                            product_for_notif = existing_lead.get("product_interest", "")
+                            stage_label = "quiere comprar" if new_stage == "cliente_nuevo" else "en negociacion"
+                            await db.advisor_notifications.insert_one({
+                                "id": str(uuid.uuid4()), "advisor_id": "admin", "type": "hot_lead",
+                                "title": f"Lead caliente: {lead_name_for_notif} ({stage_label})",
+                                "message": f"{lead_name_for_notif} esta listo para compra{f' de {product_for_notif}' if product_for_notif else ''}. Asigna un asesor para cerrar la venta.",
+                                "lead_id": lead_id, "session_id": session_id, "read": False,
+                                "created_at": datetime.now(timezone.utc).isoformat()
+                            })
+                            logger.info(f"Hot lead notification: {lead_name_for_notif} reached {new_stage}")
+                    await db.leads.update_one({"id": lead_id}, {"$set": update_data})
     reply = re.sub(r'\[STAGE:\w*\]', '', reply).strip()
 
     # Defensive final sweep: strip any remaining internal sentinels that may have leaked

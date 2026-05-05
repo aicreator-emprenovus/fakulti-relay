@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 from database import db
 from auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
 from models import ChatMessageRequest, CRMWhatsAppReply
-from utils import FUNNEL_STAGES
+from utils import FUNNEL_STAGES, PROTECTED_FROM_AUTO_LOST
 from whatsapp_utils import send_whatsapp_message, send_whatsapp_image, send_whatsapp_media, upload_whatsapp_media, send_whatsapp_media_by_id, send_whatsapp_catalog_message
 from bot_logic import build_product_bot_prompt
 from realtime import broker
@@ -81,10 +81,18 @@ async def _parse_ai_response(assistant_content: str, has_name: bool, lead_id_for
         new_stage = stage_match.group(1).strip()
         assistant_content = re.sub(r'\[STAGE:\w+\]', '', assistant_content).strip()
         if new_stage in FUNNEL_STAGES and lead_id_for_session:
-            await db.leads.update_one(
-                {"id": lead_id_for_session},
-                {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}}
-            )
+            # Guard: bot cannot auto-move "cliente_nuevo" / "cliente_activo" leads to "perdido".
+            skip = False
+            if new_stage == "perdido":
+                current = await db.leads.find_one({"id": lead_id_for_session}, {"_id": 0, "funnel_stage": 1})
+                if current and current.get("funnel_stage") in PROTECTED_FROM_AUTO_LOST:
+                    skip = True
+                    logger.info(f"Blocked bot auto-transition {current.get('funnel_stage')} -> perdido for lead {lead_id_for_session} (protected stage)")
+            if not skip:
+                await db.leads.update_one(
+                    {"id": lead_id_for_session},
+                    {"$set": {"funnel_stage": new_stage, "last_interaction": datetime.now(timezone.utc).isoformat()}}
+                )
 
     return assistant_content, lead_id_for_session
 

@@ -7,6 +7,7 @@ from database import db
 from auth import get_current_user
 from models import AutomationRuleCreate
 from whatsapp_utils import get_whatsapp_config, send_whatsapp_message, send_whatsapp_template
+from utils import PROTECTED_FROM_AUTO_LOST
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -127,7 +128,7 @@ async def run_automation_now(user=Depends(get_current_user)):
             query = {
                 "last_interaction": {"$lte": cutoff},
                 "whatsapp": {"$ne": ""},
-                "funnel_stage": {"$nin": ["perdido", "cliente_activo"]},
+                "funnel_stage": {"$nin": ["perdido", "cliente_activo", "cliente_nuevo"]},
             }
             if upper_cutoff:
                 query["last_interaction"]["$gte"] = upper_cutoff
@@ -181,9 +182,12 @@ async def run_automation_now(user=Depends(get_current_user)):
                 elif action_type == "cambiar_etapa":
                     new_stage = rule.get("action_value", "")
                     if new_stage:
-                        await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": new_stage}})
-                        total_actions += 1
-                        details.append(f"{lead.get('name', phone)}: {rule['name']} - Etapa -> {new_stage}")
+                        if new_stage == "perdido" and lead.get("funnel_stage") in PROTECTED_FROM_AUTO_LOST:
+                            details.append(f"{lead.get('name', phone)}: {rule['name']} - Bloqueado (lead protegido de auto-perdido)")
+                        else:
+                            await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": new_stage}})
+                            total_actions += 1
+                            details.append(f"{lead.get('name', phone)}: {rule['name']} - Etapa -> {new_stage}")
 
                 await db.automation_log.insert_one({
                     "lead_id": lead_id, "rule_id": rule["id"],
@@ -232,7 +236,7 @@ async def process_automation_rules_background():
                     query = {
                         "last_interaction": {"$lte": cutoff},
                         "whatsapp": {"$ne": ""},
-                        "funnel_stage": {"$nin": ["perdido", "cliente_activo"]},
+                        "funnel_stage": {"$nin": ["perdido", "cliente_activo", "cliente_nuevo"]},
                     }
                     if upper_cutoff:
                         query["last_interaction"]["$gte"] = upper_cutoff
@@ -283,9 +287,12 @@ async def process_automation_rules_background():
                         elif action_type == "cambiar_etapa":
                             new_stage = rule.get("action_value", "")
                             if new_stage:
-                                await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": new_stage}})
-                                total_actions += 1
-                                logger.info(f"Auto-stage change: {lead.get('name', phone)} -> {new_stage} - Rule: {rule['name']}")
+                                if new_stage == "perdido" and lead.get("funnel_stage") in PROTECTED_FROM_AUTO_LOST:
+                                    logger.info(f"Blocked auto-stage change to perdido for {lead.get('name', phone)} (protected stage)")
+                                else:
+                                    await db.leads.update_one({"id": lead_id}, {"$set": {"funnel_stage": new_stage}})
+                                    total_actions += 1
+                                    logger.info(f"Auto-stage change: {lead.get('name', phone)} -> {new_stage} - Rule: {rule['name']}")
 
                         await db.automation_log.insert_one({
                             "lead_id": lead_id, "rule_id": rule["id"],

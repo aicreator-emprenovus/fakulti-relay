@@ -53,6 +53,7 @@ Plataforma CRM completa con automatizacion de ventas por WhatsApp para la marca 
 - [x] Multimedia attachments via Meta media_id (send & receive)
 - [x] Auto-handover when user sends attachment or asks credit-card payment
 - [x] Meta Catalog integration (Phase 1 - manual): "Enviar Catálogo" button in chat header sends `interactive: catalog_message` (Ver catálogo button) — uses catalog connected to WABA. catalog_id field added in WhatsApp config panel + diagnose endpoint validates linked catalog. Catalog ID configurado: `1518830646561816`. (2026-04-29)
+- [x] Lead stage protection: Leads in "cliente_nuevo" (Leads ganados) and "cliente_activo" (Cartera activa) can NEVER be auto-moved to "perdido" by the bot or automation rules (`sin_respuesta`). Only human advisors can move them manually. Implemented in `routes/whatsapp.py`, `routes/chat.py`, `routes/automation.py` (both run-now + scheduler) using `PROTECTED_FROM_AUTO_LOST` constant in `utils.py`. Validated end-to-end. (2026-05-05)
 
 ## Backlog
 - [ ] Phase 2 catalog: send specific products via `interactive: product` / `product_list` (requires `catalog_id` + `retailer_id` in payload).

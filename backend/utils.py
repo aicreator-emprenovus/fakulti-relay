@@ -10,6 +10,9 @@ STAGE_LABELS = {
     "cliente_activo": "Cartera activa",
     "perdido": "Perdido",
 }
+# Stages that must NEVER be auto-moved to "perdido" by the bot or automation.
+# Human advisors can still move them manually from the CRM.
+PROTECTED_FROM_AUTO_LOST = {"cliente_nuevo", "cliente_activo"}
 SOURCES = ["TV", "QR", "Fibeca", "pauta_digital", "web", "referido", "otro"]
 SEASONS = ["verano", "invierno", "todo_el_ano"]
 
