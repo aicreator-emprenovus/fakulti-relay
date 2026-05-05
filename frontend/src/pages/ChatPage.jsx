@@ -597,30 +597,30 @@ export default function ChatPage() {
                   {activeLeadId && (
                     <>
                       {botPaused ? (
-                        <Button data-testid="resume-bot-btn" variant="outline" size="sm" className="text-green-500 hover:text-green-600 hover:bg-green-500/10 h-8 text-xs" onClick={resumeBot}>
-                          <Play size={12} className="mr-1" /> Reactivar Bot
+                        <Button data-testid="resume-bot-btn" variant="outline" size="sm" className="text-green-500 hover:text-green-600 hover:bg-green-500/10 h-8 text-xs px-2 md:px-3" onClick={resumeBot} title="Reactivar Bot">
+                          <Play size={14} className="md:mr-1" /> <span className="hidden md:inline">Reactivar Bot</span>
                         </Button>
                       ) : (
-                        <Button data-testid="pause-bot-btn" variant="outline" size="sm" className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 h-8 text-xs" onClick={pauseBot}>
-                          <Pause size={12} className="mr-1" /> Tomar Control
+                        <Button data-testid="pause-bot-btn" variant="outline" size="sm" className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 h-8 text-xs px-2 md:px-3" onClick={pauseBot} title="Tomar Control">
+                          <Pause size={14} className="md:mr-1" /> <span className="hidden md:inline">Tomar Control</span>
                         </Button>
                       )}
-                      <Button data-testid="assign-advisor-btn" variant="outline" size="sm" className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 h-8 text-xs" onClick={() => setShowAssignAdvisor(!showAssignAdvisor)}>
-                        <UserCheck size={12} className="mr-1" /> Asignar Asesor
+                      <Button data-testid="assign-advisor-btn" variant="outline" size="sm" className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 h-8 text-xs px-2 md:px-3" onClick={() => setShowAssignAdvisor(!showAssignAdvisor)} title="Asignar Asesor">
+                        <UserCheck size={14} className="md:mr-1" /> <span className="hidden md:inline">Asignar Asesor</span>
                       </Button>
-                      <Button data-testid="reset-bot-context-btn" variant="outline" size="sm" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 h-8 text-xs" onClick={resetBotContext} title="Resetea el contexto del bot — el historial sigue visible pero el bot lo ignora y empieza fresco">
-                        <RotateCcw size={12} className="mr-1" /> Resetear Bot
+                      <Button data-testid="reset-bot-context-btn" variant="outline" size="sm" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 h-8 text-xs px-2 md:px-3" onClick={resetBotContext} title="Resetear Bot — historial visible pero el bot lo ignora y empieza fresco">
+                        <RotateCcw size={14} className="md:mr-1" /> <span className="hidden md:inline">Resetear Bot</span>
                       </Button>
-                      <Button data-testid="send-catalog-btn" variant="outline" size="sm" className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8 text-xs" onClick={sendCatalog} title="Envía un mensaje interactivo con el botón 'Ver catálogo' al cliente">
-                        <BookOpen size={12} className="mr-1" /> Enviar Catálogo
+                      <Button data-testid="send-catalog-btn" variant="outline" size="sm" className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8 text-xs px-2 md:px-3" onClick={sendCatalog} title="Enviar Catálogo (botón 'Ver catálogo' al cliente)">
+                        <BookOpen size={14} className="md:mr-1" /> <span className="hidden md:inline">Enviar Catálogo</span>
                       </Button>
                     </>
                   )}
                   {activeSession && messages.length > 0 && (
                     <Button data-testid="analyze-btn" variant="outline" size="sm" disabled={analyzing}
-                      className="text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 h-8 text-xs" onClick={analyzeConversation}>
-                      {analyzing ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Brain size={12} className="mr-1" />}
-                      {analyzing ? "Analizando..." : "IA Análisis"}
+                      className="text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 h-8 text-xs px-2 md:px-3" onClick={analyzeConversation} title="IA Análisis">
+                      {analyzing ? <Loader2 size={14} className="md:mr-1 animate-spin" /> : <Brain size={14} className="md:mr-1" />}
+                      <span className="hidden md:inline">{analyzing ? "Analizando..." : "IA Análisis"}</span>
                     </Button>
                   )}
                 </div>
