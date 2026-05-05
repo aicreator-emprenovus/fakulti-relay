@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useTheme } from "@/App";
-import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Menu, X, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Code, Bell, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users, Gamepad2, Heart, Phone, Settings, LogOut, Sun, Moon, Zap, QrCode, UserCheck, Megaphone, ChevronLeft, ChevronRight, Bell, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -23,11 +23,10 @@ const allNavItems = [
   { path: "/dev-alerts", icon: Bell, label: "Panel de Alertas", roles: ["developer"] },
 ];
 
-export default function Sidebar({ currentPath }) {
+export default function Sidebar({ currentPath, mobileOpen, setMobileOpen }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("fk_sidebar") === "collapsed");
   const userRole = user?.role || "admin";
 
@@ -35,7 +34,7 @@ export default function Sidebar({ currentPath }) {
 
   const handleNav = (path) => {
     navigate(path);
-    setMobileOpen(false);
+    if (setMobileOpen) setMobileOpen(false);
   };
 
   const toggleCollapse = () => {
@@ -146,16 +145,8 @@ export default function Sidebar({ currentPath }) {
 
   return (
     <>
-      <button
-        data-testid="mobile-menu-btn"
-        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border text-foreground"
-        onClick={() => setMobileOpen(!mobileOpen)}
-      >
-        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileOpen(false)} />
+        <div className="md:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileOpen && setMobileOpen(false)} />
       )}
 
       <aside className={`fixed top-0 left-0 h-full ${w} z-40 transition-all duration-300 md:translate-x-0 ${mobileOpen ? "translate-x-0 w-52" : "-translate-x-full md:translate-x-0"}`}>

@@ -20,6 +20,7 @@ import DevPanelPage from "@/pages/DevPanelPage";
 import DevAlertsPage from "@/pages/DevAlertsPage";
 import Sidebar from "@/components/Sidebar";
 import ForceChangePasswordModal from "@/components/ForceChangePassword";
+import { Menu } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -140,6 +141,7 @@ function ProtectedRoute({ children }) {
 function AdminLayout({ children }) {
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("fk_sidebar") === "collapsed");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => setSidebarCollapsed(localStorage.getItem("fk_sidebar") === "collapsed");
@@ -148,10 +150,25 @@ function AdminLayout({ children }) {
     return () => { window.removeEventListener("storage", handler); clearInterval(iv); };
   }, []);
 
+  // Close mobile drawer on route change
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar currentPath={location.pathname} />
+      <Sidebar currentPath={location.pathname} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <main className={`flex-1 ml-0 ${sidebarCollapsed ? "md:ml-16" : "md:ml-52"} h-screen flex flex-col transition-all duration-300 overflow-hidden`}>
+        {/* Mobile top bar — reserves space for the menu trigger so it does NOT overlap content */}
+        <header className="md:hidden flex items-center gap-2 h-12 px-3 bg-card border-b border-border flex-shrink-0">
+          <button
+            data-testid="mobile-menu-btn"
+            onClick={() => setMobileOpen(true)}
+            className="p-1.5 rounded-lg text-foreground hover:bg-muted/60 transition-colors"
+            aria-label="Abrir menú"
+          >
+            <Menu size={20} />
+          </button>
+          <span className="text-sm font-semibold text-foreground">Fakulti CRM</span>
+        </header>
         <div className="p-4 md:p-6 flex-1 overflow-auto">
           {children}
         </div>

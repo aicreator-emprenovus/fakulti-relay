@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   Send, Phone, Clock, AlertTriangle, Activity,
   Shield, MessageCircle, CheckCircle, Users,
-  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw, Paperclip, BookOpen
+  Pause, Play, UserCheck, Bot, Brain, Loader2, Bell, RotateCcw, Paperclip, BookOpen, ArrowLeft
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -254,6 +254,7 @@ export default function ChatPage() {
 
   const loadSession = (session) => {
     setActiveSession(session.session_id);
+    setMobileView("chat");
     setActiveLeadId(session.lead_id || null);
     setBotPaused(session.bot_paused || false);
     axios.get(`${API}/chat/history/${session.session_id}`).then(res => setMessages(res.data)).catch(() => {});
@@ -493,6 +494,8 @@ export default function ChatPage() {
 
   // Filter for sessions panel: 'all' | 'bot' | 'human'
   const [conversationFilter, setConversationFilter] = useState("all");
+  // Mobile view toggle (WhatsApp-like): 'list' shows conversations list, 'chat' shows the active chat
+  const [mobileView, setMobileView] = useState("list");
   const filteredSessions = sessions.filter(s => {
     if (conversationFilter === "bot") return !s.bot_paused;
     if (conversationFilter === "human") return s.bot_paused;
@@ -507,7 +510,7 @@ export default function ChatPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-h-0">
         {/* Sessions Sidebar */}
-        <Card className="bg-card border-border rounded-2xl md:col-span-1 hidden md:block overflow-hidden">
+        <Card className={`bg-card border-border rounded-2xl md:col-span-1 ${mobileView === "list" ? "flex" : "hidden"} md:flex flex-col overflow-hidden`}>
           <CardContent className="p-3 h-full flex flex-col">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2 font-semibold">
               Conversaciones ({filteredSessions.length}{conversationFilter !== "all" ? ` / ${sessions.length}` : ""})
@@ -569,11 +572,19 @@ export default function ChatPage() {
         </Card>
 
         {/* Chat Area */}
-        <Card className="bg-card border-border rounded-2xl md:col-span-3 flex flex-col overflow-hidden">
+        <Card className={`bg-card border-border rounded-2xl md:col-span-3 ${mobileView === "chat" ? "flex" : "hidden"} md:flex flex-col overflow-hidden`}>
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
             {/* Header with Customer Context Card */}
             <div className="p-3 border-b border-input">
               <div className="flex items-center gap-2">
+                <button
+                  data-testid="back-to-list-btn"
+                  onClick={() => setMobileView("list")}
+                  className="md:hidden flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  aria-label="Volver a la lista de conversaciones"
+                >
+                  <ArrowLeft size={18} />
+                </button>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${botPaused ? "bg-amber-500/10" : "bg-green-500/10"}`}>
                     {botPaused ? <UserCheck size={15} className="text-amber-500" /> : <Phone size={15} className="text-green-500" />}
