@@ -182,6 +182,23 @@ export default function ConfigPage() {
     } catch { toast.error("Error al guardar"); }
   };
 
+  const disconnectWaNumber = async () => {
+    if (!window.confirm("¿Desvincular el número actual?\n\nEsto borra el Phone Number ID, el Access Token y el Catalog ID. El bot dejará de responder hasta que registres un nuevo número.\n\nNo se borra ninguna conversación, lead, ni configuración del bot.")) return;
+    try {
+      const cleared = {
+        phone_number_id: "",
+        access_token: "",
+        verify_token: waForm.verify_token || "fakulti-whatsapp-verify-token",
+        business_name: waForm.business_name || "Fakulti Laboratorios",
+        catalog_id: "",
+      };
+      await axios.put(`${API}/config/whatsapp`, cleared);
+      setWaForm(cleared);
+      setTestResult(null);
+      toast.success("Número desvinculado. Para reconectar otro número, llena los campos y guarda.");
+    } catch { toast.error("Error al desvincular"); }
+  };
+
   const testWaConnection = async () => {
     setTesting(true);
     setTestResult(null);
@@ -385,10 +402,20 @@ export default function ConfigPage() {
                   />
                   <p className="text-[11px] text-muted-foreground mt-1">ID del catálogo conectado a la WABA en Business Settings → WhatsApp → Catálogo conectado. Se usa para diagnóstico y futuras integraciones; el botón "Ver catálogo" funciona automáticamente con el catálogo vinculado a la WABA.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button data-testid="save-wa-config" onClick={saveWaConfig} className="bg-primary text-primary-foreground font-bold rounded-full hover:bg-primary/90">Guardar Configuración</Button>
                   <Button data-testid="test-wa-btn" variant="outline" onClick={testWaConnection} disabled={testing} className="border-input text-foreground rounded-full">
                     <Wifi size={14} className="mr-1" /> {testing ? "Probando..." : "Probar Conexión"}
+                  </Button>
+                  <Button
+                    data-testid="disconnect-wa-btn"
+                    variant="outline"
+                    onClick={disconnectWaNumber}
+                    disabled={!waForm.phone_number_id}
+                    className="border-red-500/40 text-red-500 hover:bg-red-500/10 rounded-full"
+                    title="Borra el Phone Number ID, Access Token y Catalog ID. La estructura y conversaciones se mantienen."
+                  >
+                    Desvincular número
                   </Button>
                 </div>
                 {testResult && (

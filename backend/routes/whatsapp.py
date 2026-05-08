@@ -574,6 +574,12 @@ async def whatsapp_incoming(request: Request):
     _cfg = await get_whatsapp_config()
     configured_pnid = (_cfg.get("phone_number_id") or "").strip()
 
+    # If no number is configured, treat the bot as DISCONNECTED. Acknowledge the
+    # webhook to Meta (so it doesn't retry) but do not process any messages.
+    if not configured_pnid:
+        logger.info("WA webhook received but no phone_number_id configured -> bot disconnected, ignoring")
+        return {"status": "ok"}
+
     entries = body.get("entry", [])
     for entry in entries:
         waba_id = str(entry.get("id", "")).strip()
